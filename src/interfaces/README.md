@@ -23,6 +23,7 @@ python scripts/serve_api.py
 - `POST /api/tasks/{task_id}/assess`：提交 `records`、`weights` 和 `signals_by_domain`，执行清洗、评分并持久化
 - `POST /api/tasks/{task_id}/leads/{domain}/draft`：仅在真实邮箱和真实背调存在时调用 DeepSeek 生成待审核草稿，不发送邮件
 - `GET /api/drafts/{draft_id}`
+- `POST /api/drafts/{draft_id}/translate`：调用非大模型机器翻译生成中文阅读预览，不覆盖原始英文草稿
 - `POST /api/drafts/{draft_id}/approve`
 - `POST /api/drafts/{draft_id}/request-revision`
 - `POST /api/drafts/{draft_id}/reject`

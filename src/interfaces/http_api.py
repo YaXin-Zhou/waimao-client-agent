@@ -12,13 +12,16 @@ from src.domain.task import AcquisitionCriteria
 
 
 class ApiApplication:
-    def __init__(self, tasks, leads, research, drafts, acquisition=None, email_drafts=None):
+    def __init__(
+        self, tasks, leads, research, drafts, acquisition=None, email_drafts=None, translation=None
+    ):
         self._tasks = tasks
         self._leads = leads
         self._research = research
         self._drafts = drafts
         self._acquisition = acquisition or AcquisitionService(tasks, leads)
         self._email_drafts = email_drafts
+        self._translation = translation
         self._reviews = EmailReviewService(drafts)
 
     def handle(self, method: str, path: str, body=None) -> tuple[int, dict]:
@@ -63,6 +66,13 @@ class ApiApplication:
                 return self._lead_list(segments[2])
             if method == "GET" and len(segments) == 3 and segments[:2] == ["api", "drafts"]:
                 return self._draft_detail(segments[2])
+            if (
+                method == "POST"
+                and len(segments) == 4
+                and segments[:2] == ["api", "drafts"]
+                and segments[3] == "translate"
+            ):
+                return self._translate_draft(segments[2], self._parse_body(body))
             if method == "POST" and len(segments) == 4 and segments[:2] == ["api", "drafts"]:
                 return self._review(segments[2], segments[3], self._parse_body(body))
             return 404, {"error": "Route not found"}
@@ -162,10 +172,16 @@ class ApiApplication:
         if assessed is None:
             raise KeyError(f"Lead not found: {domain}")
         report = self._research.get(task_id, domain)
+        draft = (
+            self._drafts.latest_for_lead(task_id, domain)
+            if hasattr(self._drafts, "latest_for_lead")
+            else None
+        )
         return 200, {
             "lead": self._lead(assessed.lead),
             "score": self._score(assessed.score),
             "research": self._research_result(report) if report else None,
+            "draft": self._draft(draft) if draft else None,
         }
 
     def _draft_detail(self, draft_id: str) -> tuple[int, dict]:
@@ -173,6 +189,14 @@ class ApiApplication:
         if draft is None:
             raise KeyError(f"Draft not found: {draft_id}")
         return 200, self._draft(draft)
+
+    def _translate_draft(self, draft_id: str, body: dict) -> tuple[int, dict]:
+        if self._translation is None:
+            raise RuntimeError("translation provider is not configured")
+        draft = self._drafts.get(draft_id)
+        if draft is None:
+            raise KeyError(f"Draft not found: {draft_id}")
+        return 200, self._translation.preview(draft, str(body.get("target_language", "zh-CN")))
 
     def _review(self, draft_id: str, action: str, body: dict) -> tuple[int, dict]:
         reviewer = body.get("reviewer", "")

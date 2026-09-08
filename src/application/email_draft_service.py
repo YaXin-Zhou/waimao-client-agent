@@ -36,7 +36,9 @@ class EmailDraftService:
         except (KeyError, ValueError) as exc:
             raise ValueError("email template contains unsupported placeholders") from exc
         prompt = (
-            "Write a concise first-contact B2B email. Use only the supplied facts. "
+            "Write a concise first-contact B2B email to the recipient company. "
+            "The recipient company is not the sender. Use [Our Company], [Your Name], "
+            "or [Your Position] when sender details are not supplied. Use only the supplied facts. "
             "Do not invent prices, delivery times, certifications, partnerships, or buyer needs. "
             "Return JSON with exactly two string fields: subject and body. "
             f"Company: {lead.company_name}\n"

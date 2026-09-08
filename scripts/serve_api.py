@@ -12,7 +12,11 @@ ROOT = Path(__file__).resolve().parents[1]
 sys.path.insert(0, str(ROOT))
 
 from src.application.email_draft_service import EmailDraftService  # noqa: E402
+from src.application.translation_service import TranslationService  # noqa: E402
 from src.infrastructure.deepseek_provider import DeepSeekConfig, DeepSeekProvider  # noqa: E402
+from src.infrastructure.machine_translation_provider import (  # noqa: E402
+    GoogleMachineTranslationProvider,
+)
 from src.infrastructure.sqlite_repositories import (  # noqa: E402
     SQLiteEmailDraftRepository,
     SQLiteLeadRepository,
@@ -34,6 +38,7 @@ application = ApiApplication(
     SQLiteResearchRepository(DATABASE),
     SQLiteEmailDraftRepository(DATABASE),
     email_drafts=email_draft_service,
+    translation=TranslationService(GoogleMachineTranslationProvider()),
 )
 
 

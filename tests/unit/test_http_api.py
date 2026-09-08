@@ -53,6 +53,13 @@ class Drafts:
     def save(self, draft):
         self.draft = draft
 
+    def latest_for_lead(self, task_id, lead_domain):
+        return (
+            self.draft
+            if self.draft.task_id == task_id and self.draft.lead_domain == lead_domain
+            else None
+        )
+
 
 class DraftGenerator:
     def generate(self, task_id, lead, research, template, product):
@@ -64,6 +71,16 @@ class DraftGenerator:
             "Generated body",
             (research.evidence_url,),
         )
+
+
+class Translation:
+    def preview(self, draft, target):
+        return {
+            "draft_id": draft.id,
+            "target_language": target,
+            "subject": "中文主题",
+            "body": "中文正文",
+        }
 
 
 def make_app():
@@ -88,6 +105,7 @@ def test_api_returns_leads_and_research_detail():
     assert payload["lead"]["company_name"] == "Alpine Energy"
     assert payload["lead"]["website"] == "https://alpine.example"
     assert payload["research"]["evidence_status"] == "sufficient"
+    assert payload["draft"]["recipient_email"] == "sales@alpine.example"
 
 
 def test_api_returns_tasks_without_hardcoded_task_id():
@@ -190,6 +208,20 @@ def test_api_returns_json_error_for_unknown_draft():
 
     assert status == 404
     assert payload["error"] == "Draft not found: missing"
+
+
+def test_api_translates_draft_for_preview_without_replacing_source():
+    app, _, draft = make_app()
+    app._translation = Translation()
+
+    status, payload = app.handle(
+        "POST", f"/api/drafts/{draft.id}/translate", {"target_language": "zh-CN"}
+    )
+
+    assert status == 200
+    assert payload["subject"] == "中文主题"
+    assert payload["body"] == "中文正文"
+    assert app._drafts.draft.subject == "Subject"
 
 
 def test_api_generates_and_persists_reviewable_draft():

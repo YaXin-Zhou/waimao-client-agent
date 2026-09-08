@@ -56,6 +56,7 @@ def test_generate_draft_uses_configured_template_and_requires_review():
     assert draft.subject == "Portable power for Alpine"
     assert draft.evidence_urls == ("https://alpine.example/about",)
     assert "Introduce portable power stations to Alpine Energy" in provider.prompts[0]
+    assert "The recipient company is not the sender" in provider.prompts[0]
 
 
 def test_generate_draft_rejects_missing_recipient():

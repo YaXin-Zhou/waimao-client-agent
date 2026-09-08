@@ -365,3 +365,12 @@ class SQLiteEmailDraftRepository:
             reviewed_by=row["reviewed_by"],
             review_note=row["review_note"],
         )
+
+    def latest_for_lead(self, task_id: str, lead_domain: str) -> EmailDraft | None:
+        with _connect(self._database) as connection:
+            row = connection.execute(
+                "SELECT id FROM email_drafts WHERE task_id = ? AND lead_domain = "
+                "? ORDER BY rowid DESC LIMIT 1",
+                (task_id, lead_domain),
+            ).fetchone()
+        return self.get(row["id"]) if row else None
