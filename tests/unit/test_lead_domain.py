@@ -1,4 +1,23 @@
+import json
+from pathlib import Path
+
 from src.domain.lead import LeadRecord, clean_leads, score_lead
+
+
+def test_sample_dataset_produces_clean_records_for_sales_review():
+    fixture = Path(__file__).parents[1] / "fixtures" / "sample_leads.json"
+    raw_records = json.loads(fixture.read_text(encoding="utf-8"))
+
+    cleaned = clean_leads([LeadRecord(**record) for record in raw_records])
+
+    assert len(cleaned) == 3
+    assert cleaned[0].company_name == "Northwind Outdoor Ltd."
+    assert cleaned[0].emails == (
+        "sales@northwind-outdoor.example",
+        "info@northwind-outdoor.example",
+    )
+    assert cleaned[1].quality == "complete"
+    assert cleaned[2].quality == "needs_review"
 
 
 def test_clean_leads_normalizes_and_merges_same_company_by_domain():

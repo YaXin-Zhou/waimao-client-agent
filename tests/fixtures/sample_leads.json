@@ -1,0 +1,26 @@
+[
+  {
+    "company_name": "Northwind Outdoor Ltd.",
+    "website": "https://www.northwind-outdoor.example/contact",
+    "email": " SALES@NORTHWIND-OUTDOOR.EXAMPLE ",
+    "country": "GB"
+  },
+  {
+    "company_name": "Northwind Outdoor",
+    "website": "http://northwind-outdoor.example",
+    "email": "info@northwind-outdoor.example",
+    "country": "United Kingdom"
+  },
+  {
+    "company_name": "Alpine Camp Supply",
+    "website": "alpine-camp.example",
+    "email": "contact@alpine-camp.example",
+    "country": "DE"
+  },
+  {
+    "company_name": "Noisy Directory Listing",
+    "website": "",
+    "email": "unknown",
+    "country": ""
+  }
+]
