@@ -1,0 +1,25 @@
+# Secrets and local configuration
+.env
+.env.*
+!.env.example
+config/local.*
+
+# Runtime data and logs
+data/runtime/
+data/uploads/
+data/exports/
+logs/
+
+# Tooling output
+.pytest_cache/
+.ruff_cache/
+__pycache__/
+*.pyc
+.venv/
+node_modules/
+dist/
+build/
+
+# Local IDE files
+.vscode/
+.idea/
