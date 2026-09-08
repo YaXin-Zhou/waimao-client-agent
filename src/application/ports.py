@@ -4,6 +4,7 @@ from __future__ import annotations
 
 from typing import TYPE_CHECKING, Protocol
 
+from src.domain.email_draft import EmailDraft
 from src.domain.lead import LeadRecord
 from src.domain.research_run import ResearchRun
 from src.domain.task import AcquisitionTask
@@ -32,3 +33,9 @@ class ResearchRunRepository(Protocol):
     def save(self, run: ResearchRun) -> None: ...
 
     def get(self, run_id: str) -> ResearchRun | None: ...
+
+
+class EmailDraftRepository(Protocol):
+    def save(self, draft: EmailDraft) -> None: ...
+
+    def get(self, draft_id: str) -> EmailDraft | None: ...

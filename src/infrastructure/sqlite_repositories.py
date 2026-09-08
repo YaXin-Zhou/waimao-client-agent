@@ -7,6 +7,7 @@ import sqlite3
 from pathlib import Path
 
 from src.application.acquisition_service import AssessedLead
+from src.domain.email_draft import EmailDraft, EmailDraftStatus
 from src.domain.lead import CleanLead, LeadScore
 from src.domain.research import CustomerType, EvidenceStatus, ResearchResult
 from src.domain.research_run import ResearchRun, ResearchRunStatus
@@ -57,6 +58,22 @@ def _connect(database: str | Path) -> sqlite3.Connection:
             status TEXT NOT NULL,
             attempts INTEGER NOT NULL,
             error TEXT NOT NULL
+        )
+        """
+    )
+    connection.execute(
+        """
+        CREATE TABLE IF NOT EXISTS email_drafts (
+            id TEXT PRIMARY KEY,
+            task_id TEXT NOT NULL,
+            lead_domain TEXT NOT NULL,
+            recipient_email TEXT NOT NULL,
+            subject TEXT NOT NULL,
+            body TEXT NOT NULL,
+            evidence_urls_json TEXT NOT NULL,
+            status TEXT NOT NULL,
+            reviewed_by TEXT NOT NULL,
+            review_note TEXT NOT NULL
         )
         """
     )
@@ -282,4 +299,62 @@ class SQLiteResearchRunRepository:
             status=ResearchRunStatus(row["status"]),
             attempts=row["attempts"],
             error=row["error"],
+        )
+
+
+class SQLiteEmailDraftRepository:
+    def __init__(self, database: str | Path):
+        self._database = database
+
+    def save(self, draft: EmailDraft) -> None:
+        with _connect(self._database) as connection:
+            connection.execute(
+                """
+                INSERT INTO email_drafts (
+                    id, task_id, lead_domain, recipient_email, subject, body,
+                    evidence_urls_json, status, reviewed_by, review_note
+                ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+                ON CONFLICT(id) DO UPDATE SET
+                    task_id=excluded.task_id,
+                    lead_domain=excluded.lead_domain,
+                    recipient_email=excluded.recipient_email,
+                    subject=excluded.subject,
+                    body=excluded.body,
+                    evidence_urls_json=excluded.evidence_urls_json,
+                    status=excluded.status,
+                    reviewed_by=excluded.reviewed_by,
+                    review_note=excluded.review_note
+                """,
+                (
+                    draft.id,
+                    draft.task_id,
+                    draft.lead_domain,
+                    draft.recipient_email,
+                    draft.subject,
+                    draft.body,
+                    json.dumps(draft.evidence_urls),
+                    draft.status.value,
+                    draft.reviewed_by,
+                    draft.review_note,
+                ),
+            )
+
+    def get(self, draft_id: str) -> EmailDraft | None:
+        with _connect(self._database) as connection:
+            row = connection.execute(
+                "SELECT * FROM email_drafts WHERE id = ?", (draft_id,)
+            ).fetchone()
+        if row is None:
+            return None
+        return EmailDraft(
+            id=row["id"],
+            task_id=row["task_id"],
+            lead_domain=row["lead_domain"],
+            recipient_email=row["recipient_email"],
+            subject=row["subject"],
+            body=row["body"],
+            evidence_urls=tuple(json.loads(row["evidence_urls_json"])),
+            status=EmailDraftStatus(row["status"]),
+            reviewed_by=row["reviewed_by"],
+            review_note=row["review_note"],
         )
