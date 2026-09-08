@@ -26,6 +26,8 @@
 - `python scripts/backup_runtime.py`：创建不覆盖旧文件的 SQLite 备份。
 - API 标准输出：每行一个 JSON 请求事件，可由部署环境收集，不包含敏感字段。
 - `config/.env` 仅作为本机配置文件，已被 Git 忽略；正式部署应使用主机密钥管理或受限权限注入，不提交真实凭据。
+- API 容器部署：`docker compose config` 检查编排文件，`docker compose build api` 构建镜像；`config/.env` 以只读挂载注入，运行数据和日志单独挂载，镜像不包含密钥。
+- 容器验收已在本机完成：编排解析、API 镜像构建和容器内配置状态检查均通过；尚未进行生产主机部署演练。
 - `python scripts/export_leads.py --task-id <真实任务ID>`：导出已持久化客户档案和背调证据为 CSV；没有证据的行业、规模等字段不会被填充。
 - `python scripts/mailbox_acceptance.py --task-id <真实任务ID>`：按连接、同步、线程、分类、待办顺序执行只读验收；未配置邮箱时以失败退出，永远不发送邮件。
 - 发生恢复操作前，先停止 API、复制当前数据库到隔离目录，再由负责人确认备份可读；本项目不提供自动删除旧数据的命令。

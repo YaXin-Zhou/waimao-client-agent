@@ -1,0 +1,19 @@
+FROM python:3.13-slim
+
+ENV PYTHONDONTWRITEBYTECODE=1 \
+    PYTHONUNBUFFERED=1 \
+    WAIMAO_API_HOST=0.0.0.0 \
+    WAIMAO_API_PORT=8001
+
+WORKDIR /app
+COPY requirements.txt ./
+RUN pip install --no-cache-dir -r requirements.txt
+COPY src ./src
+COPY scripts/serve_api.py ./scripts/serve_api.py
+COPY scripts/backup_runtime.py ./scripts/backup_runtime.py
+COPY scripts/config_status.py ./scripts/config_status.py
+COPY scripts/export_leads.py ./scripts/export_leads.py
+COPY scripts/mailbox_acceptance.py ./scripts/mailbox_acceptance.py
+
+EXPOSE 8001
+CMD ["python", "scripts/serve_api.py"]

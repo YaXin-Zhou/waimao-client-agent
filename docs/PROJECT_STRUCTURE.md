@@ -7,6 +7,9 @@ waimaogongzuoliu/
 ├── CONTEXT.md                 # 领域词汇和业务边界，只记录稳定概念
 ├── README.md                  # 项目入口和开发纪律
 ├── .gitignore                 # 密钥、运行数据和工具产物排除规则
+├── .dockerignore              # 容器构建上下文排除规则
+├── Dockerfile.api             # API 可复现镜像构建文件
+├── docker-compose.yml          # API 本地部署编排
 ├── pyproject.toml             # Python 依赖、格式化、测试和静态检查配置
 ├── package.json               # 前端依赖和脚本（若采用前端工程）
 ├── config/                    # 配置模板和环境配置说明，不放真实密钥
@@ -71,6 +74,7 @@ waimaogongzuoliu/
 
 - 不在根目录直接堆放业务源码、临时脚本、导出表格或日志。
 - 不把密钥、真实客户资料、真实邮箱密码写入代码或配置模板。
+- 容器镜像不复制 `config/.env`、运行数据库、日志或导出文件；这些内容必须在运行时挂载。
 - 不在接口层、页面组件或脚本中复制业务规则。
 - 不为了临时验证把测试文件放入 `src/`。
 - 不创建没有职责说明的目录。
