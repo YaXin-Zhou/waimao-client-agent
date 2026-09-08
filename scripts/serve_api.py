@@ -17,6 +17,7 @@ from src.application.reply_analysis_service import ReplyAnalysisService  # noqa:
 from src.application.research_execution import ResearchExecutionService  # noqa: E402
 from src.application.research_queue import ResearchJobQueue  # noqa: E402
 from src.application.research_workflow import ResearchWorkflow  # noqa: E402
+from src.application.send_safety_service import SendSafetyService  # noqa: E402
 from src.application.translation_service import TranslationService  # noqa: E402
 from src.infrastructure.ali_imap import AliImapConfig, AliImapMailbox  # noqa: E402
 from src.infrastructure.deepseek_provider import DeepSeekConfig, DeepSeekProvider  # noqa: E402
@@ -97,6 +98,7 @@ imap_config = AliImapConfig(
 mailbox = AliImapMailbox(imap_config) if imap_config.configured else None
 mailbox_sync = MailboxSyncService(lead_repository, inbound_email_repository)
 reply_analysis_service = ReplyAnalysisService(inbound_email_repository, reply_analysis_repository)
+send_safety_service = SendSafetyService(SQLiteEmailDraftRepository(DATABASE))
 application = ApiApplication(
     task_repository,
     lead_repository,
@@ -112,6 +114,7 @@ application = ApiApplication(
     mailbox_sync=mailbox_sync,
     inbound_emails=inbound_email_repository,
     reply_analysis=reply_analysis_service,
+    send_safety=send_safety_service,
 )
 
 

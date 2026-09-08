@@ -12,6 +12,7 @@ from src.domain.inbound_email import InboundEmail
 from src.domain.lead import LeadRecord, LeadStatus
 from src.domain.reply_analysis import ReplyAnalysis
 from src.domain.research_run import ResearchRun
+from src.domain.send_safety import SendPolicy
 from src.domain.sender_profile import SenderProfile
 from src.domain.task import AcquisitionCriteria, TaskStatus
 
@@ -34,6 +35,7 @@ class ApiApplication:
         mailbox_sync=None,
         inbound_emails=None,
         reply_analysis=None,
+        send_safety=None,
     ):
         self._tasks = tasks
         self._leads = leads
@@ -50,6 +52,7 @@ class ApiApplication:
         self._mailbox_sync = mailbox_sync
         self._inbound_emails = inbound_emails
         self._reply_analysis = reply_analysis
+        self._send_safety = send_safety
         self._reviews = EmailReviewService(drafts, audit)
 
     def handle(self, method: str, path: str, body=None) -> tuple[int, dict]:
@@ -59,6 +62,13 @@ class ApiApplication:
                 return 200, {"status": "ok"}
             if method == "GET" and segments == ["api", "mailbox", "status"]:
                 return self._mailbox_status()
+            if (
+                method == "POST"
+                and len(segments) == 4
+                and segments[:2] == ["api", "drafts"]
+                and segments[3] == "send-check"
+            ):
+                return self._send_check(segments[2], self._parse_body(body))
             if (
                 method == "POST"
                 and len(segments) == 5
@@ -223,6 +233,23 @@ class ApiApplication:
             "configured": self._mailbox is not None,
             "mode": "read_only",
             "sending_enabled": False,
+        }
+
+    def _send_check(self, draft_id: str, body: dict) -> tuple[int, dict]:
+        if self._send_safety is None:
+            raise RuntimeError("send safety service is not configured")
+        policy = SendPolicy(
+            blocked_emails=tuple(str(item) for item in body.get("blocked_emails", [])),
+            blocked_domains=tuple(str(item) for item in body.get("blocked_domains", [])),
+            daily_limit=int(body.get("daily_limit", 0)),
+            sent_today=int(body.get("sent_today", 0)),
+        )
+        result = self._send_safety.check(draft_id, policy)
+        return 200, {
+            "allowed": result.allowed,
+            "requires_manual_confirmation": result.requires_manual_confirmation,
+            "reasons": result.reasons,
+            "sending_performed": False,
         }
 
     def _sync_mailbox(self, task_id: str) -> tuple[int, dict]:
