@@ -7,6 +7,7 @@ from typing import Protocol
 from src.domain.email_draft import EmailDraft
 from src.domain.lead import CleanLead
 from src.domain.research import ResearchResult
+from src.domain.sender_profile import SenderProfile
 
 
 class StructuredProvider(Protocol):
@@ -24,6 +25,7 @@ class EmailDraftService:
         research: ResearchResult,
         template: str,
         product: str,
+        sender_profile: SenderProfile | None = None,
     ) -> EmailDraft:
         if not lead.emails:
             raise ValueError("recipient email is required")
@@ -35,6 +37,9 @@ class EmailDraftService:
             template_hint = template.format(company=lead.company_name, product=product)
         except (KeyError, ValueError) as exc:
             raise ValueError("email template contains unsupported placeholders") from exc
+        sender_company, sender_name, sender_position = (
+            sender_profile or SenderProfile()
+        ).prompt_values()
         prompt = (
             "Write a concise first-contact B2B email to the recipient company. "
             "The recipient company is not the sender. Use [Our Company], [Your Name], "
@@ -46,6 +51,9 @@ class EmailDraftService:
             f"Products: {', '.join(research.products)}\n"
             f"Country: {research.country}\n"
             f"Evidence URL: {research.evidence_url}\n"
+            f"Sender company: {sender_company}\n"
+            f"Sender name: {sender_name}\n"
+            f"Sender position: {sender_position}\n"
             f"Configured template direction: {template_hint}"
         )
         data = self._provider.generate_json(prompt)

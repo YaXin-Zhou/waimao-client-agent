@@ -4,6 +4,7 @@ from src.application.email_draft_service import EmailDraftService
 from src.domain.email_draft import EmailDraftStatus
 from src.domain.lead import CleanLead
 from src.domain.research import CustomerType, EvidenceStatus, ResearchResult
+from src.domain.sender_profile import SenderProfile
 
 
 class FakeProvider:
@@ -57,6 +58,19 @@ def test_generate_draft_uses_configured_template_and_requires_review():
     assert draft.evidence_urls == ("https://alpine.example/about",)
     assert "Introduce portable power stations to Alpine Energy" in provider.prompts[0]
     assert "The recipient company is not the sender" in provider.prompts[0]
+
+
+def test_generate_draft_uses_configured_sender_profile():
+    provider = FakeProvider({"subject": "Subject", "body": "Body"})
+
+    EmailDraftService(provider).generate(
+        "task-1", sample_lead(), sample_research(), "Hello {company}", "product",
+        SenderProfile("Northstar Trading", "Li Ming", "Sales Manager"),
+    )
+
+    assert "Sender company: Northstar Trading" in provider.prompts[0]
+    assert "Sender name: Li Ming" in provider.prompts[0]
+    assert "Sender position: Sales Manager" in provider.prompts[0]
 
 
 def test_generate_draft_rejects_missing_recipient():

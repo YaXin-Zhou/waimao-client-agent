@@ -6,6 +6,8 @@ from dataclasses import dataclass, replace
 from enum import StrEnum
 from uuid import uuid4
 
+from src.domain.sender_profile import SenderProfile
+
 
 class TaskStatus(StrEnum):
     DRAFT = "draft"
@@ -42,12 +44,23 @@ class AcquisitionTask:
     name: str
     criteria: AcquisitionCriteria
     status: TaskStatus = TaskStatus.DRAFT
+    sender_profile: SenderProfile = SenderProfile()
 
     @classmethod
-    def create(cls, name: str, criteria: AcquisitionCriteria) -> "AcquisitionTask":
+    def create(
+        cls,
+        name: str,
+        criteria: AcquisitionCriteria,
+        sender_profile: SenderProfile | None = None,
+    ) -> "AcquisitionTask":
         if not name.strip():
             raise ValueError("task name is required")
-        return cls(id=str(uuid4()), name=name.strip(), criteria=criteria)
+        return cls(
+            id=str(uuid4()),
+            name=name.strip(),
+            criteria=criteria,
+            sender_profile=sender_profile or SenderProfile(),
+        )
 
     def transition_to(self, target: TaskStatus) -> "AcquisitionTask":
         allowed = {

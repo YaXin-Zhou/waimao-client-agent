@@ -62,7 +62,7 @@ class Drafts:
 
 
 class DraftGenerator:
-    def generate(self, task_id, lead, research, template, product):
+    def generate(self, task_id, lead, research, template, product, sender_profile=None):
         return EmailDraft.create(
             task_id,
             lead.domain,
@@ -131,6 +131,11 @@ def test_api_creates_task_from_form_configuration():
                 "customer_types": ["distributor"],
                 "daily_limit": 5,
             },
+            "sender_profile": {
+                "company_name": "Northstar Trading",
+                "contact_name": "Li Ming",
+                "position": "Sales Manager",
+            },
         },
     )
 
@@ -138,6 +143,7 @@ def test_api_creates_task_from_form_configuration():
     assert payload["name"] == "France solar distributors"
     assert payload["status"] == "draft"
     assert app._tasks.get(payload["id"]).criteria.countries == ("France",)
+    assert app._tasks.get(payload["id"]).sender_profile.company_name == "Northstar Trading"
 
 
 def test_api_returns_lead_list():

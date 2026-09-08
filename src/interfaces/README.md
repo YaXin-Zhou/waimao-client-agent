@@ -17,7 +17,7 @@ python scripts/serve_api.py
 
 - `GET /api/health`
 - `GET /api/tasks`
-- `POST /api/tasks`：按表单提交任务名称和 `criteria`，创建并持久化草稿任务
+- `POST /api/tasks`：按表单提交任务名称、`criteria` 和可选的 `sender_profile`，创建并持久化草稿任务
 - `GET /api/tasks/{task_id}/leads`
 - `GET /api/tasks/{task_id}/leads/{domain}`
 - `POST /api/tasks/{task_id}/assess`：提交 `records`、`weights` 和 `signals_by_domain`，执行清洗、评分并持久化

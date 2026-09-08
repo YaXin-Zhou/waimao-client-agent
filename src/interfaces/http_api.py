@@ -8,6 +8,7 @@ from urllib.parse import unquote, urlsplit
 from src.application.acquisition_service import AcquisitionService
 from src.application.email_review_service import EmailReviewService
 from src.domain.lead import LeadRecord
+from src.domain.sender_profile import SenderProfile
 from src.domain.task import AcquisitionCriteria
 
 
@@ -109,7 +110,15 @@ class ApiApplication:
             daily_limit=int(criteria_data.get("daily_limit", 10)),
             keywords=tuple(str(item) for item in criteria_data.get("keywords", [])),
         )
-        task = self._acquisition.create_task(str(body.get("name", "")), criteria)
+        sender_data = body.get("sender_profile", {})
+        if not isinstance(sender_data, dict):
+            raise ValueError("sender_profile must be an object")
+        sender_profile = SenderProfile(
+            company_name=str(sender_data.get("company_name", "")),
+            contact_name=str(sender_data.get("contact_name", "")),
+            position=str(sender_data.get("position", "")),
+        )
+        task = self._acquisition.create_task(str(body.get("name", "")), criteria, sender_profile)
         return 201, self._task(task)
 
     def _assess_leads(self, task_id: str, body: dict) -> tuple[int, dict]:
@@ -158,7 +167,12 @@ class ApiApplication:
         template = str(body.get("template", ""))
         product = str(body.get("product", ""))
         draft = self._email_drafts.generate(
-            task_id, assessed.lead, research, template, product
+            task_id,
+            assessed.lead,
+            research,
+            template,
+            product,
+            self._tasks.get(task_id).sender_profile,
         )
         self._drafts.save(draft)
         return 201, self._draft(draft)

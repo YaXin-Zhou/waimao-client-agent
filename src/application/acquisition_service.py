@@ -6,6 +6,7 @@ from dataclasses import dataclass
 
 from src.application.ports import LeadRepository, SearchProvider, TaskRepository
 from src.domain.lead import CleanLead, LeadRecord, LeadScore, clean_leads, score_lead
+from src.domain.sender_profile import SenderProfile
 from src.domain.task import AcquisitionCriteria, AcquisitionTask
 
 
@@ -26,8 +27,13 @@ class AcquisitionService:
         self._leads = lead_repository
         self._search = search_provider
 
-    def create_task(self, name: str, criteria: AcquisitionCriteria) -> AcquisitionTask:
-        task = AcquisitionTask.create(name, criteria)
+    def create_task(
+        self,
+        name: str,
+        criteria: AcquisitionCriteria,
+        sender_profile: SenderProfile | None = None,
+    ) -> AcquisitionTask:
+        task = AcquisitionTask.create(name, criteria, sender_profile)
         self._tasks.save(task)
         return task
 

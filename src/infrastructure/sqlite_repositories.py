@@ -11,6 +11,7 @@ from src.domain.email_draft import EmailDraft, EmailDraftStatus
 from src.domain.lead import CleanLead, LeadScore
 from src.domain.research import CustomerType, EvidenceStatus, ResearchResult
 from src.domain.research_run import ResearchRun, ResearchRunStatus
+from src.domain.sender_profile import SenderProfile
 from src.domain.task import AcquisitionCriteria, AcquisitionTask, TaskStatus
 
 
@@ -94,6 +95,11 @@ class SQLiteTaskRepository:
             "language": task.criteria.language,
             "daily_limit": task.criteria.daily_limit,
             "keywords": task.criteria.keywords,
+            "sender_profile": {
+                "company_name": task.sender_profile.company_name,
+                "contact_name": task.sender_profile.contact_name,
+                "position": task.sender_profile.position,
+            },
         }
         with _connect(self._database) as connection:
             connection.execute(
@@ -126,11 +132,17 @@ class SQLiteTaskRepository:
             daily_limit=criteria_data["daily_limit"],
             keywords=tuple(criteria_data.get("keywords", [])),
         )
+        sender_data = criteria_data.get("sender_profile", {})
         return AcquisitionTask(
             id=row["id"],
             name=row["name"],
             criteria=criteria,
             status=TaskStatus(row["status"]),
+            sender_profile=SenderProfile(
+                company_name=str(sender_data.get("company_name", "")),
+                contact_name=str(sender_data.get("contact_name", "")),
+                position=str(sender_data.get("position", "")),
+            ),
         )
 
     def list(self) -> list[AcquisitionTask]:
