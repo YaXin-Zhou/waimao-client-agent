@@ -14,12 +14,20 @@ class ResearchRunStatus(StrEnum):
     FAILED = "failed"
 
 
+class ResearchRunStep(StrEnum):
+    QUEUED = "queued"
+    EXECUTING = "executing"
+    COMPLETED = "completed"
+    FAILED = "failed"
+
+
 @dataclass(frozen=True)
 class ResearchRun:
     id: str
     task_id: str
     domain: str
     status: ResearchRunStatus = ResearchRunStatus.RUNNING
+    step: ResearchRunStep = ResearchRunStep.QUEUED
     attempts: int = 0
     error: str = ""
 
@@ -28,7 +36,7 @@ class ResearchRun:
         return cls(id=str(uuid4()), task_id=task_id, domain=domain)
 
     def attempted(self) -> "ResearchRun":
-        return replace(self, attempts=self.attempts + 1)
+        return replace(self, attempts=self.attempts + 1, step=ResearchRunStep.EXECUTING)
 
     def succeed(self, review_required: bool = False) -> "ResearchRun":
         status = (
@@ -36,7 +44,12 @@ class ResearchRun:
             if review_required
             else ResearchRunStatus.SUCCEEDED
         )
-        return replace(self, status=status, error="")
+        return replace(self, status=status, step=ResearchRunStep.COMPLETED, error="")
 
     def fail(self, error: str) -> "ResearchRun":
-        return replace(self, status=ResearchRunStatus.FAILED, error=error)
+        return replace(
+            self,
+            status=ResearchRunStatus.FAILED,
+            step=ResearchRunStep.FAILED,
+            error=error,
+        )

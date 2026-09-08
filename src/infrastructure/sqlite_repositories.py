@@ -11,7 +11,7 @@ from src.domain.audit_event import AuditEvent
 from src.domain.email_draft import EmailDraft, EmailDraftStatus
 from src.domain.lead import CleanLead, LeadScore, LeadStatus
 from src.domain.research import CustomerType, EvidenceStatus, ResearchResult
-from src.domain.research_run import ResearchRun, ResearchRunStatus
+from src.domain.research_run import ResearchRun, ResearchRunStatus, ResearchRunStep
 from src.domain.sender_profile import SenderProfile
 from src.domain.task import AcquisitionCriteria, AcquisitionTask, TaskStatus
 
@@ -58,11 +58,20 @@ def _connect(database: str | Path) -> sqlite3.Connection:
             task_id TEXT NOT NULL,
             domain TEXT NOT NULL,
             status TEXT NOT NULL,
+            step TEXT NOT NULL DEFAULT 'queued',
             attempts INTEGER NOT NULL,
             error TEXT NOT NULL
         )
         """
     )
+    columns = {
+        row["name"]
+        for row in connection.execute("PRAGMA table_info(research_runs)").fetchall()
+    }
+    if "step" not in columns:
+        connection.execute(
+            "ALTER TABLE research_runs ADD COLUMN step TEXT NOT NULL DEFAULT 'queued'"
+        )
     connection.execute(
         """
         CREATE TABLE IF NOT EXISTS email_drafts (
@@ -298,12 +307,13 @@ class SQLiteResearchRunRepository:
         with _connect(self._database) as connection:
             connection.execute(
                 """
-                INSERT INTO research_runs (id, task_id, domain, status, attempts, error)
-                VALUES (?, ?, ?, ?, ?, ?)
+                INSERT INTO research_runs (id, task_id, domain, status, step, attempts, error)
+                VALUES (?, ?, ?, ?, ?, ?, ?)
                 ON CONFLICT(id) DO UPDATE SET
                     task_id=excluded.task_id,
                     domain=excluded.domain,
                     status=excluded.status,
+                    step=excluded.step,
                     attempts=excluded.attempts,
                     error=excluded.error
                 """,
@@ -312,6 +322,7 @@ class SQLiteResearchRunRepository:
                     run.task_id,
                     run.domain,
                     run.status.value,
+                    run.step.value,
                     run.attempts,
                     run.error,
                 ),
@@ -321,7 +332,7 @@ class SQLiteResearchRunRepository:
         with _connect(self._database) as connection:
             row = connection.execute(
                 """
-                SELECT id, task_id, domain, status, attempts, error
+                SELECT id, task_id, domain, status, step, attempts, error
                 FROM research_runs
                 WHERE id = ?
                 """,
@@ -334,6 +345,7 @@ class SQLiteResearchRunRepository:
             task_id=row["task_id"],
             domain=row["domain"],
             status=ResearchRunStatus(row["status"]),
+            step=ResearchRunStep(row["step"]),
             attempts=row["attempts"],
             error=row["error"],
         )
@@ -342,7 +354,7 @@ class SQLiteResearchRunRepository:
         with _connect(self._database) as connection:
             rows = connection.execute(
                 """
-                SELECT id, task_id, domain, status, attempts, error
+                SELECT id, task_id, domain, status, step, attempts, error
                 FROM research_runs
                 WHERE task_id = ?
                 ORDER BY rowid
@@ -355,6 +367,7 @@ class SQLiteResearchRunRepository:
                 task_id=row["task_id"],
                 domain=row["domain"],
                 status=ResearchRunStatus(row["status"]),
+                step=ResearchRunStep(row["step"]),
                 attempts=row["attempts"],
                 error=row["error"],
             )

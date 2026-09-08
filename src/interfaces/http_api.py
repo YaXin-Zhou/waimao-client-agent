@@ -475,6 +475,7 @@ class ApiApplication:
             "task_id": run.task_id,
             "domain": run.domain,
             "status": run.status.value,
+            "step": run.step.value,
             "attempts": run.attempts,
             "error": run.error,
         }

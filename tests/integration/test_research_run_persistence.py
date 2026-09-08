@@ -12,6 +12,7 @@ def test_research_run_survives_repository_recreation(tmp_path):
 
     assert restored == run
     assert restored.status is ResearchRunStatus.REVIEW_REQUIRED
+    assert restored.step.value == "completed"
 
 
 def test_research_runs_can_be_listed_by_task(tmp_path):
