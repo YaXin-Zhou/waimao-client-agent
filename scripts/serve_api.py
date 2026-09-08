@@ -3,8 +3,10 @@
 from __future__ import annotations
 
 import json
+import logging
 import os
 import sys
+import time
 from http.server import BaseHTTPRequestHandler, ThreadingHTTPServer
 from pathlib import Path
 
@@ -43,6 +45,8 @@ from src.infrastructure.website_fetcher import WebsiteFetcher  # noqa: E402
 from src.interfaces.http_api import ApiApplication  # noqa: E402
 
 DATABASE = ROOT / "data" / "runtime" / "acquisition.db"
+LOGGER = logging.getLogger("waimao.api")
+logging.basicConfig(level=logging.INFO, format="%(message)s")
 
 
 def _config_values(path: Path) -> dict[str, str]:
@@ -160,6 +164,18 @@ application = ApiApplication(
 
 
 class Handler(BaseHTTPRequestHandler):
+    def _handle(self, method, body=None):
+        started = time.perf_counter()
+        status, payload = application.handle(method, self.path, body)
+        LOGGER.info(json.dumps({
+            "event": "http_request",
+            "method": method,
+            "path": self.path.split("?", 1)[0],
+            "status": status,
+            "duration_ms": round((time.perf_counter() - started) * 1000, 2),
+        }, ensure_ascii=False))
+        self._respond(status, payload)
+
     def _respond(self, status, payload):
         encoded = json.dumps(payload, ensure_ascii=False).encode("utf-8")
         self.send_response(status)
@@ -169,14 +185,12 @@ class Handler(BaseHTTPRequestHandler):
         self.wfile.write(encoded)
 
     def do_GET(self):
-        status, payload = application.handle("GET", self.path)
-        self._respond(status, payload)
+        self._handle("GET")
 
     def do_POST(self):
         length = int(self.headers.get("Content-Length", 0))
         body = self.rfile.read(length).decode("utf-8")
-        status, payload = application.handle("POST", self.path, body)
-        self._respond(status, payload)
+        self._handle("POST", body)
 
     def log_message(self, *_args):
         return
