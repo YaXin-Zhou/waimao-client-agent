@@ -27,6 +27,7 @@ class AcquisitionCriteria:
     customer_types: tuple[str, ...] = ()
     language: str = "English"
     daily_limit: int = 10
+    keywords: tuple[str, ...] = ()
 
     def __post_init__(self) -> None:
         if not self.product.strip():

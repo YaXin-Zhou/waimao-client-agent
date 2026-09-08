@@ -15,6 +15,8 @@ class LeadRecord:
     website: str = ""
     email: str = ""
     country: str = ""
+    source_url: str = ""
+    source_excerpt: str = ""
 
 
 @dataclass(frozen=True)
@@ -27,6 +29,7 @@ class CleanLead:
     country: str
     quality: str
     flags: tuple[str, ...] = ()
+    sources: tuple[tuple[str, str], ...] = ()
 
 
 @dataclass(frozen=True)
@@ -85,6 +88,13 @@ def clean_leads(records: list[LeadRecord]) -> list[CleanLead]:
         emails = tuple(dict.fromkeys(value for value in email_values if value))
         country_values = [_normalize_country(item.country) for item in group]
         countries = tuple(dict.fromkeys(value for value in country_values if value))
+        sources = tuple(
+            dict.fromkeys(
+                (item.source_url.strip(), item.source_excerpt.strip())
+                for item in group
+                if item.source_url.strip()
+            )
+        )
         flags: list[str] = []
         if not domain:
             flags.append("missing_website")
@@ -94,7 +104,9 @@ def clean_leads(records: list[LeadRecord]) -> list[CleanLead]:
             flags.append("conflicting_country")
         country = countries[0] if countries else ""
         quality = "complete" if domain and emails and len(countries) <= 1 else "needs_review"
-        result.append(CleanLead(company_name, domain, emails, country, quality, tuple(flags)))
+        result.append(
+            CleanLead(company_name, domain, emails, country, quality, tuple(flags), sources)
+        )
     return result
 
 

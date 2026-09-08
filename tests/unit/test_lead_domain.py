@@ -20,6 +20,34 @@ def test_sample_dataset_produces_clean_records_for_sales_review():
     assert cleaned[2].quality == "needs_review"
 
 
+def test_clean_leads_preserves_source_evidence_when_merging_records():
+    cleaned = clean_leads(
+        [
+            LeadRecord(
+                "Acme Outdoor",
+                "https://acme.example",
+                "sales@acme.example",
+                "DE",
+                "https://search.example/acme",
+                "Search result snippet",
+            ),
+            LeadRecord(
+                "Acme Outdoor",
+                "https://acme.example/contact",
+                "info@acme.example",
+                "Germany",
+                "https://acme.example/contact",
+                "Official contact page",
+            ),
+        ]
+    )
+
+    assert cleaned[0].sources == (
+        ("https://search.example/acme", "Search result snippet"),
+        ("https://acme.example/contact", "Official contact page"),
+    )
+
+
 def test_clean_leads_normalizes_and_merges_same_company_by_domain():
     records = [
         LeadRecord(

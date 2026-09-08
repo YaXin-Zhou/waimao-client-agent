@@ -52,6 +52,7 @@ class SQLiteTaskRepository:
             "customer_types": task.criteria.customer_types,
             "language": task.criteria.language,
             "daily_limit": task.criteria.daily_limit,
+            "keywords": task.criteria.keywords,
         }
         with _connect(self._database) as connection:
             connection.execute(
@@ -82,6 +83,7 @@ class SQLiteTaskRepository:
             customer_types=tuple(criteria_data["customer_types"]),
             language=criteria_data["language"],
             daily_limit=criteria_data["daily_limit"],
+            keywords=tuple(criteria_data.get("keywords", [])),
         )
         return AcquisitionTask(
             id=row["id"],
@@ -116,6 +118,7 @@ class SQLiteLeadRepository:
                             "country": result.lead.country,
                             "quality": result.lead.quality,
                             "flags": result.lead.flags,
+                            "sources": result.lead.sources,
                         }),
                         json.dumps({
                             "total": result.score.total,
@@ -151,6 +154,7 @@ class SQLiteLeadRepository:
                         country=lead_data["country"],
                         quality=lead_data["quality"],
                         flags=tuple(lead_data["flags"]),
+                        sources=tuple(tuple(source) for source in lead_data.get("sources", [])),
                     ),
                     score=LeadScore(
                         total=score_data["total"],
