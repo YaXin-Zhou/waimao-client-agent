@@ -62,6 +62,48 @@ class AcquisitionService:
             raise KeyError(f"Task not found: {task_id}")
         return self._leads.list_assessments(task_id)
 
+    def update_contact(
+        self,
+        task_id: str,
+        domain: str,
+        email: str,
+        source_url: str,
+        source_excerpt: str,
+    ) -> AssessedLead:
+        """补充有来源的公开邮箱，并保留原有评分。"""
+        assessed = next(
+            (item for item in self.list_leads(task_id) if item.lead.domain == domain), None
+        )
+        if assessed is None:
+            raise KeyError(f"Lead not found: {domain}")
+        if not source_url.strip() or not source_excerpt.strip():
+            raise ValueError("contact source url and excerpt are required")
+        record = LeadRecord(
+            company_name=assessed.lead.company_name,
+            website=f"https://{assessed.lead.domain}",
+            email=email,
+            country=assessed.lead.country,
+            source_url=source_url,
+            source_excerpt=source_excerpt,
+        )
+        updated = clean_leads([
+            LeadRecord(
+                record.company_name,
+                record.website,
+                assessed.lead.emails[0] if assessed.lead.emails else "",
+                record.country,
+                assessed.lead.sources[0][0] if assessed.lead.sources else "",
+                assessed.lead.sources[0][1] if assessed.lead.sources else "",
+            ),
+            record,
+        ])[0]
+        result = AssessedLead(updated, assessed.score)
+        self._leads.save_assessments(
+            task_id,
+            [item if item.lead.domain != domain else result for item in self.list_leads(task_id)],
+        )
+        return result
+
     def discover_and_assess(
         self,
         task_id: str,

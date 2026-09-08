@@ -155,6 +155,24 @@ def test_api_returns_lead_list():
     assert payload["items"][0]["lead"]["domain"] == "alpine.example"
 
 
+def test_api_updates_contact_only_with_source_evidence_and_keeps_score():
+    app, task, _ = make_app()
+
+    status, payload = app.handle(
+        "POST",
+        f"/api/tasks/{task.id}/leads/alpine.example/contact",
+        {
+            "email": "contact@alpine.example",
+            "source_url": "https://alpine.example/contact",
+            "source_excerpt": "Public sales contact",
+        },
+    )
+
+    assert status == 200
+    assert payload["lead"]["emails"] == ("sales@alpine.example", "contact@alpine.example")
+    assert payload["score"]["total"] == 72
+
+
 def test_api_assesses_external_records_with_request_configuration():
     app, task, _ = make_app()
 

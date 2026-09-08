@@ -46,6 +46,16 @@ class ApiApplication:
                 )
             if (
                 method == "POST"
+                and len(segments) == 6
+                and segments[:2] == ["api", "tasks"]
+                and segments[3] == "leads"
+                and segments[5] == "contact"
+            ):
+                return self._update_contact(
+                    segments[2], segments[4], self._parse_body(body)
+                )
+            if (
+                method == "POST"
                 and len(segments) == 4
                 and segments[:2] == ["api", "tasks"]
                 and segments[3] == "assess"
@@ -171,6 +181,16 @@ class ApiApplication:
         )
         self._drafts.save(draft)
         return 201, self._draft(draft)
+
+    def _update_contact(self, task_id: str, domain: str, body: dict) -> tuple[int, dict]:
+        result = self._acquisition.update_contact(
+            task_id,
+            domain,
+            str(body.get("email", "")),
+            str(body.get("source_url", "")),
+            str(body.get("source_excerpt", "")),
+        )
+        return 200, self._assessed(result)
 
     def _lead_detail(self, task_id: str, domain: str) -> tuple[int, dict]:
         self._require_task(task_id)
