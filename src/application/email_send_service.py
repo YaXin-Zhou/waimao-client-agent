@@ -64,3 +64,6 @@ class EmailSendService:
         )
         self._attempts.save(attempt)
         return attempt
+
+    def list_attempts(self, draft_id: str):
+        return self._attempts.list_for_draft(draft_id)

@@ -82,6 +82,13 @@ class ApiApplication:
             ):
                 return self._send_draft(segments[2], self._parse_body(body))
             if (
+                method == "GET"
+                and len(segments) == 4
+                and segments[:2] == ["api", "drafts"]
+                and segments[3] == "send-attempts"
+            ):
+                return self._send_attempts(segments[2])
+            if (
                 method == "POST"
                 and len(segments) == 5
                 and segments[:2] == ["api", "tasks"]
@@ -293,6 +300,15 @@ class ApiApplication:
             str(body.get("idempotency_key", "")).strip(),
         )
         return 200, {"attempt": self._send_attempt(attempt), "sending_performed": True}
+
+    def _send_attempts(self, draft_id: str) -> tuple[int, dict]:
+        if self._email_send is None:
+            raise RuntimeError("email send service is not configured")
+        if self._drafts.get(draft_id) is None:
+            raise KeyError(f"Draft not found: {draft_id}")
+        return 200, {
+            "items": [self._send_attempt(item) for item in self._email_send.list_attempts(draft_id)]
+        }
 
     def _sync_mailbox(self, task_id: str) -> tuple[int, dict]:
         if self._mailbox_sync is None or self._mailbox is None:

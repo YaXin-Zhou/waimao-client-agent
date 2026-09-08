@@ -29,6 +29,9 @@ python scripts/serve_api.py
 - `POST /api/tasks/{task_id}/leads/{domain}/draft`：仅在真实邮箱和真实背调存在时调用 DeepSeek 生成待审核草稿，不发送邮件
 - `GET /api/drafts/{draft_id}`
 - `GET /api/drafts/{draft_id}/audit-events`：读取草稿审核状态变更记录
+- `POST /api/drafts/{draft_id}/send-check`：只做发送前安全检查，不发送邮件
+- `POST /api/drafts/{draft_id}/send`：仅在批准、人工确认和内容快照一致后调用 SMTP
+- `GET /api/drafts/{draft_id}/send-attempts`：读取发送尝试审计记录
 - `POST /api/drafts/{draft_id}/translate`：调用非大模型机器翻译生成中文阅读预览，不覆盖原始英文草稿
 - `POST /api/drafts/{draft_id}/approve`
 - `POST /api/drafts/{draft_id}/request-revision`
