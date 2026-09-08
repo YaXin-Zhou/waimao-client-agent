@@ -1,16 +1,5 @@
 import { useEffect, useMemo, useState } from 'react'
 
-const leads = [
-  { name: 'Solar-Generatoren.de', country: 'Germany', flag: '🇩🇪', type: 'Retailer', score: 25, status: 'evidence', detail: '专注于便携式太阳能发电机及户外能源解决方案的在线零售商。', email: 'Kontakt (AT) Solar-Generatoren.de', website: 'https://solar-generatoren.de/' },
-  { name: 'GreenPower Solutions', country: 'France', flag: '🇫🇷', type: 'Distributor', score: 18, status: 'complete', detail: '面向欧洲市场提供便携储能与户外电源产品的分销商。', email: 'sales@greenpower.example', website: 'https://greenpower.example/' },
-  { name: 'SunVolt GmbH', country: 'Germany', flag: '🇩🇪', type: 'Wholesaler', score: 22, status: 'researching', detail: '批发太阳能组件与小型储能设备，正在补充联系人信息。', email: 'info@sunvolt.example', website: 'https://sunvolt.example/' },
-  { name: 'EcoTech Retail', country: 'Netherlands', flag: '🇳🇱', type: 'Retailer', score: 17, status: 'review', detail: '线上零售环保能源设备，产品类别与目标产品部分重合。', email: 'hello@ecotech.example', website: 'https://ecotech.example/' },
-  { name: 'PowerHome SAS', country: 'France', flag: '🇫🇷', type: 'Retailer', score: 20, status: 'complete', detail: '家用应急电源及户外能源产品零售商。', email: 'contact@powerhome.example', website: 'https://powerhome.example/' },
-  { name: 'Solar & More', country: 'Belgium', flag: '🇧🇪', type: 'Distributor', score: 19, status: 'researching', detail: '比利时太阳能及储能产品渠道服务商。', email: 'sales@solar-more.example', website: 'https://solar-more.example/' },
-  { name: 'Renewable Goods Ltd', country: 'United Kingdom', flag: '🇬🇧', type: 'Retailer', score: 16, status: 'review', detail: '可再生能源消费品零售渠道。', email: 'team@renewable-goods.example', website: 'https://renewable-goods.example/' },
-  { name: 'SunLife Store', country: 'Spain', flag: '🇪🇸', type: 'Retailer', score: 18, status: 'complete', detail: '西班牙户外及露营能源装备零售商。', email: 'ventas@sunlife.example', website: 'https://sunlife.example/' },
-]
-
 const navItems = [
   ['users', '客户池'],
   ['clipboard', '背调队列'],
@@ -42,8 +31,9 @@ function Status({ status }) {
 }
 
 function App() {
-  const [selected, setSelected] = useState(leads[0])
-  const [remoteLeads, setRemoteLeads] = useState(null)
+  const [selected, setSelected] = useState(null)
+  const [remoteLeads, setRemoteLeads] = useState([])
+  const [remoteTasks, setRemoteTasks] = useState([])
   const [remoteTaskId, setRemoteTaskId] = useState('')
   const [remoteTaskConfig, setRemoteTaskConfig] = useState(null)
   const [selectedResearch, setSelectedResearch] = useState(null)
@@ -66,29 +56,42 @@ function App() {
         const taskResponse = await fetch('/api/tasks')
         if (!taskResponse.ok) throw new Error('tasks request failed')
         const tasks = await taskResponse.json()
-        const task = tasks.items?.[0]
+        const availableTasks = tasks.items || []
+        setRemoteTasks(availableTasks)
+        const task = availableTasks[0]
         if (!task) {
-          if (!cancelled) { setRemoteLeads([]); setApiState('empty') }
+          if (!cancelled) { setRemoteLeads([]); setSelected(null); setApiState('empty') }
           return
         }
-        setRemoteTaskId(task.id)
-        setRemoteTaskConfig(task)
-        const leadResponse = await fetch(`/api/tasks/${task.id}/leads`)
-        if (!leadResponse.ok) throw new Error('leads request failed')
-        const data = await leadResponse.json()
-        const loaded = (data.items || []).map(mapRemoteLead)
-        if (!cancelled) {
-          setRemoteLeads(loaded)
-          setApiState(loaded.length ? 'connected' : 'empty')
-          if (loaded.length) setSelected(loaded[0])
-        }
+        if (!cancelled) { setRemoteTaskId(task.id); setRemoteTaskConfig(task) }
       } catch {
-        if (!cancelled) setApiState('demo')
+        if (!cancelled) { setRemoteTasks([]); setRemoteLeads([]); setSelected(null); setApiState('error') }
       }
     }
     load()
     return () => { cancelled = true }
   }, [])
+  useEffect(() => {
+    if (!remoteTaskId) return undefined
+    let cancelled = false
+    const loadLeads = async () => {
+      try {
+        const leadResponse = await fetch(`/api/tasks/${remoteTaskId}/leads`)
+        if (!leadResponse.ok) throw new Error('leads request failed')
+        const data = await leadResponse.json()
+        const loaded = (data.items || []).map(mapRemoteLead)
+        if (!cancelled) {
+          setRemoteLeads(loaded)
+          setSelected(loaded[0] || null)
+          setApiState(loaded.length ? 'connected' : 'empty')
+        }
+      } catch {
+        if (!cancelled) { setRemoteLeads([]); setSelected(null); setApiState('error') }
+      }
+    }
+    loadLeads()
+    return () => { cancelled = true }
+  }, [remoteTaskId])
   useEffect(() => {
     if (!remoteTaskId || !selected?.domain) return undefined
     let cancelled = false
@@ -100,13 +103,25 @@ function App() {
       .catch(() => { if (!cancelled) setSelectedResearch(null) })
     return () => { cancelled = true }
   }, [remoteTaskId, selected?.domain])
-  const displayLeads = remoteLeads?.length ? remoteLeads : leads
+  const displayLeads = remoteLeads
   const filteredLeads = useMemo(() => displayLeads.filter((lead) => `${lead.name} ${lead.country} ${lead.type}`.toLowerCase().includes(query.toLowerCase())), [displayLeads, query])
-  const activeLead = selectedResearch || selectedDraft ? { ...selected, type: selectedResearch ? customerTypeLabel(selectedResearch.customer_type) : selected.type, detail: selectedResearch?.business_summary || selected.detail, research: selectedResearch, draft: selectedDraft, isRemote: true } : selected
+  const activeLead = selected && (selectedResearch || selectedDraft) ? { ...selected, type: selectedResearch ? customerTypeLabel(selectedResearch.customer_type) : selected.type, detail: selectedResearch?.business_summary || selected.detail, research: selectedResearch, draft: selectedDraft, isRemote: true } : selected
   const isRealMode = apiState === 'connected'
 
   const notify = (message) => { setToast(message); window.setTimeout(() => setToast(''), 2600) }
   const selectLead = (lead) => { setSelected(lead); setDetailTab('概览'); setDraftStatus('pending'); setTranslatedDraft(null) }
+  const selectTask = (event) => {
+    const task = remoteTasks.find((item) => item.id === event.target.value)
+    if (!task) return
+    setRemoteTaskId(task.id)
+    setRemoteTaskConfig(task)
+    setRemoteLeads([])
+    setSelected(null)
+    setSelectedResearch(null)
+    setSelectedDraft(null)
+    setTranslatedDraft(null)
+    setDetailTab('概览')
+  }
   const translateDraft = async () => {
     if (!selectedDraft?.id) return
     setTranslationLoading(true)
@@ -191,18 +206,19 @@ function App() {
   return <div className="app-shell">
     <aside className="sidebar">
       <div className="brand"><span className="brand-mark">✦</span><span>NORTHSTAR OPS</span></div>
-      <nav>{navItems.map(([icon, label]) => <button key={label} className={`nav-item ${activeNav === label ? 'active' : ''}`} onClick={() => { setActiveNav(label); notify(`${label}模块将在下一阶段接入`) }}><Icon name={icon} /><span>{label}</span>{label === '开发信审核' && <b>12</b>}</button>)}</nav>
+      <nav>{navItems.map(([icon, label]) => <button key={label} className={`nav-item ${activeNav === label ? 'active' : ''}`} onClick={() => { setActiveNav(label); notify(`${label}模块将在下一阶段接入`) }}><Icon name={icon} /><span>{label}</span></button>)}</nav>
       <div className="sidebar-bottom"><div className="sidebar-rule"/><p>让中国制造<br/>连接全球真实需求</p><small>NORTHSTAR OPS<br/><em>v0.1.0 · LOCAL</em></small></div>
     </aside>
     <main className="main-shell">
       <header className="topbar"><div className="search-global"><Icon name="search" size={17}/><input value={query} onChange={(event) => setQuery(event.target.value)} placeholder="搜索公司、域名或关键词…"/><kbd>⌘ K</kbd></div><div className="top-actions"><button className="icon-button" onClick={() => notify('暂无新的系统通知')} aria-label="通知"><Icon name="bell" size={20}/><i className="notification-dot"/></button><span className="top-divider"/><div className="profile"><span className="avatar">ZL</span><span><strong>张力</strong><small>销售团队</small></span><span className="chevron">⌄</span></div></div></header>
       <div className="content">
         <div className="page-heading"><div><h1>客户智能工作台</h1><p>从公开证据到可审核的下一步</p></div><button className="primary-button" onClick={() => setShowTask(true)}><Icon name="plus" size={19}/>新建获客任务</button></div>
-        <div className={`data-notice ${apiState}`}><span />{apiState === 'loading' ? '正在读取本地任务数据…' : apiState === 'connected' ? '已连接本地 API · 当前显示持久化客户档案' : apiState === 'empty' ? 'API 已连接 · 当前数据库暂无客户档案，以下为演示数据' : 'API 未连接 · 当前为演示数据，审核动作尚未写入后端'}</div>
-        <section className="metric-row"><Metric icon="clipboard" label="待审核" value={isRealMode ? '—' : '12'} note={isRealMode ? '统计接口尚未接入' : '需要你的判断'}/><Metric icon="users" label="高匹配客户" value={isRealMode ? '—' : '28'} note={isRealMode ? '统计接口尚未接入' : '本周 +6'}/><Metric icon="researching" label="本周新增" value={isRealMode ? '—' : '37'} note={isRealMode ? '统计接口尚未接入' : '来自 4 个市场'}/></section>
+        <div className={`data-notice ${apiState}`}><span />{apiState === 'loading' ? '正在读取本地任务数据…' : apiState === 'connected' ? '已连接本地 API · 当前显示持久化客户档案' : apiState === 'empty' ? 'API 已连接 · 当前没有可显示的真实客户档案' : 'API 连接失败 · 为避免混淆，已隐藏演示数据'}</div>
+        <div className="task-context"><label>当前获客任务<select value={remoteTaskId} onChange={selectTask} disabled={!remoteTasks.length}><option value="">暂无可选任务</option>{remoteTasks.map((task) => <option key={task.id} value={task.id}>{task.name}</option>)}</select></label>{remoteTaskConfig && <span>任务条件：{remoteTaskConfig.criteria?.product || '未配置产品'} · {remoteTaskConfig.criteria?.countries?.join('、') || '未配置市场'}</span>}</div>
+        <section className="metric-row"><Metric icon="clipboard" label="待审核" value="—" note="统计接口尚未接入"/><Metric icon="users" label="高匹配客户" value="—" note="统计接口尚未接入"/><Metric icon="researching" label="本周新增" value="—" note="统计接口尚未接入"/></section>
         <section className="workspace-grid">
-          <div className="lead-panel panel"><div className="panel-heading"><div><h2>客户列表 <span>共 {filteredLeads.length} 个</span></h2><p>已按当前任务条件筛选</p></div><button className="filter-button" onClick={() => notify('筛选条件：国家、类型、评分、状态')}><Icon name="filter" size={16}/>筛选</button></div><div className="table-head"><span className="checkbox"/><span>公司名称</span><span>国家 / 地区</span><span>客户类型</span><span>匹配分数</span><span>状态</span><span/></div><div className="lead-list">{filteredLeads.length ? filteredLeads.map((lead) => <button className={`lead-row ${selected.name === lead.name ? 'selected' : ''}`} key={lead.name} onClick={() => selectLead(lead)}><span className={`checkbox ${selected.name === lead.name ? 'checked' : ''}`}>{selected.name === lead.name && <Icon name="check" size={13}/>}</span><strong>{lead.name}</strong><span className="country"><span>{lead.flag}</span>{lead.country}</span><span>{lead.type}</span><span className="score"><b>{lead.score}</b> / 100</span><Status status={lead.status}/><span className="more">···</span></button>) : <div className="empty-results">没有匹配的客户，请调整搜索词</div>}</div><div className="table-footer"><span>当前筛选 {filteredLeads.length} 条</span><div className="pagination"><button>‹</button><button className="page-active">1</button><button>2</button><button>3</button><button>4</button><span>…</span><button>13</button><button>›</button></div></div></div>
-          <aside className={`detail-panel panel ${filteredLeads.length ? '' : 'detail-empty'}`}>{filteredLeads.length ? <><div className="detail-top"><div className="company-symbol">◎</div><div className="company-title"><div><h2>{activeLead.name} <a href={activeLead.website} target="_blank" rel="noreferrer"><Icon name="external" size={14}/></a></h2><p>{activeLead.country} <i/> {activeLead.type} <i/> {activeLead.research ? '已完成官网背调' : '待背调'}</p></div><div className="score-block"><Status status={activeLead.status}/><strong>{activeLead.score}<small> / 100</small></strong><span>匹配分数</span></div></div></div><div className="detail-tabs">{['概览', '来源证据', '开发信草稿'].map((tab) => <button className={detailTab === tab ? 'active' : ''} key={tab} onClick={() => setDetailTab(tab)}>{tab}</button>)}</div>{detailTab === '概览' && <Overview lead={activeLead} onEvidence={() => setDetailTab('来源证据')} onDraft={() => setDetailTab('开发信草稿')}/>} {detailTab === '来源证据' && <Evidence lead={activeLead}/>} {detailTab === '开发信草稿' && <><Draft lead={activeLead} language={language} setLanguage={setLanguage} translatedDraft={translatedDraft} translationLoading={translationLoading} onTranslate={translateDraft} onReview={reviewDraft} reviewLoading={reviewLoading} status={draftStatus} setStatus={setDraftStatus} notify={notify}/><ContactForm lead={activeLead} onUpdate={updateContact}/><SenderProfileEditor taskConfig={remoteTaskConfig} onSave={saveSenderProfile}/><DraftGenerator lead={activeLead} taskConfig={remoteTaskConfig} loading={reviewLoading} onGenerate={generateDraft}/><ReviewControls lead={activeLead} onReview={reviewDraft} loading={reviewLoading}/></>}</> : <div className="detail-empty-state"><strong>没有选中的客户</strong><span>调整搜索词后选择一条客户记录</span></div>}</aside>
+          <div className="lead-panel panel"><div className="panel-heading"><div><h2>客户列表 <span>共 {filteredLeads.length} 个</span></h2><p>已按当前任务条件筛选</p></div><button className="filter-button" onClick={() => notify('筛选条件：国家、类型、评分、状态')}><Icon name="filter" size={16}/>筛选</button></div><div className="table-head"><span className="checkbox"/><span>公司名称</span><span>国家 / 地区</span><span>客户类型</span><span>匹配分数</span><span>状态</span><span/></div><div className="lead-list">{filteredLeads.length ? filteredLeads.map((lead) => <button className={`lead-row ${selected?.name === lead.name ? 'selected' : ''}`} key={lead.name} onClick={() => selectLead(lead)}><span className={`checkbox ${selected?.name === lead.name ? 'checked' : ''}`}>{selected?.name === lead.name && <Icon name="check" size={13}/>}</span><strong>{lead.name}</strong><span className="country"><span>{lead.flag}</span>{lead.country}</span><span>{lead.type}</span><span className="score"><b>{lead.score}</b> / 100</span><Status status={lead.status}/><span className="more">···</span></button>) : <div className="empty-results">没有匹配的客户，请调整搜索词</div>}</div><div className="table-footer"><span>当前筛选 {filteredLeads.length} 条</span><div className="pagination"><button>‹</button><button className="page-active">1</button><button>2</button><button>3</button><button>4</button><span>…</span><button>13</button><button>›</button></div></div></div>
+          <aside className={`detail-panel panel ${filteredLeads.length && activeLead ? '' : 'detail-empty'}`}>{filteredLeads.length && activeLead ? <><div className="detail-top"><div className="company-symbol">◎</div><div className="company-title"><div><h2>{activeLead.name} <a href={activeLead.website} target="_blank" rel="noreferrer"><Icon name="external" size={14}/></a></h2><p>{activeLead.country} <i/> {activeLead.type} <i/> {activeLead.research ? '已完成官网背调' : '待背调'}</p></div><div className="score-block"><Status status={activeLead.status}/><strong>{activeLead.score}<small> / 100</small></strong><span>匹配分数</span></div></div></div><div className="detail-tabs">{['概览', '来源证据', '开发信草稿'].map((tab) => <button className={detailTab === tab ? 'active' : ''} key={tab} onClick={() => setDetailTab(tab)}>{tab}</button>)}</div>{detailTab === '概览' && <Overview lead={activeLead} onEvidence={() => setDetailTab('来源证据')} onDraft={() => setDetailTab('开发信草稿')}/>} {detailTab === '来源证据' && <Evidence lead={activeLead}/>} {detailTab === '开发信草稿' && <><Draft lead={activeLead} language={language} setLanguage={setLanguage} translatedDraft={translatedDraft} translationLoading={translationLoading} onTranslate={translateDraft} onReview={reviewDraft} reviewLoading={reviewLoading} status={draftStatus} setStatus={setDraftStatus} notify={notify}/><ContactForm lead={activeLead} onUpdate={updateContact}/><SenderProfileEditor taskConfig={remoteTaskConfig} onSave={saveSenderProfile}/><DraftGenerator lead={activeLead} taskConfig={remoteTaskConfig} loading={reviewLoading} onGenerate={generateDraft}/><ReviewControls lead={activeLead} onReview={reviewDraft} loading={reviewLoading}/></>}</> : <div className="detail-empty-state"><strong>没有选中的客户</strong><span>调整搜索词后选择一条客户记录</span></div>}</aside>
         </section>
       </div>
     </main>
