@@ -14,6 +14,10 @@ class StructuredProvider(Protocol):
 
 def _customer_type(value: object) -> CustomerType:
     label = str(value).strip().lower()
+    if any(alias in label for alias in ("online shop", "e-commerce", "ecommerce", "b2c", "retail")):
+        return CustomerType.RETAILER
+    if any(alias in label for alias in ("b2b distributor", "dealer", "reseller")):
+        return CustomerType.DISTRIBUTOR
     for customer_type in CustomerType:
         if customer_type is not CustomerType.UNKNOWN and customer_type.value in label:
             return customer_type
@@ -31,7 +35,8 @@ def research_company(
     prompt = (
         "Analyze the company using only the supplied source text. Do not invent facts. "
         "Return JSON with exactly these fields: business_summary (string), customer_type "
-        "(string or unknown), products (array of strings), country (string or unknown), "
+        "(one of distributor, wholesaler, retailer, manufacturer, consumer, "
+        "service_provider, unknown), products (array of strings), country (string or unknown), "
         "confidence (number 0 to 1).\n"
         f"Company name: {lead.company_name}\nSource URL: {source_url}\n"
         f"Source text:\n{website_text}"

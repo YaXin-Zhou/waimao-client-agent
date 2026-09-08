@@ -72,3 +72,25 @@ def test_research_company_normalizes_unknown_customer_type_and_weak_evidence():
 
     assert result.customer_type is CustomerType.UNKNOWN
     assert result.evidence_status is EvidenceStatus.INSUFFICIENT
+
+
+def test_research_company_maps_online_shop_language_to_retailer():
+    provider = FakeStructuredProvider(
+        {
+            "business_summary": "Online shop for solar equipment.",
+            "customer_type": "online shop / e-commerce",
+            "products": ["solar generators"],
+            "country": "Germany",
+            "confidence": 0.8,
+        }
+    )
+    lead = CleanLead("Shop", "shop.example", (), "Germany", "complete")
+
+    result = research_company(
+        provider,
+        lead,
+        "https://shop.example",
+        "A sufficiently long source text for review.",
+    )
+
+    assert result.customer_type is CustomerType.RETAILER
