@@ -39,6 +39,7 @@ function App() {
   const [selectedResearch, setSelectedResearch] = useState(null)
   const [selectedDraft, setSelectedDraft] = useState(null)
   const [selectedLeadAudit, setSelectedLeadAudit] = useState([])
+  const [leadTransitionLoading, setLeadTransitionLoading] = useState(false)
   const [translatedDraft, setTranslatedDraft] = useState(null)
   const [translationLoading, setTranslationLoading] = useState(false)
   const [reviewLoading, setReviewLoading] = useState(false)
@@ -176,6 +177,21 @@ function App() {
       notify('联系人已按来源证据更新，可继续生成开发信')
     } catch { notify('联系人更新失败，请检查邮箱格式和来源证据') }
   }
+  const transitionLead = async (target, actor, note) => {
+    if (!remoteTaskId || !selected?.domain) return
+    setLeadTransitionLoading(true)
+    try {
+      const response = await fetch(`/api/tasks/${remoteTaskId}/leads/${selected.domain}/transition`, { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ status: target, actor, note }) })
+      const payload = await response.json()
+      if (!response.ok) throw new Error(payload.error || 'lead transition failed')
+      const updated = mapRemoteLead(payload)
+      setRemoteLeads((items) => (items || []).map((lead) => lead.domain === updated.domain ? updated : lead))
+      setSelected(updated)
+      const auditResponse = await fetch(`/api/tasks/${remoteTaskId}/leads/${selected.domain}/audit-events`)
+      if (auditResponse.ok) setSelectedLeadAudit((await auditResponse.json()).items || [])
+      notify('客户状态已更新，审计记录已保存')
+    } catch (error) { notify(error.message || '客户状态更新失败，请检查状态转换和审核人') } finally { setLeadTransitionLoading(false) }
+  }
   const saveSenderProfile = async (profile) => {
     if (!remoteTaskId) return
     try {
@@ -234,7 +250,7 @@ function App() {
         <section className="metric-row"><Metric icon="clipboard" label="待审核" value="—" note="统计接口尚未接入"/><Metric icon="users" label="高匹配客户" value="—" note="统计接口尚未接入"/><Metric icon="researching" label="本周新增" value="—" note="统计接口尚未接入"/></section>
         <section className="workspace-grid">
           <div className="lead-panel panel"><div className="panel-heading"><div><h2>客户列表 <span>共 {filteredLeads.length} 个</span></h2><p>已按当前任务条件筛选</p></div><button className="filter-button" onClick={() => notify('筛选条件：国家、类型、评分、状态')}><Icon name="filter" size={16}/>筛选</button></div><div className="table-head"><span className="checkbox"/><span>公司名称</span><span>国家 / 地区</span><span>客户类型</span><span>匹配分数</span><span>状态</span><span/></div><div className="lead-list">{filteredLeads.length ? filteredLeads.map((lead) => <button className={`lead-row ${selected?.name === lead.name ? 'selected' : ''}`} key={lead.name} onClick={() => selectLead(lead)}><span className={`checkbox ${selected?.name === lead.name ? 'checked' : ''}`}>{selected?.name === lead.name && <Icon name="check" size={13}/>}</span><strong>{lead.name}</strong><span className="country"><span>{lead.flag}</span>{lead.country}</span><span>{lead.type}</span><span className="score"><b>{lead.score}</b> / 100</span><Status status={lead.status}/><span className="more">···</span></button>) : <div className="empty-results">没有匹配的客户，请调整搜索词</div>}</div><div className="table-footer"><span>当前筛选 {filteredLeads.length} 条</span><div className="pagination"><button>‹</button><button className="page-active">1</button><button>2</button><button>3</button><button>4</button><span>…</span><button>13</button><button>›</button></div></div></div>
-          <aside className={`detail-panel panel ${filteredLeads.length && activeLead ? '' : 'detail-empty'}`}>{filteredLeads.length && activeLead ? <><div className="detail-top"><div className="company-symbol">◎</div><div className="company-title"><div><h2>{activeLead.name} <a href={activeLead.website} target="_blank" rel="noreferrer"><Icon name="external" size={14}/></a></h2><p>{activeLead.country} <i/> {activeLead.type} <i/> {activeLead.research ? '已完成官网背调' : '待背调'}</p></div><div className="score-block"><Status status={activeLead.status}/><strong>{activeLead.score}<small> / 100</small></strong><span>匹配分数</span></div></div></div><div className="detail-tabs">{['概览', '来源证据', '开发信草稿'].map((tab) => <button className={detailTab === tab ? 'active' : ''} key={tab} onClick={() => setDetailTab(tab)}>{tab}</button>)}</div>{detailTab === '概览' && <><Overview lead={activeLead} onEvidence={() => setDetailTab('来源证据')} onDraft={() => setDetailTab('开发信草稿')}/><LeadTimeline events={activeLead.auditEvents}/></>} {detailTab === '来源证据' && <Evidence lead={activeLead}/>} {detailTab === '开发信草稿' && <><Draft lead={activeLead} language={language} setLanguage={setLanguage} translatedDraft={translatedDraft} translationLoading={translationLoading} onTranslate={translateDraft} onReview={reviewDraft} reviewLoading={reviewLoading} status={draftStatus} setStatus={setDraftStatus} notify={notify}/><ContactForm lead={activeLead} onUpdate={updateContact}/><SenderProfileEditor taskConfig={remoteTaskConfig} onSave={saveSenderProfile}/><DraftGenerator lead={activeLead} taskConfig={remoteTaskConfig} loading={reviewLoading} onGenerate={generateDraft}/><ReviewControls lead={activeLead} onReview={reviewDraft} loading={reviewLoading}/></>}</> : <div className="detail-empty-state"><strong>没有选中的客户</strong><span>调整搜索词后选择一条客户记录</span></div>}</aside>
+          <aside className={`detail-panel panel ${filteredLeads.length && activeLead ? '' : 'detail-empty'}`}>{filteredLeads.length && activeLead ? <><div className="detail-top"><div className="company-symbol">◎</div><div className="company-title"><div><h2>{activeLead.name} <a href={activeLead.website} target="_blank" rel="noreferrer"><Icon name="external" size={14}/></a></h2><p>{activeLead.country} <i/> {activeLead.type} <i/> {activeLead.research ? '已完成官网背调' : '待背调'}</p></div><div className="score-block"><Status status={activeLead.status}/><strong>{activeLead.score}<small> / 100</small></strong><span>匹配分数</span></div></div></div><div className="detail-tabs">{['概览', '来源证据', '开发信草稿'].map((tab) => <button className={detailTab === tab ? 'active' : ''} key={tab} onClick={() => setDetailTab(tab)}>{tab}</button>)}</div>{detailTab === '概览' && <><Overview lead={activeLead} onEvidence={() => setDetailTab('来源证据')} onDraft={() => setDetailTab('开发信草稿')}/><LeadTimeline lead={activeLead} events={activeLead.auditEvents} onTransition={transitionLead} loading={leadTransitionLoading}/></>} {detailTab === '来源证据' && <Evidence lead={activeLead}/>} {detailTab === '开发信草稿' && <><Draft lead={activeLead} language={language} setLanguage={setLanguage} translatedDraft={translatedDraft} translationLoading={translationLoading} onTranslate={translateDraft} onReview={reviewDraft} reviewLoading={reviewLoading} status={draftStatus} setStatus={setDraftStatus} notify={notify}/><ContactForm lead={activeLead} onUpdate={updateContact}/><SenderProfileEditor taskConfig={remoteTaskConfig} onSave={saveSenderProfile}/><DraftGenerator lead={activeLead} taskConfig={remoteTaskConfig} loading={reviewLoading} onGenerate={generateDraft}/><ReviewControls lead={activeLead} onReview={reviewDraft} loading={reviewLoading}/></>}</> : <div className="detail-empty-state"><strong>没有选中的客户</strong><span>调整搜索词后选择一条客户记录</span></div>}</aside>
         </section>
       </div>
     </main>
@@ -252,6 +268,7 @@ function mapRemoteLead(item) {
     type: 'Unknown',
     score: item.score?.total || 0,
     status: lead.quality === 'complete' ? 'evidence' : 'review',
+    workflowStatus: lead.status || 'new',
     detail: '已从本地持久化客户档案读取，等待更多背调字段接入。',
     email: lead.emails?.[0] || '未发现公开邮箱',
     website: lead.website || `https://${lead.domain}`,
@@ -302,6 +319,9 @@ function ReviewControls({ lead, onReview, loading }) {
 }
 
 export default App
-function LeadTimeline({ events }) {
-  return <div className="lead-timeline"><div className="section-title"><h3>状态时间线</h3><span>{events.length ? `${events.length} 条记录` : '暂无状态变更'}</span></div>{events.length ? <div className="timeline-list">{events.map((event) => <div className="timeline-row" key={event.id}><strong>{event.from_status} → {event.to_status}</strong><span>{event.actor} · {new Date(event.occurred_at).toLocaleString()}</span>{event.note && <p>{event.note}</p>}</div>)}</div> : <p className="timeline-empty">客户状态尚未发生可审计变更。</p>}</div>
+function LeadTimeline({ lead, events, onTransition, loading }) {
+  const [target, setTarget] = useState('awaiting_score')
+  const [actor, setActor] = useState('')
+  const [note, setNote] = useState('')
+  return <div className="lead-timeline"><div className="section-title"><h3>状态时间线</h3><span>当前：{lead.workflowStatus || 'new'} · {events.length} 条记录</span></div><div className="lead-transition"><select value={target} onChange={(event) => setTarget(event.target.value)}><option value="awaiting_score">待评分</option><option value="awaiting_review">待审核</option><option value="selected">已入选</option><option value="contacted">已联系</option><option value="replied">已回复</option><option value="following_up">跟进中</option><option value="paused">暂缓</option><option value="invalid">无效</option></select><input value={actor} onChange={(event) => setActor(event.target.value)} placeholder="操作人"/><input value={note} onChange={(event) => setNote(event.target.value)} placeholder="变更原因（可选）"/><button className="outline-button" disabled={loading || !actor.trim() || target === lead.workflowStatus} onClick={() => onTransition(target, actor, note)}>{loading ? '保存中…' : target === lead.workflowStatus ? '已是当前状态' : '更新状态'}</button></div>{events.length ? <div className="timeline-list">{events.map((event) => <div className="timeline-row" key={event.id}><strong>{event.from_status} → {event.to_status}</strong><span>{event.actor} · {new Date(event.occurred_at).toLocaleString()}</span>{event.note && <p>{event.note}</p>}</div>)}</div> : <p className="timeline-empty">客户状态尚未发生可审计变更。</p>}</div>
 }
