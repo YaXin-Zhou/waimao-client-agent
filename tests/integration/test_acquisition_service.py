@@ -6,6 +6,19 @@ from src.domain.task import AcquisitionCriteria
 from src.infrastructure.memory_repositories import InMemoryLeadRepository, InMemoryTaskRepository
 
 
+class FakeSearchProvider:
+    def search(self, criteria):
+        assert criteria.product == "portable power station"
+        return [
+            LeadRecord(
+                "Alpine Camp Supply",
+                "https://alpine.example",
+                "sales@alpine.example",
+                "DE",
+            )
+        ]
+
+
 def test_service_creates_task_and_assesses_imported_leads():
     service = AcquisitionService(InMemoryTaskRepository(), InMemoryLeadRepository())
     task = service.create_task(
@@ -50,3 +63,22 @@ def test_service_rejects_unknown_task_before_processing_leads():
 
     with pytest.raises(KeyError, match="Task not found"):
         service.assess_leads("missing-task", [], {}, {})
+
+
+def test_service_discovers_candidates_through_replaceable_provider():
+    service = AcquisitionService(
+        InMemoryTaskRepository(), InMemoryLeadRepository(), search_provider=FakeSearchProvider()
+    )
+    task = service.create_task(
+        "EU outdoor leads",
+        AcquisitionCriteria(product="portable power station"),
+    )
+
+    results = service.discover_and_assess(
+        task.id,
+        weights={"product_match": 30},
+        signals_by_domain={"alpine.example": {"product_match": 30}},
+    )
+
+    assert results[0].lead.company_name == "Alpine Camp Supply"
+    assert results[0].score.total == 30
