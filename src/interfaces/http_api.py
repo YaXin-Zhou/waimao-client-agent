@@ -21,6 +21,8 @@ class ApiApplication:
             segments = [unquote(item) for item in urlsplit(path).path.split("/") if item]
             if method == "GET" and segments == ["api", "health"]:
                 return 200, {"status": "ok"}
+            if method == "GET" and segments == ["api", "tasks"]:
+                return self._task_list()
             if (
                 method == "GET"
                 and len(segments) == 5
@@ -49,6 +51,14 @@ class ApiApplication:
         self._require_task(task_id)
         items = [self._assessed(item) for item in self._leads.list_assessments(task_id)]
         return 200, {"items": items}
+
+    def _task_list(self) -> tuple[int, dict]:
+        return 200, {
+            "items": [
+                {"id": task.id, "name": task.name, "status": task.status.value}
+                for task in self._tasks.list()
+            ]
+        }
 
     def _lead_detail(self, task_id: str, domain: str) -> tuple[int, dict]:
         self._require_task(task_id)

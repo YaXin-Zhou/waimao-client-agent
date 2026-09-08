@@ -15,6 +15,9 @@ class Tasks:
     def get(self, task_id):
         return self.task if task_id == self.task.id else None
 
+    def list(self):
+        return [self.task]
+
 
 class Leads:
     def __init__(self, results):
@@ -65,6 +68,15 @@ def test_api_returns_leads_and_research_detail():
     assert status == 200
     assert payload["lead"]["company_name"] == "Alpine Energy"
     assert payload["research"]["evidence_status"] == "sufficient"
+
+
+def test_api_returns_tasks_without_hardcoded_task_id():
+    app, task, _ = make_app()
+
+    status, payload = app.handle("GET", "/api/tasks")
+
+    assert status == 200
+    assert payload["items"][0]["id"] == task.id
 
 
 def test_api_returns_lead_list():

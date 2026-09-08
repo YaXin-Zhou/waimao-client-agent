@@ -133,6 +133,13 @@ class SQLiteTaskRepository:
             status=TaskStatus(row["status"]),
         )
 
+    def list(self) -> list[AcquisitionTask]:
+        with _connect(self._database) as connection:
+            rows = connection.execute(
+                "SELECT id FROM acquisition_tasks ORDER BY rowid"
+            ).fetchall()
+        return [task for row in rows if (task := self.get(row["id"])) is not None]
+
 
 class SQLiteLeadRepository:
     def __init__(self, database: str | Path):

@@ -1,4 +1,4 @@
-import { useMemo, useState } from 'react'
+import { useEffect, useMemo, useState } from 'react'
 
 const leads = [
   { name: 'Solar-Generatoren.de', country: 'Germany', flag: '🇩🇪', type: 'Retailer', score: 25, status: 'evidence', detail: '专注于便携式太阳能发电机及户外能源解决方案的在线零售商。', email: 'Kontakt (AT) Solar-Generatoren.de', website: 'https://solar-generatoren.de/' },
@@ -43,6 +43,8 @@ function Status({ status }) {
 
 function App() {
   const [selected, setSelected] = useState(leads[0])
+  const [remoteLeads, setRemoteLeads] = useState(null)
+  const [apiState, setApiState] = useState('loading')
   const [query, setQuery] = useState('')
   const [activeNav, setActiveNav] = useState('客户池')
   const [detailTab, setDetailTab] = useState('概览')
@@ -50,7 +52,36 @@ function App() {
   const [draftStatus, setDraftStatus] = useState('pending')
   const [showTask, setShowTask] = useState(false)
   const [toast, setToast] = useState('')
-  const filteredLeads = useMemo(() => leads.filter((lead) => `${lead.name} ${lead.country} ${lead.type}`.toLowerCase().includes(query.toLowerCase())), [query])
+  useEffect(() => {
+    let cancelled = false
+    const load = async () => {
+      try {
+        const taskResponse = await fetch('/api/tasks')
+        if (!taskResponse.ok) throw new Error('tasks request failed')
+        const tasks = await taskResponse.json()
+        const task = tasks.items?.[0]
+        if (!task) {
+          if (!cancelled) { setRemoteLeads([]); setApiState('empty') }
+          return
+        }
+        const leadResponse = await fetch(`/api/tasks/${task.id}/leads`)
+        if (!leadResponse.ok) throw new Error('leads request failed')
+        const data = await leadResponse.json()
+        const loaded = (data.items || []).map(mapRemoteLead)
+        if (!cancelled) {
+          setRemoteLeads(loaded)
+          setApiState(loaded.length ? 'connected' : 'empty')
+          if (loaded.length) setSelected(loaded[0])
+        }
+      } catch {
+        if (!cancelled) setApiState('demo')
+      }
+    }
+    load()
+    return () => { cancelled = true }
+  }, [])
+  const displayLeads = remoteLeads?.length ? remoteLeads : leads
+  const filteredLeads = useMemo(() => displayLeads.filter((lead) => `${lead.name} ${lead.country} ${lead.type}`.toLowerCase().includes(query.toLowerCase())), [displayLeads, query])
 
   const notify = (message) => { setToast(message); window.setTimeout(() => setToast(''), 2600) }
   const selectLead = (lead) => { setSelected(lead); setDetailTab('概览'); setDraftStatus('pending') }
@@ -65,6 +96,7 @@ function App() {
       <header className="topbar"><div className="search-global"><Icon name="search" size={17}/><input value={query} onChange={(event) => setQuery(event.target.value)} placeholder="搜索公司、域名或关键词…"/><kbd>⌘ K</kbd></div><div className="top-actions"><button className="icon-button" onClick={() => notify('暂无新的系统通知')} aria-label="通知"><Icon name="bell" size={20}/><i className="notification-dot"/></button><span className="top-divider"/><div className="profile"><span className="avatar">ZL</span><span><strong>张力</strong><small>销售团队</small></span><span className="chevron">⌄</span></div></div></header>
       <div className="content">
         <div className="page-heading"><div><h1>客户智能工作台</h1><p>从公开证据到可审核的下一步</p></div><button className="primary-button" onClick={() => setShowTask(true)}><Icon name="plus" size={19}/>新建获客任务</button></div>
+        <div className={`data-notice ${apiState}`}><span />{apiState === 'loading' ? '正在读取本地任务数据…' : apiState === 'connected' ? '已连接本地 API · 当前显示持久化客户档案' : apiState === 'empty' ? 'API 已连接 · 当前数据库暂无客户档案，以下为演示数据' : 'API 未连接 · 当前为演示数据，审核动作尚未写入后端'}</div>
         <section className="metric-row"><Metric icon="clipboard" label="待审核" value="12" note="需要你的判断"/><Metric icon="users" label="高匹配客户" value="28" note="本周 +6"/><Metric icon="researching" label="本周新增" value="37" note="来自 4 个市场"/></section>
         <section className="workspace-grid">
           <div className="lead-panel panel"><div className="panel-heading"><div><h2>客户列表 <span>共 {filteredLeads.length || 128} 个</span></h2><p>已按当前任务条件筛选</p></div><button className="filter-button" onClick={() => notify('筛选条件：国家、类型、评分、状态')}><Icon name="filter" size={16}/>筛选</button></div><div className="table-head"><span className="checkbox"/><span>公司名称</span><span>国家 / 地区</span><span>客户类型</span><span>匹配分数</span><span>状态</span><span/></div><div className="lead-list">{filteredLeads.map((lead) => <button className={`lead-row ${selected.name === lead.name ? 'selected' : ''}`} key={lead.name} onClick={() => selectLead(lead)}><span className={`checkbox ${selected.name === lead.name ? 'checked' : ''}`}>{selected.name === lead.name && <Icon name="check" size={13}/>}</span><strong>{lead.name}</strong><span className="country"><span>{lead.flag}</span>{lead.country}</span><span>{lead.type}</span><span className="score"><b>{lead.score}</b> / 100</span><Status status={lead.status}/><span className="more">···</span></button>)}</div><div className="table-footer"><span>每页 10 条，共 128 条</span><div className="pagination"><button>‹</button><button className="page-active">1</button><button>2</button><button>3</button><button>4</button><span>…</span><button>13</button><button>›</button></div></div></div>
@@ -75,6 +107,22 @@ function App() {
     {toast && <div className="toast"><span>✓</span>{toast}</div>}
     {showTask && <div className="modal-backdrop" onClick={() => setShowTask(false)}><div className="task-modal" onClick={(event) => event.stopPropagation()}><button className="modal-close" onClick={() => setShowTask(false)}>×</button><span className="modal-icon"><Icon name="plus"/></span><h2>新建获客任务</h2><p>定义目标产品、国家和客户类型，系统将按规则运行搜索与背调。</p><label>任务名称<input defaultValue="便携式太阳能发电机 · 欧洲渠道"/></label><label>目标产品<input defaultValue="portable solar generator"/></label><div className="modal-grid"><label>目标市场<select defaultValue="Germany"><option>Germany</option><option>France</option><option>Netherlands</option></select></label><label>客户类型<select defaultValue="Distributor"><option>Distributor</option><option>Retailer</option><option>Wholesaler</option></select></label></div><button className="primary-button full" onClick={() => { setShowTask(false); notify('任务草稿已创建，下一步将配置规则') }}>创建任务草稿 <Icon name="arrow" size={16}/></button></div></div>}
   </div>
+}
+
+function mapRemoteLead(item) {
+  const lead = item.lead
+  const source = lead.sources?.[0]?.[0] || `https://${lead.domain}`
+  return {
+    name: lead.company_name,
+    country: lead.country || 'Unknown',
+    flag: '·',
+    type: 'Unknown',
+    score: item.score?.total || 0,
+    status: lead.quality === 'complete' ? 'evidence' : 'review',
+    detail: '已从本地持久化客户档案读取，等待更多背调字段接入。',
+    email: lead.emails?.[0] || '未发现公开邮箱',
+    website: source,
+  }
 }
 
 function Metric({ icon, label, value, note }) { return <div className="metric"><span className={`metric-icon ${icon}`}><Icon name={icon === 'researching' ? 'users' : icon} size={20}/></span><div><span>{label}</span><strong>{value}<Icon name="arrow" size={16}/></strong><small>{note}</small></div></div> }
