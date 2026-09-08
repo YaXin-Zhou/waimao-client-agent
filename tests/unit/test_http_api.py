@@ -54,6 +54,18 @@ class Drafts:
         self.draft = draft
 
 
+class DraftGenerator:
+    def generate(self, task_id, lead, research, template, product):
+        return EmailDraft.create(
+            task_id,
+            lead.domain,
+            lead.emails[0],
+            "Generated",
+            "Generated body",
+            (research.evidence_url,),
+        )
+
+
 def make_app():
     task = AcquisitionTask.create("Power station", AcquisitionCriteria(product="power station"))
     lead = CleanLead(
@@ -178,3 +190,34 @@ def test_api_returns_json_error_for_unknown_draft():
 
     assert status == 404
     assert payload["error"] == "Draft not found: missing"
+
+
+def test_api_generates_and_persists_reviewable_draft():
+    app, task, draft = make_app()
+    app._email_drafts = DraftGenerator()
+
+    status, payload = app.handle(
+        "POST",
+        f"/api/tasks/{task.id}/leads/alpine.example/draft",
+        {"template": "Intro for {company} about {product}", "product": "power station"},
+    )
+
+    assert status == 201
+    assert payload["status"] == "pending_review"
+    assert payload["recipient_email"] == "sales@alpine.example"
+    assert app._drafts.draft.id == payload["id"]
+
+
+def test_api_draft_requires_research_before_generation():
+    app, task, _ = make_app()
+    app._email_drafts = DraftGenerator()
+    app._research.get = lambda task_id, domain: None
+
+    status, payload = app.handle(
+        "POST",
+        f"/api/tasks/{task.id}/leads/alpine.example/draft",
+        {"template": "Intro for {company}", "product": "power station"},
+    )
+
+    assert status == 400
+    assert payload["error"] == "research report is required before drafting"

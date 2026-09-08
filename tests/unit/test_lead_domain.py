@@ -82,6 +82,21 @@ def test_clean_leads_marks_missing_evidence_for_manual_review():
     assert "missing_website" in cleaned[0].flags
 
 
+def test_clean_leads_normalizes_explicitly_obfuscated_public_email():
+    cleaned = clean_leads(
+        [
+            LeadRecord(
+                "GBT GmbH",
+                "https://portable-power-stations.com",
+                "Info(at)gbt-international.com",
+            )
+        ]
+    )
+
+    assert cleaned[0].emails == ("info@gbt-international.com",)
+    assert cleaned[0].quality == "complete"
+
+
 def test_score_lead_uses_configured_weights_and_returns_priority():
     lead = clean_leads(
         [

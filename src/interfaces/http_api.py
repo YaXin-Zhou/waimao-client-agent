@@ -12,12 +12,13 @@ from src.domain.task import AcquisitionCriteria
 
 
 class ApiApplication:
-    def __init__(self, tasks, leads, research, drafts, acquisition=None):
+    def __init__(self, tasks, leads, research, drafts, acquisition=None, email_drafts=None):
         self._tasks = tasks
         self._leads = leads
         self._research = research
         self._drafts = drafts
         self._acquisition = acquisition or AcquisitionService(tasks, leads)
+        self._email_drafts = email_drafts
         self._reviews = EmailReviewService(drafts)
 
     def handle(self, method: str, path: str, body=None) -> tuple[int, dict]:
@@ -29,6 +30,16 @@ class ApiApplication:
                 return self._task_list()
             if method == "POST" and segments == ["api", "tasks"]:
                 return self._create_task(self._parse_body(body))
+            if (
+                method == "POST"
+                and len(segments) == 6
+                and segments[:2] == ["api", "tasks"]
+                and segments[3] == "leads"
+                and segments[5] == "draft"
+            ):
+                return self._create_draft(
+                    segments[2], segments[4], self._parse_body(body)
+                )
             if (
                 method == "POST"
                 and len(segments) == 4
@@ -120,6 +131,27 @@ class ApiApplication:
             },
         )
         return 200, {"items": [self._assessed(item) for item in results]}
+
+    def _create_draft(self, task_id: str, domain: str, body: dict) -> tuple[int, dict]:
+        if self._email_drafts is None:
+            raise RuntimeError("email draft provider is not configured")
+        self._require_task(task_id)
+        assessed = next(
+            (item for item in self._leads.list_assessments(task_id) if item.lead.domain == domain),
+            None,
+        )
+        if assessed is None:
+            raise KeyError(f"Lead not found: {domain}")
+        research = self._research.get(task_id, domain)
+        if research is None:
+            raise ValueError("research report is required before drafting")
+        template = str(body.get("template", ""))
+        product = str(body.get("product", ""))
+        draft = self._email_drafts.generate(
+            task_id, assessed.lead, research, template, product
+        )
+        self._drafts.save(draft)
+        return 201, self._draft(draft)
 
     def _lead_detail(self, task_id: str, domain: str) -> tuple[int, dict]:
         self._require_task(task_id)

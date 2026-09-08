@@ -11,21 +11,29 @@ from pathlib import Path
 ROOT = Path(__file__).resolve().parents[1]
 sys.path.insert(0, str(ROOT))
 
-from src.infrastructure.sqlite_repositories import (
+from src.application.email_draft_service import EmailDraftService  # noqa: E402
+from src.infrastructure.deepseek_provider import DeepSeekConfig, DeepSeekProvider  # noqa: E402
+from src.infrastructure.sqlite_repositories import (  # noqa: E402
     SQLiteEmailDraftRepository,
     SQLiteLeadRepository,
     SQLiteResearchRepository,
     SQLiteTaskRepository,
 )
-from src.interfaces.http_api import ApiApplication
-
+from src.interfaces.http_api import ApiApplication  # noqa: E402
 
 DATABASE = ROOT / "data" / "runtime" / "acquisition.db"
+try:
+    email_draft_service = EmailDraftService(
+        DeepSeekProvider(DeepSeekConfig.from_env_file(ROOT / "config" / ".env"))
+    )
+except (FileNotFoundError, ValueError):
+    email_draft_service = None
 application = ApiApplication(
     SQLiteTaskRepository(DATABASE),
     SQLiteLeadRepository(DATABASE),
     SQLiteResearchRepository(DATABASE),
     SQLiteEmailDraftRepository(DATABASE),
+    email_drafts=email_draft_service,
 )
 
 

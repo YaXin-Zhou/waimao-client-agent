@@ -55,7 +55,12 @@ def _normalize_domain(website: str) -> str:
 
 
 def _normalize_email(email: str) -> str:
-    address = parseaddr(email.strip())[1].lower()
+    raw = email.strip().lower()
+    for token in ("(at)", "[at]", " at "):
+        raw = raw.replace(token, "@")
+    for token in ("(dot)", "[dot]", " dot "):
+        raw = raw.replace(token, ".")
+    address = parseaddr(raw)[1]
     return address if "@" in address and "." in address.rsplit("@", 1)[-1] else ""
 
 
