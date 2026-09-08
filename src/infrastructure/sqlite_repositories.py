@@ -11,6 +11,7 @@ from src.domain.audit_event import AuditEvent
 from src.domain.email_draft import EmailDraft, EmailDraftStatus
 from src.domain.inbound_email import InboundEmail
 from src.domain.lead import CleanLead, LeadScore, LeadStatus
+from src.domain.reply_analysis import ReplyAnalysis, ReplyCategory
 from src.domain.research import CustomerType, EvidenceStatus, ResearchResult
 from src.domain.research_run import ResearchRun, ResearchRunStatus, ResearchRunStep
 from src.domain.sender_profile import SenderProfile
@@ -129,6 +130,22 @@ def _connect(database: str | Path) -> sqlite3.Connection:
             task_id TEXT NOT NULL,
             lead_domain TEXT NOT NULL,
             is_bounce INTEGER NOT NULL
+        )
+        """
+    )
+    connection.execute(
+        """
+        CREATE TABLE IF NOT EXISTS reply_analyses (
+            id TEXT PRIMARY KEY,
+            message_id TEXT NOT NULL UNIQUE,
+            task_id TEXT NOT NULL,
+            lead_domain TEXT NOT NULL,
+            category TEXT NOT NULL,
+            confidence REAL NOT NULL,
+            risk_level TEXT NOT NULL,
+            suggested_action TEXT NOT NULL,
+            needs_human_review INTEGER NOT NULL,
+            evidence_json TEXT NOT NULL
         )
         """
     )
@@ -605,4 +622,58 @@ def _inbound_email(row) -> InboundEmail:
         task_id=row["task_id"],
         lead_domain=row["lead_domain"],
         is_bounce=bool(row["is_bounce"]),
+    )
+
+
+class SQLiteReplyAnalysisRepository:
+    def __init__(self, database: str | Path):
+        self._database = database
+
+    def save(self, analysis: ReplyAnalysis) -> None:
+        with _connect(self._database) as connection:
+            connection.execute(
+                """
+                INSERT INTO reply_analyses (
+                    id, message_id, task_id, lead_domain, category, confidence,
+                    risk_level, suggested_action, needs_human_review, evidence_json
+                ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+                ON CONFLICT(message_id) DO UPDATE SET
+                    task_id=excluded.task_id, lead_domain=excluded.lead_domain,
+                    category=excluded.category, confidence=excluded.confidence,
+                    risk_level=excluded.risk_level, suggested_action=excluded.suggested_action,
+                    needs_human_review=excluded.needs_human_review,
+                    evidence_json=excluded.evidence_json
+                """,
+                (
+                    analysis.id, analysis.message_id, analysis.task_id, analysis.lead_domain,
+                    analysis.category.value, analysis.confidence, analysis.risk_level,
+                    analysis.suggested_action, int(analysis.needs_human_review),
+                    json.dumps(analysis.evidence),
+                ),
+            )
+
+    def get_by_message_id(self, message_id: str) -> ReplyAnalysis | None:
+        with _connect(self._database) as connection:
+            row = connection.execute(
+                "SELECT * FROM reply_analyses WHERE message_id = ?", (message_id,)
+            ).fetchone()
+        return _reply_analysis(row) if row else None
+
+    def list_for_task(self, task_id: str) -> list[ReplyAnalysis]:
+        with _connect(self._database) as connection:
+            rows = connection.execute(
+                "SELECT * FROM reply_analyses WHERE task_id = ? ORDER BY rowid",
+                (task_id,),
+            ).fetchall()
+        return [_reply_analysis(row) for row in rows]
+
+
+def _reply_analysis(row) -> ReplyAnalysis:
+    return ReplyAnalysis(
+        id=row["id"], message_id=row["message_id"], task_id=row["task_id"],
+        lead_domain=row["lead_domain"], category=ReplyCategory(row["category"]),
+        confidence=row["confidence"], risk_level=row["risk_level"],
+        suggested_action=row["suggested_action"],
+        needs_human_review=bool(row["needs_human_review"]),
+        evidence=tuple(json.loads(row["evidence_json"])),
     )

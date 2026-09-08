@@ -10,6 +10,7 @@ from src.application.email_review_service import EmailReviewService
 from src.domain.audit_event import AuditEvent
 from src.domain.inbound_email import InboundEmail
 from src.domain.lead import LeadRecord, LeadStatus
+from src.domain.reply_analysis import ReplyAnalysis
 from src.domain.research_run import ResearchRun
 from src.domain.sender_profile import SenderProfile
 from src.domain.task import AcquisitionCriteria, TaskStatus
@@ -32,6 +33,7 @@ class ApiApplication:
         mailbox=None,
         mailbox_sync=None,
         inbound_emails=None,
+        reply_analysis=None,
     ):
         self._tasks = tasks
         self._leads = leads
@@ -47,6 +49,7 @@ class ApiApplication:
         self._mailbox = mailbox
         self._mailbox_sync = mailbox_sync
         self._inbound_emails = inbound_emails
+        self._reply_analysis = reply_analysis
         self._reviews = EmailReviewService(drafts, audit)
 
     def handle(self, method: str, path: str, body=None) -> tuple[int, dict]:
@@ -71,6 +74,21 @@ class ApiApplication:
                 and segments[3] == "mail-threads"
             ):
                 return self._mail_threads(segments[2])
+            if (
+                method == "POST"
+                and len(segments) == 5
+                and segments[:2] == ["api", "tasks"]
+                and segments[3] == "reply-analyses"
+                and segments[4] == "run"
+            ):
+                return self._analyze_replies(segments[2])
+            if (
+                method == "GET"
+                and len(segments) == 4
+                and segments[:2] == ["api", "tasks"]
+                and segments[3] == "reply-analyses"
+            ):
+                return self._reply_analyses(segments[2])
             if method == "GET" and segments == ["api", "tasks"]:
                 return self._task_list()
             if method == "POST" and segments == ["api", "tasks"]:
@@ -229,6 +247,24 @@ class ApiApplication:
                 for item in self._inbound_emails.list_for_task(task_id)
             ]
         }
+
+    def _analyze_replies(self, task_id: str) -> tuple[int, dict]:
+        if self._reply_analysis is None:
+            raise RuntimeError("reply analysis service is not configured")
+        self._require_task(task_id)
+        result = self._reply_analysis.analyze_task(task_id)
+        return 200, {
+            "analyzed": result.analyzed,
+            "reused": result.reused,
+            "items": [self._reply_analysis_item(item) for item in result.items],
+        }
+
+    def _reply_analyses(self, task_id: str) -> tuple[int, dict]:
+        self._require_task(task_id)
+        if self._reply_analysis is None:
+            raise RuntimeError("reply analysis service is not configured")
+        analyses = self._reply_analysis.list_for_task(task_id)
+        return 200, {"items": [self._reply_analysis_item(item) for item in analyses]}
 
     def _task_list(self) -> tuple[int, dict]:
         return 200, {"items": [self._task(task) for task in self._tasks.list()]}
@@ -561,6 +597,21 @@ class ApiApplication:
             "thread_key": message.thread_key,
             "lead_domain": message.lead_domain,
             "is_bounce": message.is_bounce,
+        }
+
+    @staticmethod
+    def _reply_analysis_item(item: ReplyAnalysis) -> dict:
+        return {
+            "id": item.id,
+            "message_id": item.message_id,
+            "task_id": item.task_id,
+            "lead_domain": item.lead_domain,
+            "category": item.category.value,
+            "confidence": item.confidence,
+            "risk_level": item.risk_level,
+            "suggested_action": item.suggested_action,
+            "needs_human_review": item.needs_human_review,
+            "evidence": item.evidence,
         }
 
     @staticmethod

@@ -13,6 +13,7 @@ sys.path.insert(0, str(ROOT))
 
 from src.application.email_draft_service import EmailDraftService  # noqa: E402
 from src.application.mailbox_sync import MailboxSyncService  # noqa: E402
+from src.application.reply_analysis_service import ReplyAnalysisService  # noqa: E402
 from src.application.research_execution import ResearchExecutionService  # noqa: E402
 from src.application.research_queue import ResearchJobQueue  # noqa: E402
 from src.application.research_workflow import ResearchWorkflow  # noqa: E402
@@ -27,6 +28,7 @@ from src.infrastructure.sqlite_repositories import (  # noqa: E402
     SQLiteEmailDraftRepository,
     SQLiteInboundEmailRepository,
     SQLiteLeadRepository,
+    SQLiteReplyAnalysisRepository,
     SQLiteResearchRepository,
     SQLiteResearchRunRepository,
     SQLiteTaskRepository,
@@ -55,6 +57,7 @@ lead_repository = SQLiteLeadRepository(DATABASE)
 research_repository = SQLiteResearchRepository(DATABASE)
 research_run_repository = SQLiteResearchRunRepository(DATABASE)
 inbound_email_repository = SQLiteInboundEmailRepository(DATABASE)
+reply_analysis_repository = SQLiteReplyAnalysisRepository(DATABASE)
 try:
     deepseek_provider = DeepSeekProvider(
         DeepSeekConfig.from_env_file(ROOT / "config" / ".env")
@@ -93,6 +96,7 @@ imap_config = AliImapConfig(
 )
 mailbox = AliImapMailbox(imap_config) if imap_config.configured else None
 mailbox_sync = MailboxSyncService(lead_repository, inbound_email_repository)
+reply_analysis_service = ReplyAnalysisService(inbound_email_repository, reply_analysis_repository)
 application = ApiApplication(
     task_repository,
     lead_repository,
@@ -107,6 +111,7 @@ application = ApiApplication(
     mailbox=mailbox,
     mailbox_sync=mailbox_sync,
     inbound_emails=inbound_email_repository,
+    reply_analysis=reply_analysis_service,
 )
 
 

@@ -1,0 +1,39 @@
+"""将已同步的收件邮件分类并保存；重复分析复用已有结果。"""
+
+from __future__ import annotations
+
+from dataclasses import dataclass
+
+from src.application.reply_analysis import classify_inbound
+
+
+@dataclass(frozen=True)
+class ReplyAnalysisBatchResult:
+    analyzed: int
+    reused: int
+    items: tuple
+
+
+class ReplyAnalysisService:
+    def __init__(self, messages, analyses):
+        self._messages = messages
+        self._analyses = analyses
+
+    def analyze_task(self, task_id: str) -> ReplyAnalysisBatchResult:
+        analyzed = 0
+        reused = 0
+        items = []
+        for message in self._messages.list_for_task(task_id):
+            existing = self._analyses.get_by_message_id(message.message_id)
+            if existing is not None:
+                reused += 1
+                items.append(existing)
+                continue
+            analysis = classify_inbound(message)
+            self._analyses.save(analysis)
+            analyzed += 1
+            items.append(analysis)
+        return ReplyAnalysisBatchResult(analyzed, reused, tuple(items))
+
+    def list_for_task(self, task_id: str):
+        return self._analyses.list_for_task(task_id)
