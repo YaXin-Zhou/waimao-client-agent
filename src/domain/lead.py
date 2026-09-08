@@ -2,8 +2,9 @@
 
 from __future__ import annotations
 
-from dataclasses import dataclass
+from dataclasses import dataclass, replace
 from email.utils import parseaddr
+from enum import StrEnum
 from urllib.parse import urlparse
 
 
@@ -19,6 +20,20 @@ class LeadRecord:
     source_excerpt: str = ""
 
 
+class LeadStatus(StrEnum):
+    NEW = "new"
+    CLEANING = "cleaning"
+    AWAITING_SCORE = "awaiting_score"
+    AWAITING_REVIEW = "awaiting_review"
+    SELECTED = "selected"
+    CONTACTED = "contacted"
+    REPLIED = "replied"
+    FOLLOWING_UP = "following_up"
+    CONVERTED = "converted"
+    PAUSED = "paused"
+    INVALID = "invalid"
+
+
 @dataclass(frozen=True)
 class CleanLead:
     """清洗后的客户档案核心视图。"""
@@ -30,6 +45,29 @@ class CleanLead:
     quality: str
     flags: tuple[str, ...] = ()
     sources: tuple[tuple[str, str], ...] = ()
+    status: LeadStatus = LeadStatus.NEW
+
+    def transition_to(self, target: "LeadStatus") -> "CleanLead":
+        allowed = {
+            LeadStatus.NEW: {LeadStatus.CLEANING, LeadStatus.AWAITING_SCORE},
+            LeadStatus.CLEANING: {LeadStatus.AWAITING_SCORE, LeadStatus.INVALID},
+            LeadStatus.AWAITING_SCORE: {
+                LeadStatus.AWAITING_REVIEW,
+                LeadStatus.SELECTED,
+                LeadStatus.INVALID,
+            },
+            LeadStatus.AWAITING_REVIEW: {LeadStatus.SELECTED, LeadStatus.INVALID},
+            LeadStatus.SELECTED: {LeadStatus.CONTACTED, LeadStatus.PAUSED, LeadStatus.INVALID},
+            LeadStatus.CONTACTED: {LeadStatus.REPLIED, LeadStatus.FOLLOWING_UP, LeadStatus.PAUSED},
+            LeadStatus.REPLIED: {LeadStatus.FOLLOWING_UP, LeadStatus.CONVERTED, LeadStatus.PAUSED},
+            LeadStatus.FOLLOWING_UP: {LeadStatus.REPLIED, LeadStatus.CONVERTED, LeadStatus.PAUSED},
+            LeadStatus.CONVERTED: set(),
+            LeadStatus.PAUSED: {LeadStatus.SELECTED, LeadStatus.CONTACTED, LeadStatus.FOLLOWING_UP},
+            LeadStatus.INVALID: set(),
+        }
+        if target not in allowed[self.status]:
+            raise ValueError(f"Invalid lead transition: {self.status} -> {target}")
+        return replace(self, status=target)
 
 
 @dataclass(frozen=True)

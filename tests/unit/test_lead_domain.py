@@ -1,7 +1,9 @@
 import json
 from pathlib import Path
 
-from src.domain.lead import LeadRecord, clean_leads, score_lead
+import pytest
+
+from src.domain.lead import LeadRecord, LeadStatus, clean_leads, score_lead
 
 
 def test_sample_dataset_produces_clean_records_for_sales_review():
@@ -128,3 +130,15 @@ def test_score_lead_uses_configured_weights_and_returns_priority():
     assert score.total == 85
     assert score.priority == "A"
     assert score.breakdown["buying_signal"] == 10
+
+
+def test_lead_status_transition_is_explicit_and_rejects_skipping_review():
+    lead = clean_leads([
+        LeadRecord("Alpine", "https://alpine.example", "sales@alpine.example", "DE")
+    ])[0]
+
+    ready = lead.transition_to(LeadStatus.AWAITING_SCORE)
+
+    assert ready.status is LeadStatus.AWAITING_SCORE
+    with pytest.raises(ValueError, match="Invalid lead transition"):
+        ready.transition_to(LeadStatus.CONTACTED)

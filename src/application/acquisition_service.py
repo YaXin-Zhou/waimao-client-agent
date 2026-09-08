@@ -11,7 +11,7 @@ from src.application.ports import (
     TaskRepository,
 )
 from src.domain.audit_event import AuditEvent
-from src.domain.lead import CleanLead, LeadRecord, LeadScore, clean_leads, score_lead
+from src.domain.lead import CleanLead, LeadRecord, LeadScore, LeadStatus, clean_leads, score_lead
 from src.domain.sender_profile import SenderProfile
 from src.domain.task import AcquisitionCriteria, AcquisitionTask, TaskStatus
 
@@ -105,12 +105,38 @@ class AcquisitionService:
             ),
             record,
         ])[0]
-        result = AssessedLead(updated, assessed.score)
+        result = AssessedLead(replace(updated, status=assessed.lead.status), assessed.score)
         self._leads.save_assessments(
             task_id,
             [item if item.lead.domain != domain else result for item in self.list_leads(task_id)],
         )
         return result
+
+    def transition_lead(
+        self, task_id: str, domain: str, target: LeadStatus, actor: str, note: str = ""
+    ) -> AssessedLead:
+        assessed = next(
+            (item for item in self.list_leads(task_id) if item.lead.domain == domain), None
+        )
+        if assessed is None:
+            raise KeyError(f"Lead not found: {domain}")
+        updated_lead = assessed.lead.transition_to(target)
+        updated = AssessedLead(updated_lead, assessed.score)
+        self._leads.save_assessments(
+            task_id,
+            [item if item.lead.domain != domain else updated for item in self.list_leads(task_id)],
+        )
+        if self._audit is not None:
+            self._audit.save(AuditEvent.status_change(
+                entity_type="lead",
+                entity_id=f"{task_id}:{domain}",
+                action="transition",
+                actor=actor,
+                from_status=assessed.lead.status.value,
+                to_status=target.value,
+                note=note,
+            ))
+        return updated
 
     def update_sender_profile(
         self, task_id: str, sender_profile: SenderProfile

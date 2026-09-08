@@ -23,6 +23,8 @@ python scripts/serve_api.py
 - `POST /api/tasks/{task_id}/sender-profile`：更新已有任务的发件人资料，供下一版开发信使用
 - `GET /api/tasks/{task_id}/leads`
 - `GET /api/tasks/{task_id}/leads/{domain}`
+- `POST /api/tasks/{task_id}/leads/{domain}/transition`：按客户状态机推进状态并记录审计
+- `GET /api/tasks/{task_id}/leads/{domain}/audit-events`：读取客户状态变更记录
 - `POST /api/tasks/{task_id}/assess`：提交 `records`、`weights` 和 `signals_by_domain`，执行清洗、评分并持久化
 - `POST /api/tasks/{task_id}/leads/{domain}/draft`：仅在真实邮箱和真实背调存在时调用 DeepSeek 生成待审核草稿，不发送邮件
 - `GET /api/drafts/{draft_id}`

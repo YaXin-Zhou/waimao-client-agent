@@ -8,7 +8,7 @@ from urllib.parse import unquote, urlsplit
 from src.application.acquisition_service import AcquisitionService
 from src.application.email_review_service import EmailReviewService
 from src.domain.audit_event import AuditEvent
-from src.domain.lead import LeadRecord
+from src.domain.lead import LeadRecord, LeadStatus
 from src.domain.sender_profile import SenderProfile
 from src.domain.task import AcquisitionCriteria, TaskStatus
 
@@ -80,6 +80,14 @@ class ApiApplication:
                 )
             if (
                 method == "POST"
+                and len(segments) == 6
+                and segments[:2] == ["api", "tasks"]
+                and segments[3] == "leads"
+                and segments[5] == "transition"
+            ):
+                return self._transition_lead(segments[2], segments[4], self._parse_body(body))
+            if (
+                method == "POST"
                 and len(segments) == 4
                 and segments[:2] == ["api", "tasks"]
                 and segments[3] == "assess"
@@ -92,6 +100,14 @@ class ApiApplication:
                 and segments[3] == "leads"
             ):
                 return self._lead_detail(segments[2], segments[4])
+            if (
+                method == "GET"
+                and len(segments) == 6
+                and segments[:2] == ["api", "tasks"]
+                and segments[3] == "leads"
+                and segments[5] == "audit-events"
+            ):
+                return self._lead_audit_events(segments[2], segments[4])
             if (
                 method == "GET"
                 and len(segments) == 4
@@ -238,6 +254,22 @@ class ApiApplication:
         )
         return 200, self._task(self._acquisition.update_sender_profile(task_id, profile))
 
+    def _transition_lead(self, task_id: str, domain: str, body: dict) -> tuple[int, dict]:
+        try:
+            target = LeadStatus(str(body.get("status", "")))
+        except ValueError as error:
+            raise ValueError("invalid lead status") from error
+        return 200, self._assessed(self._acquisition.transition_lead(
+            task_id, domain, target, str(body.get("actor", "")), str(body.get("note", ""))
+        ))
+
+    def _lead_audit_events(self, task_id: str, domain: str) -> tuple[int, dict]:
+        self._require_task(task_id)
+        self._lead_detail(task_id, domain)
+        entity_id = f"{task_id}:{domain}"
+        events = self._audit.list_for_entity("lead", entity_id) if self._audit else []
+        return 200, {"items": [self._audit_event(event) for event in events]}
+
     def _transition_task(self, task_id: str, body: dict) -> tuple[int, dict]:
         try:
             target = TaskStatus(str(body.get("status", "")))
@@ -348,6 +380,7 @@ class ApiApplication:
             "emails": lead.emails,
             "country": lead.country,
             "quality": lead.quality,
+            "status": lead.status.value,
             "flags": lead.flags,
             "sources": lead.sources,
         }

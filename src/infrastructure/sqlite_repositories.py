@@ -9,7 +9,7 @@ from pathlib import Path
 from src.application.acquisition_service import AssessedLead
 from src.domain.audit_event import AuditEvent
 from src.domain.email_draft import EmailDraft, EmailDraftStatus
-from src.domain.lead import CleanLead, LeadScore
+from src.domain.lead import CleanLead, LeadScore, LeadStatus
 from src.domain.research import CustomerType, EvidenceStatus, ResearchResult
 from src.domain.research_run import ResearchRun, ResearchRunStatus
 from src.domain.sender_profile import SenderProfile
@@ -195,6 +195,7 @@ class SQLiteLeadRepository:
                             "quality": result.lead.quality,
                             "flags": result.lead.flags,
                             "sources": result.lead.sources,
+                            "status": result.lead.status.value,
                         }),
                         json.dumps({
                             "total": result.score.total,
@@ -231,6 +232,7 @@ class SQLiteLeadRepository:
                         quality=lead_data["quality"],
                         flags=tuple(lead_data["flags"]),
                         sources=tuple(tuple(source) for source in lead_data.get("sources", [])),
+                        status=LeadStatus(lead_data.get("status", LeadStatus.NEW.value)),
                     ),
                     score=LeadScore(
                         total=score_data["total"],
