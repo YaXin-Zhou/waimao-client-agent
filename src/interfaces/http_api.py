@@ -294,6 +294,16 @@ class ApiApplication:
             blocked_domains=tuple(str(item) for item in body.get("blocked_domains", [])),
             daily_limit=int(body.get("daily_limit", 0)),
             sent_today=int(body.get("sent_today", 0)),
+            contacted_recently=bool(body.get("contacted_recently", False)),
+            attachment_names=tuple(str(item) for item in body.get("attachment_names", [])),
+            max_attachments=int(body.get("max_attachments", 5)),
+            allowed_attachment_extensions=tuple(
+                str(item)
+                for item in body.get(
+                    "allowed_attachment_extensions",
+                    SendPolicy().allowed_attachment_extensions,
+                )
+            ),
         )
         result = self._send_safety.check(draft_id, policy)
         return 200, {
@@ -311,6 +321,16 @@ class ApiApplication:
             blocked_domains=tuple(str(item) for item in body.get("blocked_domains", [])),
             daily_limit=int(body.get("daily_limit", 0)),
             sent_today=int(body.get("sent_today", 0)),
+            contacted_recently=bool(body.get("contacted_recently", False)),
+            attachment_names=tuple(str(item) for item in body.get("attachment_names", [])),
+            max_attachments=int(body.get("max_attachments", 5)),
+            allowed_attachment_extensions=tuple(
+                str(item)
+                for item in body.get(
+                    "allowed_attachment_extensions",
+                    SendPolicy().allowed_attachment_extensions,
+                )
+            ),
         )
         attempt = self._email_send.send(
             draft_id, policy, bool(body.get("confirmed", False)),

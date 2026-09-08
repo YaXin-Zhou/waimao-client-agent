@@ -25,6 +25,8 @@ python scripts/serve_api.py
 - `GET /api/tasks/{task_id}/leads/{domain}`
 - `POST /api/tasks/{task_id}/leads/{domain}/transition`：按客户状态机推进状态并记录审计
 - `GET /api/tasks/{task_id}/leads/{domain}/audit-events`：读取客户状态变更记录
+- `GET /api/tasks/{task_id}/follow-up-tasks`：读取来信分析生成的人工跟进待办
+- `PATCH /api/tasks/{task_id}/follow-up-tasks/{follow_up_id}`：更新人工跟进待办状态
 - `POST /api/tasks/{task_id}/assess`：提交 `records`、`weights` 和 `signals_by_domain`，执行清洗、评分并持久化
 - `POST /api/tasks/{task_id}/leads/{domain}/draft`：仅在真实邮箱和真实背调存在时调用 DeepSeek 生成待审核草稿，不发送邮件
 - `GET /api/drafts/{draft_id}`
@@ -38,6 +40,7 @@ python scripts/serve_api.py
 - `POST /api/drafts/{draft_id}/reject`
 
 接口只返回数据库已有数据；找不到客户、草稿或任务时返回明确错误，不生成替代数据。
+发送预检可接收 `contacted_recently`、`attachment_names`、`max_attachments` 和允许扩展名配置；预检只检查元数据，不读取或发送附件内容。
 开发信生成接口只生成待审核草稿，不执行发送；发送联调不属于当前阶段验收范围。
 
 评估接口的评分项由请求配置，不在接口中硬编码。例如：

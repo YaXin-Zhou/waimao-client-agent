@@ -38,3 +38,21 @@ def test_allowed_result_still_requires_manual_confirmation_and_does_not_send():
 
     assert result.allowed
     assert result.requires_manual_confirmation
+
+
+def test_recent_contact_and_unsafe_attachments_are_blocked():
+    from src.domain.email_draft import EmailDraftStatus
+
+    result = check_send_safety(
+        draft(EmailDraftStatus.APPROVED),
+        SendPolicy(
+            contacted_recently=True,
+            attachment_names=("../secrets.txt", "catalog.pdf", "price.xlsx"),
+            max_attachments=2,
+        ),
+    )
+
+    assert not result.allowed
+    assert "recipient was contacted recently" in result.reasons
+    assert "attachment count" in result.reasons[1]
+    assert any("secrets.txt" in reason for reason in result.reasons)
