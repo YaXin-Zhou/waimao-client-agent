@@ -1,0 +1,109 @@
+"""潜客公司、客户档案清洗和可配置评分规则。"""
+
+from __future__ import annotations
+
+from dataclasses import dataclass
+from email.utils import parseaddr
+from urllib.parse import urlparse
+
+
+@dataclass(frozen=True)
+class LeadRecord:
+    """来自搜索或官网的原始潜客记录。"""
+
+    company_name: str
+    website: str = ""
+    email: str = ""
+    country: str = ""
+
+
+@dataclass(frozen=True)
+class CleanLead:
+    """清洗后的客户档案核心视图。"""
+
+    company_name: str
+    domain: str
+    emails: tuple[str, ...]
+    country: str
+    quality: str
+    flags: tuple[str, ...] = ()
+
+
+@dataclass(frozen=True)
+class LeadScore:
+    total: int
+    priority: str
+    breakdown: dict[str, int]
+
+
+_COUNTRY_NAMES = {"DE": "Germany", "CN": "China", "US": "United States", "GB": "United Kingdom"}
+
+
+def _normalize_text(value: str) -> str:
+    return " ".join(value.split()).strip()
+
+
+def _normalize_domain(website: str) -> str:
+    raw = website.strip()
+    if not raw:
+        return ""
+    parsed = urlparse(raw if "://" in raw else f"https://{raw}")
+    return (parsed.hostname or "").lower().removeprefix("www.")
+
+
+def _normalize_email(email: str) -> str:
+    address = parseaddr(email.strip())[1].lower()
+    return address if "@" in address and "." in address.rsplit("@", 1)[-1] else ""
+
+
+def _normalize_country(country: str) -> str:
+    value = _normalize_text(country)
+    return _COUNTRY_NAMES.get(value.upper(), value)
+
+
+def clean_leads(records: list[LeadRecord]) -> list[CleanLead]:
+    """规范化并按域名合并潜客记录，保留确定性顺序和质量标记。"""
+    groups: dict[str, list[LeadRecord]] = {}
+    for record in records:
+        domain = _normalize_domain(record.website)
+        key = domain or _normalize_text(record.company_name).lower()
+        groups.setdefault(key, []).append(record)
+
+    result: list[CleanLead] = []
+    for group in groups.values():
+        names = [
+            _normalize_text(item.company_name)
+            for item in group
+            if _normalize_text(item.company_name)
+        ]
+        company_name = max(names, key=len, default="Unknown")
+        domain = next(
+            (_normalize_domain(item.website) for item in group if _normalize_domain(item.website)),
+            "",
+        )
+        email_values = [_normalize_email(item.email) for item in group]
+        emails = tuple(dict.fromkeys(value for value in email_values if value))
+        country_values = [_normalize_country(item.country) for item in group]
+        countries = tuple(dict.fromkeys(value for value in country_values if value))
+        flags: list[str] = []
+        if not domain:
+            flags.append("missing_website")
+        if not emails:
+            flags.append("invalid_email")
+        if len(countries) > 1:
+            flags.append("conflicting_country")
+        country = countries[0] if countries else ""
+        quality = "complete" if domain and emails and len(countries) <= 1 else "needs_review"
+        result.append(CleanLead(company_name, domain, emails, country, quality, tuple(flags)))
+    return result
+
+
+def score_lead(lead: CleanLead, weights: dict[str, int], signals: dict[str, int]) -> LeadScore:
+    """按调用方提供的权重和信号计算评分，评分项不写死在领域规则中。"""
+    breakdown = {
+        key: max(0, min(int(signals.get(key, 0)), int(weight)))
+        for key, weight in weights.items()
+    }
+    total = sum(breakdown.values())
+    priority = "A" if total >= 80 else "B" if total >= 60 else "C" if total >= 40 else "D"
+    return LeadScore(total=total, priority=priority, breakdown=breakdown)
