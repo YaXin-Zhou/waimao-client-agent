@@ -106,7 +106,6 @@ function App() {
   const displayLeads = remoteLeads
   const filteredLeads = useMemo(() => displayLeads.filter((lead) => `${lead.name} ${lead.country} ${lead.type}`.toLowerCase().includes(query.toLowerCase())), [displayLeads, query])
   const activeLead = selected && (selectedResearch || selectedDraft) ? { ...selected, type: selectedResearch ? customerTypeLabel(selectedResearch.customer_type) : selected.type, detail: selectedResearch?.business_summary || selected.detail, research: selectedResearch, draft: selectedDraft, isRemote: true } : selected
-  const isRealMode = apiState === 'connected'
 
   const notify = (message) => { setToast(message); window.setTimeout(() => setToast(''), 2600) }
   const selectLead = (lead) => { setSelected(lead); setDetailTab('概览'); setDraftStatus('pending'); setTranslatedDraft(null) }
@@ -116,6 +115,7 @@ function App() {
     setRemoteTaskId(task.id)
     setRemoteTaskConfig(task)
     setRemoteLeads([])
+    setApiState('loading')
     setSelected(null)
     setSelectedResearch(null)
     setSelectedDraft(null)
@@ -196,8 +196,15 @@ function App() {
     try {
       const response = await fetch('/api/tasks', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify(payload) })
       if (!response.ok) throw new Error('task creation failed')
+      const task = await response.json()
+      setRemoteTasks((items) => [task, ...items.filter((item) => item.id !== task.id)])
+      setRemoteTaskId(task.id)
+      setRemoteTaskConfig(task)
+      setRemoteLeads([])
+      setSelected(null)
+      setApiState('loading')
       setShowTask(false)
-      notify('任务草稿已保存到本地 API')
+      notify('任务草稿已保存，已切换到当前任务')
     } catch {
       notify('任务保存失败，请检查本地 API')
     }
