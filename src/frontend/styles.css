@@ -112,6 +112,17 @@ h1 { color: #132238; font-size: 29px; font-weight: 700; letter-spacing: -.8px; }
 .reply-empty strong, .reply-empty span { display: block; }
 .reply-empty strong { color: #52667c; font-size: 12px; }
 .reply-empty span { margin-top: 5px; }
+.reply-list { margin-top: 12px; border-top: 1px solid #e8edf3; }
+.reply-item { padding: 11px 0; border-bottom: 1px solid #edf1f5; display: flex; justify-content: space-between; gap: 16px; color: #6e8092; font-size: 11px; }
+.reply-item > div:first-child { min-width: 150px; }
+.reply-item strong, .reply-item span, .reply-analysis span, .reply-analysis p { display: block; }
+.reply-item strong { color: #30445c; font-size: 12px; }
+.reply-item > div:first-child span { margin-top: 3px; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.reply-item em { color: #a2804d; font-style: normal; }
+.reply-analysis { min-width: 250px; text-align: right; }
+.reply-analysis b { color: #168eef; font-size: 11px; }
+.reply-analysis span { margin-top: 2px; color: #8797a7; }
+.reply-analysis p { margin-top: 3px; color: #52667c; }
 .task-context label { display: flex; align-items: center; gap: 8px; color: #41566d; font-weight: 600; white-space: nowrap; }
 .task-context select { min-width: 230px; padding: 7px 28px 7px 9px; border: 1px solid #d6e1eb; border-radius: 5px; outline: 0; color: #263a51; background: #fbfcfd; font-size: 11px; }
 .task-context select:focus { border-color: #62b4f3; box-shadow: 0 0 0 3px rgba(98, 180, 243, .13); }
