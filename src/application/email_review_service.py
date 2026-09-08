@@ -2,12 +2,14 @@
 
 from __future__ import annotations
 
+from src.domain.audit_event import AuditEvent
 from src.domain.email_draft import EmailDraft
 
 
 class EmailReviewService:
-    def __init__(self, repository):
+    def __init__(self, repository, audit_repository=None):
         self._repository = repository
+        self._audit = audit_repository
 
     def approve(self, draft_id: str, reviewer: str) -> EmailDraft:
         return self._apply(draft_id, lambda draft: draft.approve(reviewer))
@@ -26,4 +28,14 @@ class EmailReviewService:
             raise KeyError(f"Draft not found: {draft_id}")
         reviewed = transition(draft)
         self._repository.save(reviewed)
+        if self._audit is not None:
+            self._audit.save(AuditEvent.status_change(
+                entity_type="email_draft",
+                entity_id=draft.id,
+                action="review",
+                actor=reviewed.reviewed_by,
+                from_status=draft.status.value,
+                to_status=reviewed.status.value,
+                note=reviewed.review_note,
+            ))
         return reviewed

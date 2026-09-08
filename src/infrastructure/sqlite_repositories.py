@@ -7,6 +7,7 @@ import sqlite3
 from pathlib import Path
 
 from src.application.acquisition_service import AssessedLead
+from src.domain.audit_event import AuditEvent
 from src.domain.email_draft import EmailDraft, EmailDraftStatus
 from src.domain.lead import CleanLead, LeadScore
 from src.domain.research import CustomerType, EvidenceStatus, ResearchResult
@@ -75,6 +76,21 @@ def _connect(database: str | Path) -> sqlite3.Connection:
             status TEXT NOT NULL,
             reviewed_by TEXT NOT NULL,
             review_note TEXT NOT NULL
+        )
+        """
+    )
+    connection.execute(
+        """
+        CREATE TABLE IF NOT EXISTS audit_events (
+            id TEXT PRIMARY KEY,
+            entity_type TEXT NOT NULL,
+            entity_id TEXT NOT NULL,
+            action TEXT NOT NULL,
+            actor TEXT NOT NULL,
+            from_status TEXT NOT NULL,
+            to_status TEXT NOT NULL,
+            note TEXT NOT NULL,
+            occurred_at TEXT NOT NULL
         )
         """
     )
@@ -386,3 +402,57 @@ class SQLiteEmailDraftRepository:
                 (task_id, lead_domain),
             ).fetchone()
         return self.get(row["id"]) if row else None
+
+
+class SQLiteAuditEventRepository:
+    def __init__(self, database: str | Path):
+        self._database = database
+
+    def save(self, event: AuditEvent) -> None:
+        with _connect(self._database) as connection:
+            connection.execute(
+                """
+                INSERT INTO audit_events (
+                    id, entity_type, entity_id, action, actor,
+                    from_status, to_status, note, occurred_at
+                ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)
+                """,
+                (
+                    event.id,
+                    event.entity_type,
+                    event.entity_id,
+                    event.action,
+                    event.actor,
+                    event.from_status,
+                    event.to_status,
+                    event.note,
+                    event.occurred_at,
+                ),
+            )
+
+    def list_for_entity(self, entity_type: str, entity_id: str) -> list[AuditEvent]:
+        with _connect(self._database) as connection:
+            rows = connection.execute(
+                """
+                SELECT id, entity_type, entity_id, action, actor,
+                       from_status, to_status, note, occurred_at
+                FROM audit_events
+                WHERE entity_type = ? AND entity_id = ?
+                ORDER BY occurred_at, rowid
+                """,
+                (entity_type, entity_id),
+            ).fetchall()
+        return [
+            AuditEvent(
+                id=row["id"],
+                entity_type=row["entity_type"],
+                entity_id=row["entity_id"],
+                action=row["action"],
+                actor=row["actor"],
+                from_status=row["from_status"],
+                to_status=row["to_status"],
+                note=row["note"],
+                occurred_at=row["occurred_at"],
+            )
+            for row in rows
+        ]

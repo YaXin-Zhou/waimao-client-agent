@@ -1,7 +1,12 @@
 from src.application.acquisition_service import AcquisitionService
+from src.domain.audit_event import AuditEvent
 from src.domain.lead import LeadRecord
 from src.domain.task import AcquisitionCriteria
-from src.infrastructure.sqlite_repositories import SQLiteLeadRepository, SQLiteTaskRepository
+from src.infrastructure.sqlite_repositories import (
+    SQLiteAuditEventRepository,
+    SQLiteLeadRepository,
+    SQLiteTaskRepository,
+)
 
 
 def test_task_and_assessments_survive_repository_recreation(tmp_path):
@@ -26,3 +31,22 @@ def test_task_and_assessments_survive_repository_recreation(tmp_path):
 
     assert reloaded_service.list_leads(task.id)[0].lead.company_name == "Alpine Camp Supply"
     assert reloaded_service.list_leads(task.id)[0].score.total == 50
+
+
+def test_audit_events_survive_repository_recreation(tmp_path):
+    database = tmp_path / "acquisition.db"
+    event = AuditEvent.status_change(
+        "email_draft",
+        "draft-1",
+        "review",
+        "reviewer-1",
+        "pending_review",
+        "revision_required",
+        "Please add product evidence",
+    )
+
+    SQLiteAuditEventRepository(database).save(event)
+    events = SQLiteAuditEventRepository(database).list_for_entity("email_draft", "draft-1")
+
+    assert events[0].actor == "reviewer-1"
+    assert events[0].note == "Please add product evidence"

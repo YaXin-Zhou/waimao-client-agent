@@ -18,6 +18,7 @@ from src.infrastructure.machine_translation_provider import (  # noqa: E402
     GoogleMachineTranslationProvider,
 )
 from src.infrastructure.sqlite_repositories import (  # noqa: E402
+    SQLiteAuditEventRepository,
     SQLiteEmailDraftRepository,
     SQLiteLeadRepository,
     SQLiteResearchRepository,
@@ -39,6 +40,7 @@ application = ApiApplication(
     SQLiteEmailDraftRepository(DATABASE),
     email_drafts=email_draft_service,
     translation=TranslationService(GoogleMachineTranslationProvider()),
+    audit=SQLiteAuditEventRepository(DATABASE),
 )
 
 

@@ -1,6 +1,7 @@
 import json
 
 from src.application.acquisition_service import AssessedLead
+from src.domain.audit_event import AuditEvent
 from src.domain.email_draft import EmailDraft
 from src.domain.lead import CleanLead, LeadScore
 from src.domain.research import CustomerType, EvidenceStatus, ResearchResult
@@ -61,6 +62,21 @@ class Drafts:
         )
 
 
+class AuditEvents:
+    def __init__(self):
+        self.events = []
+
+    def save(self, event: AuditEvent):
+        self.events.append(event)
+
+    def list_for_entity(self, entity_type, entity_id):
+        return [
+            event
+            for event in self.events
+            if event.entity_type == entity_type and event.entity_id == entity_id
+        ]
+
+
 class DraftGenerator:
     def generate(self, task_id, lead, research, template, product, sender_profile=None):
         return EmailDraft.create(
@@ -92,12 +108,13 @@ def make_app():
         task.id, lead.domain, lead.emails[0], "Subject", "Body", ("https://alpine.example/about",)
     )
     assessed = AssessedLead(lead, LeadScore(72, "B", {"product": 30}))
-    app = ApiApplication(Tasks(task), Leads([assessed]), Research(), Drafts(draft))
-    return app, task, draft
+    audit = AuditEvents()
+    app = ApiApplication(Tasks(task), Leads([assessed]), Research(), Drafts(draft), audit=audit)
+    return app, task, draft, audit
 
 
 def test_api_returns_leads_and_research_detail():
-    app, task, _ = make_app()
+    app, task, _, _ = make_app()
 
     status, payload = app.handle("GET", f"/api/tasks/{task.id}/leads/alpine.example")
 
@@ -109,7 +126,7 @@ def test_api_returns_leads_and_research_detail():
 
 
 def test_api_returns_tasks_without_hardcoded_task_id():
-    app, task, _ = make_app()
+    app, task, _, _ = make_app()
 
     status, payload = app.handle("GET", "/api/tasks")
 
@@ -118,7 +135,7 @@ def test_api_returns_tasks_without_hardcoded_task_id():
 
 
 def test_api_creates_task_from_form_configuration():
-    app, _, _ = make_app()
+    app, _, _, _ = make_app()
 
     status, payload = app.handle(
         "POST",
@@ -147,7 +164,7 @@ def test_api_creates_task_from_form_configuration():
 
 
 def test_api_returns_lead_list():
-    app, task, _ = make_app()
+    app, task, _, _ = make_app()
 
     status, payload = app.handle("GET", f"/api/tasks/{task.id}/leads")
 
@@ -156,7 +173,7 @@ def test_api_returns_lead_list():
 
 
 def test_api_updates_contact_only_with_source_evidence_and_keeps_score():
-    app, task, _ = make_app()
+    app, task, _, _ = make_app()
 
     status, payload = app.handle(
         "POST",
@@ -174,7 +191,7 @@ def test_api_updates_contact_only_with_source_evidence_and_keeps_score():
 
 
 def test_api_updates_existing_task_sender_profile():
-    app, task, _ = make_app()
+    app, task, _, _ = make_app()
 
     status, payload = app.handle(
         "POST",
@@ -192,7 +209,7 @@ def test_api_updates_existing_task_sender_profile():
 
 
 def test_api_assesses_external_records_with_request_configuration():
-    app, task, _ = make_app()
+    app, task, _, _ = make_app()
 
     status, payload = app.handle(
         "POST",
@@ -219,7 +236,7 @@ def test_api_assesses_external_records_with_request_configuration():
 
 
 def test_api_rejects_non_object_scoring_configuration():
-    app, task, _ = make_app()
+    app, task, _, _ = make_app()
 
     status, payload = app.handle(
         "POST", f"/api/tasks/{task.id}/assess", {"records": [], "weights": []}
@@ -230,7 +247,7 @@ def test_api_rejects_non_object_scoring_configuration():
 
 
 def test_api_approval_updates_draft_without_sending():
-    app, _, draft = make_app()
+    app, _, draft, audit = make_app()
 
     status, payload = app.handle(
         "POST", f"/api/drafts/{draft.id}/approve", {"reviewer": "reviewer-1"}
@@ -239,10 +256,18 @@ def test_api_approval_updates_draft_without_sending():
     assert status == 200
     assert payload["status"] == "approved"
     assert app._drafts.draft.recipient_email == "sales@alpine.example"
+    assert len(audit.events) == 1
+    assert audit.events[0].from_status == "pending_review"
+    assert audit.events[0].to_status == "approved"
+
+    status, events = app.handle("GET", f"/api/drafts/{draft.id}/audit-events")
+
+    assert status == 200
+    assert events["items"][0]["actor"] == "reviewer-1"
 
 
 def test_api_returns_json_error_for_unknown_draft():
-    app, _, _ = make_app()
+    app, _, _, _ = make_app()
 
     status, payload = app.handle(
         "POST", "/api/drafts/missing/reject", json.dumps({"reviewer": "r", "note": "x"})
@@ -253,7 +278,7 @@ def test_api_returns_json_error_for_unknown_draft():
 
 
 def test_api_translates_draft_for_preview_without_replacing_source():
-    app, _, draft = make_app()
+    app, _, draft, _ = make_app()
     app._translation = Translation()
 
     status, payload = app.handle(
@@ -267,7 +292,7 @@ def test_api_translates_draft_for_preview_without_replacing_source():
 
 
 def test_api_generates_and_persists_reviewable_draft():
-    app, task, draft = make_app()
+    app, task, draft, _ = make_app()
     app._email_drafts = DraftGenerator()
 
     status, payload = app.handle(
@@ -283,7 +308,7 @@ def test_api_generates_and_persists_reviewable_draft():
 
 
 def test_api_draft_requires_research_before_generation():
-    app, task, _ = make_app()
+    app, task, _, _ = make_app()
     app._email_drafts = DraftGenerator()
     app._research.get = lambda task_id, domain: None
 

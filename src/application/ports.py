@@ -4,6 +4,7 @@ from __future__ import annotations
 
 from typing import TYPE_CHECKING, Protocol
 
+from src.domain.audit_event import AuditEvent
 from src.domain.email_draft import EmailDraft
 from src.domain.lead import LeadRecord
 from src.domain.research_run import ResearchRun
@@ -39,3 +40,9 @@ class EmailDraftRepository(Protocol):
     def save(self, draft: EmailDraft) -> None: ...
 
     def get(self, draft_id: str) -> EmailDraft | None: ...
+
+
+class AuditEventRepository(Protocol):
+    def save(self, event: AuditEvent) -> None: ...
+
+    def list_for_entity(self, entity_type: str, entity_id: str) -> list[AuditEvent]: ...

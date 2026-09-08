@@ -7,6 +7,7 @@ from urllib.parse import unquote, urlsplit
 
 from src.application.acquisition_service import AcquisitionService
 from src.application.email_review_service import EmailReviewService
+from src.domain.audit_event import AuditEvent
 from src.domain.lead import LeadRecord
 from src.domain.sender_profile import SenderProfile
 from src.domain.task import AcquisitionCriteria
@@ -14,7 +15,15 @@ from src.domain.task import AcquisitionCriteria
 
 class ApiApplication:
     def __init__(
-        self, tasks, leads, research, drafts, acquisition=None, email_drafts=None, translation=None
+        self,
+        tasks,
+        leads,
+        research,
+        drafts,
+        acquisition=None,
+        email_drafts=None,
+        translation=None,
+        audit=None,
     ):
         self._tasks = tasks
         self._leads = leads
@@ -23,7 +32,8 @@ class ApiApplication:
         self._acquisition = acquisition or AcquisitionService(tasks, leads)
         self._email_drafts = email_drafts
         self._translation = translation
-        self._reviews = EmailReviewService(drafts)
+        self._audit = audit
+        self._reviews = EmailReviewService(drafts, audit)
 
     def handle(self, method: str, path: str, body=None) -> tuple[int, dict]:
         try:
@@ -84,6 +94,13 @@ class ApiApplication:
                 return self._lead_list(segments[2])
             if method == "GET" and len(segments) == 3 and segments[:2] == ["api", "drafts"]:
                 return self._draft_detail(segments[2])
+            if (
+                method == "GET"
+                and len(segments) == 4
+                and segments[:2] == ["api", "drafts"]
+                and segments[3] == "audit-events"
+            ):
+                return self._draft_audit_events(segments[2])
             if (
                 method == "POST"
                 and len(segments) == 4
@@ -234,6 +251,13 @@ class ApiApplication:
             raise KeyError(f"Draft not found: {draft_id}")
         return 200, self._draft(draft)
 
+    def _draft_audit_events(self, draft_id: str) -> tuple[int, dict]:
+        draft = self._drafts.get(draft_id)
+        if draft is None:
+            raise KeyError(f"Draft not found: {draft_id}")
+        events = self._audit.list_for_entity("email_draft", draft_id) if self._audit else []
+        return 200, {"items": [self._audit_event(event) for event in events]}
+
     def _translate_draft(self, draft_id: str, body: dict) -> tuple[int, dict]:
         if self._translation is None:
             raise RuntimeError("translation provider is not configured")
@@ -331,4 +355,18 @@ class ApiApplication:
             "status": draft.status.value,
             "reviewed_by": draft.reviewed_by,
             "review_note": draft.review_note,
+        }
+
+    @staticmethod
+    def _audit_event(event: AuditEvent) -> dict:
+        return {
+            "id": event.id,
+            "entity_type": event.entity_type,
+            "entity_id": event.entity_id,
+            "action": event.action,
+            "actor": event.actor,
+            "from_status": event.from_status,
+            "to_status": event.to_status,
+            "note": event.note,
+            "occurred_at": event.occurred_at,
         }
