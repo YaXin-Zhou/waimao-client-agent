@@ -63,6 +63,8 @@ class ApiApplication:
             segments = [unquote(item) for item in urlsplit(path).path.split("/") if item]
             if method == "GET" and segments == ["api", "health"]:
                 return 200, {"status": "ok"}
+            if method == "GET" and segments == ["api", "ready"]:
+                return self._ready()
             if method == "GET" and segments == ["api", "mailbox", "status"]:
                 return self._mailbox_status()
             if (
@@ -243,6 +245,19 @@ class ApiApplication:
             "configured": self._mailbox is not None,
             "mode": "read_only",
             "sending_enabled": False,
+        }
+
+    def _ready(self) -> tuple[int, dict]:
+        checks = {
+            "task_repository": self._tasks is not None,
+            "lead_repository": self._leads is not None,
+            "research_repository": self._research is not None,
+            "draft_repository": self._drafts is not None,
+        }
+        ready = all(checks.values())
+        return (200 if ready else 503), {
+            "status": "ready" if ready else "not_ready",
+            "checks": checks,
         }
 
     def _send_check(self, draft_id: str, body: dict) -> tuple[int, dict]:
