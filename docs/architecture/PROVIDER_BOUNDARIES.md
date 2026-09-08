@@ -10,8 +10,9 @@
 
 搜索提供商只负责返回原始潜客记录，不负责清洗、去重、评分或决定是否发送邮件。
 
-当前实现：`src/infrastructure/google_search_provider.py`。它通过公开 HTML 结果页
-提取有限数量的 HTTP(S) 官网链接，保存查询来源，不从域名推测邮箱。
+当前实现：`src/infrastructure/google_search_provider.py` 可处理静态 HTML；
+`src/infrastructure/browser_search_provider.py` 接收浏览器读取的可见结果，适用于
+Google 返回 JavaScript 页面时的真实搜索流程。两者都保存查询来源，不从域名推测邮箱。
 
 ## 责任分配
 

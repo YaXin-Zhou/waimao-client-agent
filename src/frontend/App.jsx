@@ -111,7 +111,6 @@ function App() {
 
 function mapRemoteLead(item) {
   const lead = item.lead
-  const source = lead.sources?.[0]?.[0] || `https://${lead.domain}`
   return {
     name: lead.company_name,
     country: lead.country || 'Unknown',
@@ -121,7 +120,7 @@ function mapRemoteLead(item) {
     status: lead.quality === 'complete' ? 'evidence' : 'review',
     detail: '已从本地持久化客户档案读取，等待更多背调字段接入。',
     email: lead.emails?.[0] || '未发现公开邮箱',
-    website: source,
+    website: lead.website || `https://${lead.domain}`,
   }
 }
 

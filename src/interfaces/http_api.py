@@ -151,6 +151,7 @@ class ApiApplication:
         return {
             "company_name": lead.company_name,
             "domain": lead.domain,
+            "website": f"https://{lead.domain}" if lead.domain else "",
             "emails": lead.emails,
             "country": lead.country,
             "quality": lead.quality,

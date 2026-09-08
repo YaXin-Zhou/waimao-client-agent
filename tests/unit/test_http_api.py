@@ -70,6 +70,7 @@ def test_api_returns_leads_and_research_detail():
 
     assert status == 200
     assert payload["lead"]["company_name"] == "Alpine Energy"
+    assert payload["lead"]["website"] == "https://alpine.example"
     assert payload["research"]["evidence_status"] == "sufficient"
 
 
