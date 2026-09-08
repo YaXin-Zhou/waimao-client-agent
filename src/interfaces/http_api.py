@@ -88,12 +88,7 @@ class ApiApplication:
         return 200, {"items": items}
 
     def _task_list(self) -> tuple[int, dict]:
-        return 200, {
-            "items": [
-                {"id": task.id, "name": task.name, "status": task.status.value}
-                for task in self._tasks.list()
-            ]
-        }
+        return 200, {"items": [self._task(task) for task in self._tasks.list()]}
 
     def _create_task(self, body: dict) -> tuple[int, dict]:
         criteria_data = body.get("criteria", {})
@@ -239,7 +234,20 @@ class ApiApplication:
 
     @staticmethod
     def _task(task) -> dict:
-        return {"id": task.id, "name": task.name, "status": task.status.value}
+        return {
+            "id": task.id,
+            "name": task.name,
+            "status": task.status.value,
+            "criteria": {
+                "product": task.criteria.product,
+                "language": task.criteria.language,
+            },
+            "sender_profile": {
+                "company_name": task.sender_profile.company_name,
+                "contact_name": task.sender_profile.contact_name,
+                "position": task.sender_profile.position,
+            },
+        }
 
     @staticmethod
     def _lead(lead) -> dict:
