@@ -1,0 +1,33 @@
+"""把受约束背调结果转换为评分引擎使用的信号。"""
+
+from __future__ import annotations
+
+from src.domain.lead import CleanLead
+from src.domain.research import EvidenceStatus, ResearchResult
+from src.domain.task import AcquisitionCriteria
+
+
+def _matches(left: str, right: str) -> bool:
+    left, right = left.lower().strip(), right.lower().strip()
+    return bool(left and right and (left in right or right in left))
+
+
+def build_research_signals(
+    lead: CleanLead, research: ResearchResult, criteria: AcquisitionCriteria
+) -> dict[str, int]:
+    product_match = (
+        30 if any(_matches(criteria.product, product) for product in research.products) else 0
+    )
+    market_match = (
+        20 if any(_matches(country, research.country) for country in criteria.countries) else 0
+    )
+    email_quality = 15 if lead.emails else 0
+    evidence_quality = 5 if research.evidence_status is EvidenceStatus.SUFFICIENT else 0
+    return {
+        "product_match": product_match,
+        "market_match": market_match,
+        "buying_signal": 0,
+        "email_quality": email_quality,
+        "company_size": 0,
+        "evidence_quality": evidence_quality,
+    }

@@ -2,25 +2,22 @@
 
 from __future__ import annotations
 
-from dataclasses import dataclass
 from typing import Protocol
 
 from src.domain.lead import CleanLead
+from src.domain.research import CustomerType, EvidenceStatus, ResearchResult
 
 
 class StructuredProvider(Protocol):
     def generate_json(self, prompt: str) -> dict: ...
 
 
-@dataclass(frozen=True)
-class ResearchResult:
-    company_name: str
-    business_summary: str
-    customer_type: str
-    products: tuple[str, ...]
-    country: str
-    confidence: float
-    evidence_url: str
+def _customer_type(value: object) -> CustomerType:
+    label = str(value).strip().lower()
+    for customer_type in CustomerType:
+        if customer_type is not CustomerType.UNKNOWN and customer_type.value in label:
+            return customer_type
+    return CustomerType.UNKNOWN
 
 
 def research_company(
@@ -53,9 +50,14 @@ def research_company(
     return ResearchResult(
         company_name=lead.company_name,
         business_summary=str(data["business_summary"]),
-        customer_type=str(data["customer_type"]),
+        customer_type=_customer_type(data["customer_type"]),
         products=tuple(products),
         country=str(data["country"]),
         confidence=confidence,
         evidence_url=source_url,
+        evidence_status=(
+            EvidenceStatus.SUFFICIENT
+            if len(website_text.strip()) >= 40 and confidence >= 0.5
+            else EvidenceStatus.INSUFFICIENT
+        ),
     )

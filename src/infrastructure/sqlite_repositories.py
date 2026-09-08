@@ -8,6 +8,7 @@ from pathlib import Path
 
 from src.application.acquisition_service import AssessedLead
 from src.domain.lead import CleanLead, LeadScore
+from src.domain.research import CustomerType, EvidenceStatus, ResearchResult
 from src.domain.task import AcquisitionCriteria, AcquisitionTask, TaskStatus
 
 
@@ -33,6 +34,16 @@ def _connect(database: str | Path) -> sqlite3.Connection:
             score_json TEXT NOT NULL,
             PRIMARY KEY (task_id, domain),
             FOREIGN KEY (task_id) REFERENCES acquisition_tasks(id)
+        )
+        """
+    )
+    connection.execute(
+        """
+        CREATE TABLE IF NOT EXISTS research_reports (
+            task_id TEXT NOT NULL,
+            domain TEXT NOT NULL,
+            report_json TEXT NOT NULL,
+            PRIMARY KEY (task_id, domain)
         )
         """
     )
@@ -164,3 +175,49 @@ class SQLiteLeadRepository:
                 )
             )
         return results
+
+
+class SQLiteResearchRepository:
+    def __init__(self, database: str | Path):
+        self._database = database
+
+    def save(self, task_id: str, domain: str, report: ResearchResult) -> None:
+        payload = {
+            "company_name": report.company_name,
+            "business_summary": report.business_summary,
+            "customer_type": report.customer_type.value,
+            "products": report.products,
+            "country": report.country,
+            "confidence": report.confidence,
+            "evidence_url": report.evidence_url,
+            "evidence_status": report.evidence_status.value,
+        }
+        with _connect(self._database) as connection:
+            connection.execute(
+                """
+                INSERT INTO research_reports (task_id, domain, report_json)
+                VALUES (?, ?, ?)
+                ON CONFLICT(task_id, domain) DO UPDATE SET report_json=excluded.report_json
+                """,
+                (task_id, domain, json.dumps(payload)),
+            )
+
+    def get(self, task_id: str, domain: str) -> ResearchResult | None:
+        with _connect(self._database) as connection:
+            row = connection.execute(
+                "SELECT report_json FROM research_reports WHERE task_id = ? AND domain = ?",
+                (task_id, domain),
+            ).fetchone()
+        if row is None:
+            return None
+        data = json.loads(row["report_json"])
+        return ResearchResult(
+            company_name=data["company_name"],
+            business_summary=data["business_summary"],
+            customer_type=CustomerType(data["customer_type"]),
+            products=tuple(data["products"]),
+            country=data["country"],
+            confidence=data["confidence"],
+            evidence_url=data["evidence_url"],
+            evidence_status=EvidenceStatus(data["evidence_status"]),
+        )
