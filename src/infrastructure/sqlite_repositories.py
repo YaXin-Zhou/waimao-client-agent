@@ -445,12 +445,15 @@ class SQLiteResearchRunRepository:
             ).fetchone()
         if row is None:
             return None
+        step = row["step"]
+        if step == "executing":
+            step = ResearchRunStep.FETCHING.value
         return ResearchRun(
             id=row["id"],
             task_id=row["task_id"],
             domain=row["domain"],
             status=ResearchRunStatus(row["status"]),
-            step=ResearchRunStep(row["step"]),
+            step=ResearchRunStep(step),
             attempts=row["attempts"],
             error=row["error"],
             request_key=row["request_key"],
@@ -477,7 +480,9 @@ class SQLiteResearchRunRepository:
                 task_id=row["task_id"],
                 domain=row["domain"],
                 status=ResearchRunStatus(row["status"]),
-                step=ResearchRunStep(row["step"]),
+                step=ResearchRunStep(
+                    ResearchRunStep.FETCHING.value if row["step"] == "executing" else row["step"]
+                ),
                 attempts=row["attempts"],
                 error=row["error"],
                 request_key=row["request_key"],

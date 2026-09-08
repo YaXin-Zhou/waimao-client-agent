@@ -21,7 +21,7 @@ class FlakyWorkflow:
         self.calls = 0
         self.evidence_status = evidence_status
 
-    def run(self, task_id, lead, source_url, weights):
+    def run(self, task_id, lead, source_url, weights, progress=None):
         self.calls += 1
         if self.calls <= self.failures:
             raise TimeoutError("temporary website timeout")
@@ -106,7 +106,7 @@ def test_execution_does_not_retry_invalid_workflow_input():
     repository = MemoryRunRepository()
     workflow = FlakyWorkflow(failures=0)
 
-    def invalid_run(*args):
+    def invalid_run(*args, **kwargs):
         raise ValueError("invalid structured result")
 
     workflow.run = invalid_run

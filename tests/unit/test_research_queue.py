@@ -48,7 +48,10 @@ class Runs:
 
 
 class Workflow:
-    def run(self, task_id, lead, source_url, weights):
+    def run(self, task_id, lead, source_url, weights, progress=None):
+        if progress:
+            from src.domain.research_run import ResearchRunStep
+            progress(ResearchRunStep.ANALYZING)
         return ResearchAssessment(
             ResearchResult(
                 lead.company_name,

@@ -9,6 +9,7 @@ from src.application.research_service import research_company
 from src.application.research_signals import build_research_signals
 from src.domain.lead import CleanLead, LeadScore, score_lead
 from src.domain.research import ResearchResult
+from src.domain.research_run import ResearchRunStep
 
 
 class TaskReader(Protocol):
@@ -48,13 +49,22 @@ class ResearchWorkflow:
         lead: CleanLead,
         source_url: str,
         weights: dict[str, int],
+        progress=None,
     ) -> ResearchAssessment:
         task = self._tasks.get(task_id)
         if task is None:
             raise KeyError(f"Task not found: {task_id}")
+        if progress:
+            progress(ResearchRunStep.FETCHING)
         document = self._websites.fetch(source_url)
+        if progress:
+            progress(ResearchRunStep.ANALYZING)
         research = research_company(self._ai, lead, document.url, document.text)
+        if progress:
+            progress(ResearchRunStep.SCORING)
         signals = build_research_signals(lead, research, task.criteria)
         score = score_lead(lead, weights, signals)
+        if progress:
+            progress(ResearchRunStep.PERSISTING)
         self._reports.save(task_id, lead.domain, research)
         return ResearchAssessment(research=research, score=score)

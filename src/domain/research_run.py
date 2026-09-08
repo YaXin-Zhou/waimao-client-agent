@@ -16,7 +16,10 @@ class ResearchRunStatus(StrEnum):
 
 class ResearchRunStep(StrEnum):
     QUEUED = "queued"
-    EXECUTING = "executing"
+    FETCHING = "fetching"
+    ANALYZING = "analyzing"
+    SCORING = "scoring"
+    PERSISTING = "persisting"
     COMPLETED = "completed"
     FAILED = "failed"
 
@@ -47,7 +50,12 @@ class ResearchRun:
         )
 
     def attempted(self) -> "ResearchRun":
-        return replace(self, attempts=self.attempts + 1, step=ResearchRunStep.EXECUTING)
+        return replace(self, attempts=self.attempts + 1, step=ResearchRunStep.FETCHING)
+
+    def progress(self, step: ResearchRunStep) -> "ResearchRun":
+        if self.status is not ResearchRunStatus.RUNNING:
+            return self
+        return replace(self, step=step, error="")
 
     def succeed(self, review_required: bool = False) -> "ResearchRun":
         status = (

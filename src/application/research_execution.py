@@ -7,7 +7,7 @@ from dataclasses import dataclass
 from src.application.research_workflow import ResearchAssessment
 from src.domain.lead import CleanLead
 from src.domain.research import EvidenceStatus
-from src.domain.research_run import ResearchRun
+from src.domain.research_run import ResearchRun, ResearchRunStep
 
 
 @dataclass(frozen=True)
@@ -42,7 +42,10 @@ class ResearchExecutionService:
             run = run.attempted()
             self._runs.save(run)
             try:
-                assessment = self._workflow.run(task_id, lead, source_url, weights)
+                assessment = self._workflow.run(
+                    task_id, lead, source_url, weights,
+                    progress=lambda step: self._save_progress(run, step),
+                )
             except (ConnectionError, OSError, TimeoutError) as error:
                 last_error = error
                 continue
@@ -57,3 +60,7 @@ class ResearchExecutionService:
         run = run.fail(str(last_error) if last_error else "research failed")
         self._runs.save(run)
         raise last_error or RuntimeError("research failed")
+
+    def _save_progress(self, run: ResearchRun, step: ResearchRunStep) -> None:
+        run = run.progress(step)
+        self._runs.save(run)
