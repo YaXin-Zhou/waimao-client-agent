@@ -8,6 +8,7 @@ from urllib.parse import unquote, urlsplit
 from src.application.acquisition_service import AcquisitionService
 from src.application.email_review_service import EmailReviewService
 from src.domain.audit_event import AuditEvent
+from src.domain.email_send import EmailSendAttempt
 from src.domain.inbound_email import InboundEmail
 from src.domain.lead import LeadRecord, LeadStatus
 from src.domain.reply_analysis import ReplyAnalysis
@@ -36,6 +37,7 @@ class ApiApplication:
         inbound_emails=None,
         reply_analysis=None,
         send_safety=None,
+        email_send=None,
     ):
         self._tasks = tasks
         self._leads = leads
@@ -53,6 +55,7 @@ class ApiApplication:
         self._inbound_emails = inbound_emails
         self._reply_analysis = reply_analysis
         self._send_safety = send_safety
+        self._email_send = email_send
         self._reviews = EmailReviewService(drafts, audit)
 
     def handle(self, method: str, path: str, body=None) -> tuple[int, dict]:
@@ -69,6 +72,13 @@ class ApiApplication:
                 and segments[3] == "send-check"
             ):
                 return self._send_check(segments[2], self._parse_body(body))
+            if (
+                method == "POST"
+                and len(segments) == 4
+                and segments[:2] == ["api", "drafts"]
+                and segments[3] == "send"
+            ):
+                return self._send_draft(segments[2], self._parse_body(body))
             if (
                 method == "POST"
                 and len(segments) == 5
@@ -251,6 +261,22 @@ class ApiApplication:
             "reasons": result.reasons,
             "sending_performed": False,
         }
+
+    def _send_draft(self, draft_id: str, body: dict) -> tuple[int, dict]:
+        if self._email_send is None:
+            raise RuntimeError("email send service is not configured")
+        policy = SendPolicy(
+            blocked_emails=tuple(str(item) for item in body.get("blocked_emails", [])),
+            blocked_domains=tuple(str(item) for item in body.get("blocked_domains", [])),
+            daily_limit=int(body.get("daily_limit", 0)),
+            sent_today=int(body.get("sent_today", 0)),
+        )
+        attempt = self._email_send.send(
+            draft_id, policy, bool(body.get("confirmed", False)),
+            str(body.get("recipient_email", "")), str(body.get("subject", "")),
+            str(body.get("body", "")),
+        )
+        return 200, {"attempt": self._send_attempt(attempt), "sending_performed": True}
 
     def _sync_mailbox(self, task_id: str) -> tuple[int, dict]:
         if self._mailbox_sync is None or self._mailbox is None:
@@ -639,6 +665,19 @@ class ApiApplication:
             "suggested_action": item.suggested_action,
             "needs_human_review": item.needs_human_review,
             "evidence": item.evidence,
+        }
+
+    @staticmethod
+    def _send_attempt(attempt: EmailSendAttempt) -> dict:
+        return {
+            "id": attempt.id,
+            "draft_id": attempt.draft_id,
+            "recipient_email": attempt.recipient_email,
+            "subject": attempt.subject,
+            "status": attempt.status.value,
+            "provider_message_id": attempt.provider_message_id,
+            "error": attempt.error,
+            "created_at": attempt.created_at,
         }
 
     @staticmethod

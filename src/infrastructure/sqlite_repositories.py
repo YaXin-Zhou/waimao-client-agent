@@ -9,6 +9,7 @@ from pathlib import Path
 from src.application.acquisition_service import AssessedLead
 from src.domain.audit_event import AuditEvent
 from src.domain.email_draft import EmailDraft, EmailDraftStatus
+from src.domain.email_send import EmailSendAttempt, EmailSendStatus
 from src.domain.inbound_email import InboundEmail
 from src.domain.lead import CleanLead, LeadScore, LeadStatus
 from src.domain.reply_analysis import ReplyAnalysis, ReplyCategory
@@ -146,6 +147,20 @@ def _connect(database: str | Path) -> sqlite3.Connection:
             suggested_action TEXT NOT NULL,
             needs_human_review INTEGER NOT NULL,
             evidence_json TEXT NOT NULL
+        )
+        """
+    )
+    connection.execute(
+        """
+        CREATE TABLE IF NOT EXISTS email_send_attempts (
+            id TEXT PRIMARY KEY,
+            draft_id TEXT NOT NULL,
+            recipient_email TEXT NOT NULL,
+            subject TEXT NOT NULL,
+            status TEXT NOT NULL,
+            provider_message_id TEXT NOT NULL,
+            error TEXT NOT NULL,
+            created_at TEXT NOT NULL
         )
         """
     )
@@ -677,3 +692,41 @@ def _reply_analysis(row) -> ReplyAnalysis:
         needs_human_review=bool(row["needs_human_review"]),
         evidence=tuple(json.loads(row["evidence_json"])),
     )
+
+
+class SQLiteEmailSendAttemptRepository:
+    def __init__(self, database: str | Path):
+        self._database = database
+
+    def save(self, attempt: EmailSendAttempt) -> None:
+        with _connect(self._database) as connection:
+            connection.execute(
+                """
+                INSERT INTO email_send_attempts (
+                    id, draft_id, recipient_email, subject, status,
+                    provider_message_id, error, created_at
+                ) VALUES (?, ?, ?, ?, ?, ?, ?, ?)
+                """,
+                (
+                    attempt.id, attempt.draft_id, attempt.recipient_email,
+                    attempt.subject, attempt.status.value,
+                    attempt.provider_message_id, attempt.error, attempt.created_at,
+                ),
+            )
+
+    def list_for_draft(self, draft_id: str) -> list[EmailSendAttempt]:
+        with _connect(self._database) as connection:
+            rows = connection.execute(
+                "SELECT * FROM email_send_attempts WHERE draft_id = ? ORDER BY rowid",
+                (draft_id,),
+            ).fetchall()
+        return [
+            EmailSendAttempt(
+                id=row["id"], draft_id=row["draft_id"],
+                recipient_email=row["recipient_email"], subject=row["subject"],
+                status=EmailSendStatus(row["status"]),
+                provider_message_id=row["provider_message_id"],
+                error=row["error"], created_at=row["created_at"],
+            )
+            for row in rows
+        ]

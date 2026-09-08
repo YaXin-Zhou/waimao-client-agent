@@ -12,6 +12,7 @@ ROOT = Path(__file__).resolve().parents[1]
 sys.path.insert(0, str(ROOT))
 
 from src.application.email_draft_service import EmailDraftService  # noqa: E402
+from src.application.email_send_service import EmailSendService  # noqa: E402
 from src.application.mailbox_sync import MailboxSyncService  # noqa: E402
 from src.application.reply_analysis_service import ReplyAnalysisService  # noqa: E402
 from src.application.research_execution import ResearchExecutionService  # noqa: E402
@@ -20,6 +21,7 @@ from src.application.research_workflow import ResearchWorkflow  # noqa: E402
 from src.application.send_safety_service import SendSafetyService  # noqa: E402
 from src.application.translation_service import TranslationService  # noqa: E402
 from src.infrastructure.ali_imap import AliImapConfig, AliImapMailbox  # noqa: E402
+from src.infrastructure.ali_smtp import AliSmtpConfig, AliSmtpMailer  # noqa: E402
 from src.infrastructure.deepseek_provider import DeepSeekConfig, DeepSeekProvider  # noqa: E402
 from src.infrastructure.machine_translation_provider import (  # noqa: E402
     GoogleMachineTranslationProvider,
@@ -27,6 +29,7 @@ from src.infrastructure.machine_translation_provider import (  # noqa: E402
 from src.infrastructure.sqlite_repositories import (  # noqa: E402
     SQLiteAuditEventRepository,
     SQLiteEmailDraftRepository,
+    SQLiteEmailSendAttemptRepository,
     SQLiteInboundEmailRepository,
     SQLiteLeadRepository,
     SQLiteReplyAnalysisRepository,
@@ -59,6 +62,8 @@ research_repository = SQLiteResearchRepository(DATABASE)
 research_run_repository = SQLiteResearchRunRepository(DATABASE)
 inbound_email_repository = SQLiteInboundEmailRepository(DATABASE)
 reply_analysis_repository = SQLiteReplyAnalysisRepository(DATABASE)
+email_draft_repository = SQLiteEmailDraftRepository(DATABASE)
+email_send_attempt_repository = SQLiteEmailSendAttemptRepository(DATABASE)
 try:
     deepseek_provider = DeepSeekProvider(
         DeepSeekConfig.from_env_file(ROOT / "config" / ".env")
@@ -99,11 +104,23 @@ mailbox = AliImapMailbox(imap_config) if imap_config.configured else None
 mailbox_sync = MailboxSyncService(lead_repository, inbound_email_repository)
 reply_analysis_service = ReplyAnalysisService(inbound_email_repository, reply_analysis_repository)
 send_safety_service = SendSafetyService(SQLiteEmailDraftRepository(DATABASE))
+smtp_config = AliSmtpConfig(
+    host=config_values.get("ALI_SMTP_HOST", "smtp.qiye.aliyun.com"),
+    username=config_values.get("ALI_SMTP_USERNAME", ""),
+    password=config_values.get("ALI_SMTP_PASSWORD", ""),
+    port=int(config_values.get("ALI_SMTP_PORT", "465")),
+)
+smtp_mailer = AliSmtpMailer(smtp_config) if smtp_config.configured else None
+email_send_service = EmailSendService(
+    email_draft_repository,
+    smtp_mailer or AliSmtpMailer(smtp_config),
+    email_send_attempt_repository,
+)
 application = ApiApplication(
     task_repository,
     lead_repository,
     research_repository,
-    SQLiteEmailDraftRepository(DATABASE),
+    email_draft_repository,
     email_drafts=email_draft_service,
     translation=TranslationService(GoogleMachineTranslationProvider()),
     audit=SQLiteAuditEventRepository(DATABASE),
@@ -115,6 +132,7 @@ application = ApiApplication(
     inbound_emails=inbound_email_repository,
     reply_analysis=reply_analysis_service,
     send_safety=send_safety_service,
+    email_send=email_send_service,
 )
 
 
