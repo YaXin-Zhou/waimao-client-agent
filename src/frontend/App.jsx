@@ -220,7 +220,8 @@ function DraftGenerator({ lead, taskConfig, loading, onGenerate }) {
   const [product, setProduct] = useState(taskConfig?.criteria?.product || '')
   const [template, setTemplate] = useState('Introduce {product} to {company} based on their published product range.')
   if (!lead.isRemote || lead.draft) return null
-  return <div className="review-controls draft-generator"><div className="section-title"><h3>生成开发信</h3><span>使用真实背调与已配置发件人资料</span></div><label>产品或服务<input value={product} onChange={(event) => setProduct(event.target.value)} placeholder="填写本次推广产品" /></label><label>写作方向<textarea value={template} onChange={(event) => setTemplate(event.target.value)} rows="2" /></label><button className="primary-button full" disabled={loading || !product.trim() || !lead.research} onClick={() => onGenerate(template, product)}>{loading ? '生成中…' : '生成真实开发信草稿'} <Icon name="arrow" size={16}/></button>{!lead.research && <p className="generator-hint">请先完成官网背调，再生成开发信。</p>}</div>
+  const hasRecipient = Boolean(lead.email?.includes('@'))
+  return <div className="review-controls draft-generator"><div className="section-title"><h3>生成开发信</h3><span>使用真实背调与已配置发件人资料</span></div><label>产品或服务<input value={product} onChange={(event) => setProduct(event.target.value)} placeholder="填写本次推广产品" /></label><label>写作方向<textarea value={template} onChange={(event) => setTemplate(event.target.value)} rows="2" /></label><button className="primary-button full" disabled={loading || !product.trim() || !lead.research || !hasRecipient} onClick={() => onGenerate(template, product)}>{loading ? '生成中…' : '生成真实开发信草稿'} <Icon name="arrow" size={16}/></button>{!hasRecipient ? <p className="generator-hint">当前没有公开邮箱，补充真实收件人后才能生成。</p> : !lead.research && <p className="generator-hint">请先完成官网背调，再生成开发信。</p>}</div>
 }
 
 function ReviewControls({ lead, onReview, loading }) {
