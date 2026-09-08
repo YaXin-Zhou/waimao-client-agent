@@ -78,6 +78,9 @@ h1 { color: #132238; font-size: 29px; font-weight: 700; letter-spacing: -.8px; }
 .status-green { color: #16a370; }.status-amber { color: #efb22c; }.status-blue { color: #218ee7; }.status-orange { color: #e97623; }
 .more { color: #213249; font-size: 16px; letter-spacing: 2px; }
 .table-footer { min-height: 67px; padding: 0 20px; display: flex; align-items: center; justify-content: space-between; color: #8392a4; font-size: 12px; }
+.empty-results { padding: 42px 24px; text-align: center; color: #8b95a7; font-size: 13px; }
+.detail-empty-state { min-height: 240px; display: flex; flex-direction: column; align-items: center; justify-content: center; gap: 8px; color: #8b95a7; font-size: 13px; }
+.detail-empty-state strong { color: #3b4658; font-size: 15px; }
 .pagination { display: flex; align-items: center; gap: 4px; }.pagination button { min-width: 28px; height: 28px; border: 0; border-radius: 5px; color: #5b6d83; background: transparent; font-size: 12px; }.pagination button:hover, .pagination .page-active { color: #168eef; background: #e9f5ff; }.pagination span { margin: 0 4px; }
 .detail-panel { min-height: 650px; animation: panel-in .4s cubic-bezier(.2,.8,.2,1); }
 @keyframes panel-in { from { opacity: .3; transform: translateX(8px); } to { opacity: 1; transform: translateX(0); } }

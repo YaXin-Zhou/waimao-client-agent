@@ -10,13 +10,17 @@ from src.interfaces.http_api import ApiApplication
 
 class Tasks:
     def __init__(self, task):
-        self.task = task
+        self.tasks = [task]
 
     def get(self, task_id):
-        return self.task if task_id == self.task.id else None
+        return next((task for task in self.tasks if task.id == task_id), None)
 
     def list(self):
-        return [self.task]
+        return list(self.tasks)
+
+    def save(self, task):
+        self.tasks = [item for item in self.tasks if item.id != task.id]
+        self.tasks.append(task)
 
 
 class Leads:
@@ -81,6 +85,29 @@ def test_api_returns_tasks_without_hardcoded_task_id():
 
     assert status == 200
     assert payload["items"][0]["id"] == task.id
+
+
+def test_api_creates_task_from_form_configuration():
+    app, _, _ = make_app()
+
+    status, payload = app.handle(
+        "POST",
+        "/api/tasks",
+        {
+            "name": "France solar distributors",
+            "criteria": {
+                "product": "portable solar generator",
+                "countries": ["France"],
+                "customer_types": ["distributor"],
+                "daily_limit": 5,
+            },
+        },
+    )
+
+    assert status == 201
+    assert payload["name"] == "France solar distributors"
+    assert payload["status"] == "draft"
+    assert app._tasks.get(payload["id"]).criteria.countries == ("France",)
 
 
 def test_api_returns_lead_list():

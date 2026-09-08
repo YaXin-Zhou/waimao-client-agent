@@ -8,6 +8,7 @@ from urllib.parse import unquote, urlsplit
 from src.application.acquisition_service import AcquisitionService
 from src.application.email_review_service import EmailReviewService
 from src.domain.lead import LeadRecord
+from src.domain.task import AcquisitionCriteria
 
 
 class ApiApplication:
@@ -26,6 +27,8 @@ class ApiApplication:
                 return 200, {"status": "ok"}
             if method == "GET" and segments == ["api", "tasks"]:
                 return self._task_list()
+            if method == "POST" and segments == ["api", "tasks"]:
+                return self._create_task(self._parse_body(body))
             if (
                 method == "POST"
                 and len(segments) == 4
@@ -69,6 +72,24 @@ class ApiApplication:
                 for task in self._tasks.list()
             ]
         }
+
+    def _create_task(self, body: dict) -> tuple[int, dict]:
+        criteria_data = body.get("criteria", {})
+        if not isinstance(criteria_data, dict):
+            raise ValueError("criteria must be an object")
+        criteria = AcquisitionCriteria(
+            product=str(criteria_data.get("product", "")),
+            countries=tuple(str(item) for item in criteria_data.get("countries", [])),
+            industries=tuple(str(item) for item in criteria_data.get("industries", [])),
+            customer_types=tuple(
+                str(item) for item in criteria_data.get("customer_types", [])
+            ),
+            language=str(criteria_data.get("language", "English")),
+            daily_limit=int(criteria_data.get("daily_limit", 10)),
+            keywords=tuple(str(item) for item in criteria_data.get("keywords", [])),
+        )
+        task = self._acquisition.create_task(str(body.get("name", "")), criteria)
+        return 201, self._task(task)
 
     def _assess_leads(self, task_id: str, body: dict) -> tuple[int, dict]:
         """接收外部搜索适配器的原始记录，统一清洗、评分并持久化。"""
@@ -145,6 +166,10 @@ class ApiApplication:
         if not isinstance(data, dict):
             raise ValueError("request body must be an object")
         return data
+
+    @staticmethod
+    def _task(task) -> dict:
+        return {"id": task.id, "name": task.name, "status": task.status.value}
 
     @staticmethod
     def _lead(lead) -> dict:
