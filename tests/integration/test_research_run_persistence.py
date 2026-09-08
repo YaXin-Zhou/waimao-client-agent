@@ -12,3 +12,15 @@ def test_research_run_survives_repository_recreation(tmp_path):
 
     assert restored == run
     assert restored.status is ResearchRunStatus.REVIEW_REQUIRED
+
+
+def test_research_runs_can_be_listed_by_task(tmp_path):
+    database = tmp_path / "runs.db"
+    first = ResearchRun.start("task-1", "one.example").attempted()
+    second = ResearchRun.start("task-1", "two.example").attempted()
+    other = ResearchRun.start("task-2", "other.example").attempted()
+    repository = SQLiteResearchRunRepository(database)
+    for run in (first, second, other):
+        repository.save(run)
+
+    assert repository.list_for_task("task-1") == [first, second]

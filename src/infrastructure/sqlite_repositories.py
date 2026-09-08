@@ -338,6 +338,29 @@ class SQLiteResearchRunRepository:
             error=row["error"],
         )
 
+    def list_for_task(self, task_id: str) -> list[ResearchRun]:
+        with _connect(self._database) as connection:
+            rows = connection.execute(
+                """
+                SELECT id, task_id, domain, status, attempts, error
+                FROM research_runs
+                WHERE task_id = ?
+                ORDER BY rowid
+                """,
+                (task_id,),
+            ).fetchall()
+        return [
+            ResearchRun(
+                id=row["id"],
+                task_id=row["task_id"],
+                domain=row["domain"],
+                status=ResearchRunStatus(row["status"]),
+                attempts=row["attempts"],
+                error=row["error"],
+            )
+            for row in rows
+        ]
+
 
 class SQLiteEmailDraftRepository:
     def __init__(self, database: str | Path):

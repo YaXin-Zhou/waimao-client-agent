@@ -9,6 +9,7 @@ from src.application.acquisition_service import AcquisitionService
 from src.application.email_review_service import EmailReviewService
 from src.domain.audit_event import AuditEvent
 from src.domain.lead import LeadRecord, LeadStatus
+from src.domain.research_run import ResearchRun
 from src.domain.sender_profile import SenderProfile
 from src.domain.task import AcquisitionCriteria, TaskStatus
 
@@ -24,6 +25,8 @@ class ApiApplication:
         email_drafts=None,
         translation=None,
         audit=None,
+        research_execution=None,
+        research_runs=None,
     ):
         self._tasks = tasks
         self._leads = leads
@@ -33,6 +36,8 @@ class ApiApplication:
         self._email_drafts = email_drafts
         self._translation = translation
         self._audit = audit
+        self._research_execution = research_execution
+        self._research_runs_repository = research_runs
         self._reviews = EmailReviewService(drafts, audit)
 
     def handle(self, method: str, path: str, body=None) -> tuple[int, dict]:
@@ -94,6 +99,14 @@ class ApiApplication:
             ):
                 return self._assess_leads(segments[2], self._parse_body(body))
             if (
+                method == "POST"
+                and len(segments) == 6
+                and segments[:2] == ["api", "tasks"]
+                and segments[3] == "leads"
+                and segments[5] == "research"
+            ):
+                return self._research_lead(segments[2], segments[4], self._parse_body(body))
+            if (
                 method == "GET"
                 and len(segments) == 5
                 and segments[:2] == ["api", "tasks"]
@@ -127,6 +140,13 @@ class ApiApplication:
             if (
                 method == "GET"
                 and len(segments) == 4
+                and segments[:2] == ["api", "tasks"]
+                and segments[3] == "research-runs"
+            ):
+                return self._research_runs(segments[2])
+            if (
+                method == "GET"
+                and len(segments) == 4
                 and segments[:2] == ["api", "drafts"]
                 and segments[3] == "audit-events"
             ):
@@ -143,6 +163,8 @@ class ApiApplication:
             return 404, {"error": "Route not found"}
         except KeyError as error:
             return 404, {"error": str(error).strip("'")}
+        except RuntimeError as error:
+            return 503, {"error": str(error)}
         except (TypeError, ValueError, json.JSONDecodeError) as error:
             return 400, {"error": str(error)}
 
@@ -209,6 +231,46 @@ class ApiApplication:
             },
         )
         return 200, {"items": [self._assessed(item) for item in results]}
+
+    def _research_lead(self, task_id: str, domain: str, body: dict) -> tuple[int, dict]:
+        if self._research_execution is None:
+            raise RuntimeError("research execution service is not configured")
+        self._require_task(task_id)
+        assessed = next(
+            (item for item in self._leads.list_assessments(task_id) if item.lead.domain == domain),
+            None,
+        )
+        if assessed is None:
+            raise KeyError(f"Lead not found: {domain}")
+        source_url = str(body.get("source_url", "")).strip()
+        if not source_url:
+            raise ValueError("source_url is required")
+        weights = body.get("weights", {})
+        if not isinstance(weights, dict):
+            raise ValueError("weights must be an object")
+        result = self._research_execution.execute(
+            task_id,
+            assessed.lead,
+            source_url,
+            {str(key): int(value) for key, value in weights.items()},
+            max_attempts=int(body.get("max_attempts", 2)),
+        )
+        return 200, {
+            "run": self._research_run(result.run),
+            "research": self._research_result(result.assessment.research),
+            "score": self._score(result.assessment.score),
+        }
+
+    def _research_runs(self, task_id: str) -> tuple[int, dict]:
+        self._require_task(task_id)
+        if self._research_runs_repository is None:
+            raise RuntimeError("research run repository is not configured")
+        return 200, {
+            "items": [
+                self._research_run(run)
+                for run in self._research_runs_repository.list_for_task(task_id)
+            ]
+        }
 
     def _create_draft(self, task_id: str, domain: str, body: dict) -> tuple[int, dict]:
         if self._email_drafts is None:
@@ -404,6 +466,17 @@ class ApiApplication:
             "confidence": report.confidence,
             "evidence_url": report.evidence_url,
             "evidence_status": report.evidence_status.value,
+        }
+
+    @staticmethod
+    def _research_run(run: ResearchRun) -> dict:
+        return {
+            "id": run.id,
+            "task_id": run.task_id,
+            "domain": run.domain,
+            "status": run.status.value,
+            "attempts": run.attempts,
+            "error": run.error,
         }
 
     @staticmethod

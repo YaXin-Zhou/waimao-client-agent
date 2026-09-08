@@ -5,6 +5,7 @@ from src.domain.audit_event import AuditEvent
 from src.domain.email_draft import EmailDraft
 from src.domain.lead import CleanLead, LeadScore
 from src.domain.research import CustomerType, EvidenceStatus, ResearchResult
+from src.domain.research_run import ResearchRun
 from src.domain.task import AcquisitionCriteria, AcquisitionTask, TaskStatus
 from src.interfaces.http_api import ApiApplication
 
@@ -99,6 +100,24 @@ class Translation:
         }
 
 
+class ResearchRuns:
+    def __init__(self, runs):
+        self.runs = runs
+
+    def list_for_task(self, task_id):
+        return [run for run in self.runs if run.task_id == task_id]
+
+
+class ResearchExecution:
+    def __init__(self, result):
+        self.result = result
+        self.calls = []
+
+    def execute(self, task_id, lead, source_url, weights, max_attempts=2):
+        self.calls.append((task_id, lead.domain, source_url, weights, max_attempts))
+        return self.result
+
+
 def make_app():
     task = AcquisitionTask.create("Power station", AcquisitionCriteria(product="power station"))
     lead = CleanLead(
@@ -132,6 +151,51 @@ def test_api_returns_tasks_without_hardcoded_task_id():
 
     assert status == 200
     assert payload["items"][0]["id"] == task.id
+
+
+def test_api_exposes_research_run_list_and_research_result():
+    app, task, _, _ = make_app()
+    result = type(
+        "Result",
+        (),
+        {
+            "run": ResearchRun.start(task.id, "alpine.example").attempted().succeed(),
+            "assessment": type(
+                "Assessment",
+                (),
+                {
+                    "research": Research().get(task.id, "alpine.example"),
+                    "score": LeadScore(82, "A", {"product": 40}),
+                },
+            )(),
+        },
+    )()
+    execution = ResearchExecution(result)
+    runs = ResearchRuns([result.run])
+    app = ApiApplication(
+        app._tasks,
+        app._leads,
+        app._research,
+        app._drafts,
+        acquisition=app._acquisition,
+        audit=app._audit,
+        research_execution=execution,
+        research_runs=runs,
+    )
+
+    status, payload = app.handle("POST", f"/api/tasks/{task.id}/leads/alpine.example/research", {
+        "source_url": "https://alpine.example/about",
+        "weights": {"product": 40},
+        "max_attempts": 3,
+    })
+    assert status == 200
+    assert payload["run"]["status"] == "succeeded"
+    assert payload["research"]["evidence_status"] == "sufficient"
+    assert execution.calls[0][-1] == 3
+
+    status, payload = app.handle("GET", f"/api/tasks/{task.id}/research-runs")
+    assert status == 200
+    assert payload["items"][0]["domain"] == "alpine.example"
 
 
 def test_api_creates_task_from_form_configuration():

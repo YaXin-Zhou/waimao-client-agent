@@ -12,6 +12,8 @@ ROOT = Path(__file__).resolve().parents[1]
 sys.path.insert(0, str(ROOT))
 
 from src.application.email_draft_service import EmailDraftService  # noqa: E402
+from src.application.research_execution import ResearchExecutionService  # noqa: E402
+from src.application.research_workflow import ResearchWorkflow  # noqa: E402
 from src.application.translation_service import TranslationService  # noqa: E402
 from src.infrastructure.deepseek_provider import DeepSeekConfig, DeepSeekProvider  # noqa: E402
 from src.infrastructure.machine_translation_provider import (  # noqa: E402
@@ -22,25 +24,50 @@ from src.infrastructure.sqlite_repositories import (  # noqa: E402
     SQLiteEmailDraftRepository,
     SQLiteLeadRepository,
     SQLiteResearchRepository,
+    SQLiteResearchRunRepository,
     SQLiteTaskRepository,
 )
+from src.infrastructure.website_fetcher import WebsiteFetcher  # noqa: E402
 from src.interfaces.http_api import ApiApplication  # noqa: E402
 
 DATABASE = ROOT / "data" / "runtime" / "acquisition.db"
+task_repository = SQLiteTaskRepository(DATABASE)
+lead_repository = SQLiteLeadRepository(DATABASE)
+research_repository = SQLiteResearchRepository(DATABASE)
+research_run_repository = SQLiteResearchRunRepository(DATABASE)
 try:
-    email_draft_service = EmailDraftService(
-        DeepSeekProvider(DeepSeekConfig.from_env_file(ROOT / "config" / ".env"))
+    deepseek_provider = DeepSeekProvider(
+        DeepSeekConfig.from_env_file(ROOT / "config" / ".env")
     )
+except (FileNotFoundError, ValueError):
+    deepseek_provider = None
+try:
+    email_draft_service = EmailDraftService(deepseek_provider) if deepseek_provider else None
 except (FileNotFoundError, ValueError):
     email_draft_service = None
 application = ApiApplication(
-    SQLiteTaskRepository(DATABASE),
-    SQLiteLeadRepository(DATABASE),
-    SQLiteResearchRepository(DATABASE),
+    task_repository,
+    lead_repository,
+    research_repository,
     SQLiteEmailDraftRepository(DATABASE),
     email_drafts=email_draft_service,
     translation=TranslationService(GoogleMachineTranslationProvider()),
     audit=SQLiteAuditEventRepository(DATABASE),
+    research_execution=(
+        ResearchExecutionService(
+            task_repository,
+            ResearchWorkflow(
+                task_repository,
+                WebsiteFetcher(),
+                deepseek_provider,
+                research_repository,
+            ),
+            research_run_repository,
+        )
+        if deepseek_provider is not None
+        else None
+    ),
+    research_runs=research_run_repository,
 )
 
 
