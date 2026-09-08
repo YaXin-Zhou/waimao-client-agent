@@ -2,7 +2,7 @@
 
 from __future__ import annotations
 
-from dataclasses import dataclass
+from dataclasses import dataclass, replace
 
 from src.application.ports import LeadRepository, SearchProvider, TaskRepository
 from src.domain.lead import CleanLead, LeadRecord, LeadScore, clean_leads, score_lead
@@ -103,6 +103,16 @@ class AcquisitionService:
             [item if item.lead.domain != domain else result for item in self.list_leads(task_id)],
         )
         return result
+
+    def update_sender_profile(
+        self, task_id: str, sender_profile: SenderProfile
+    ) -> AcquisitionTask:
+        task = self._tasks.get(task_id)
+        if task is None:
+            raise KeyError(f"Task not found: {task_id}")
+        updated = replace(task, sender_profile=sender_profile)
+        self._tasks.save(updated)
+        return updated
 
     def discover_and_assess(
         self,

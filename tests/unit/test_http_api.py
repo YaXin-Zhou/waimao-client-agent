@@ -173,6 +173,24 @@ def test_api_updates_contact_only_with_source_evidence_and_keeps_score():
     assert payload["score"]["total"] == 72
 
 
+def test_api_updates_existing_task_sender_profile():
+    app, task, _ = make_app()
+
+    status, payload = app.handle(
+        "POST",
+        f"/api/tasks/{task.id}/sender-profile",
+        {
+            "company_name": "Northstar Trading",
+            "contact_name": "Li Ming",
+            "position": "Sales Manager",
+        },
+    )
+
+    assert status == 200
+    assert payload["sender_profile"]["company_name"] == "Northstar Trading"
+    assert app._tasks.get(task.id).sender_profile.contact_name == "Li Ming"
+
+
 def test_api_assesses_external_records_with_request_configuration():
     app, task, _ = make_app()
 

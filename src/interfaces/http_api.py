@@ -46,6 +46,13 @@ class ApiApplication:
                 )
             if (
                 method == "POST"
+                and len(segments) == 4
+                and segments[:2] == ["api", "tasks"]
+                and segments[3] == "sender-profile"
+            ):
+                return self._update_sender_profile(segments[2], self._parse_body(body))
+            if (
+                method == "POST"
                 and len(segments) == 6
                 and segments[:2] == ["api", "tasks"]
                 and segments[3] == "leads"
@@ -191,6 +198,14 @@ class ApiApplication:
             str(body.get("source_excerpt", "")),
         )
         return 200, self._assessed(result)
+
+    def _update_sender_profile(self, task_id: str, body: dict) -> tuple[int, dict]:
+        profile = SenderProfile(
+            company_name=str(body.get("company_name", "")),
+            contact_name=str(body.get("contact_name", "")),
+            position=str(body.get("position", "")),
+        )
+        return 200, self._task(self._acquisition.update_sender_profile(task_id, profile))
 
     def _lead_detail(self, task_id: str, domain: str) -> tuple[int, dict]:
         self._require_task(task_id)
