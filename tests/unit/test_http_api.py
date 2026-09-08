@@ -5,7 +5,7 @@ from src.domain.audit_event import AuditEvent
 from src.domain.email_draft import EmailDraft
 from src.domain.lead import CleanLead, LeadScore
 from src.domain.research import CustomerType, EvidenceStatus, ResearchResult
-from src.domain.task import AcquisitionCriteria, AcquisitionTask
+from src.domain.task import AcquisitionCriteria, AcquisitionTask, TaskStatus
 from src.interfaces.http_api import ApiApplication
 
 
@@ -206,6 +206,39 @@ def test_api_updates_existing_task_sender_profile():
     assert status == 200
     assert payload["sender_profile"]["company_name"] == "Northstar Trading"
     assert app._tasks.get(task.id).sender_profile.contact_name == "Li Ming"
+
+
+def test_api_transitions_task_and_records_audit_event():
+    app, task, _, audit = make_app()
+
+    status, payload = app.handle(
+        "POST",
+        f"/api/tasks/{task.id}/transition",
+        {"status": "ready", "actor": "reviewer-1", "note": "Configuration checked"},
+    )
+
+    assert status == 200
+    assert payload["status"] == TaskStatus.READY.value
+    assert audit.events[0].entity_type == "acquisition_task"
+    assert audit.events[0].from_status == "draft"
+
+    status, events = app.handle("GET", f"/api/tasks/{task.id}/audit-events")
+
+    assert status == 200
+    assert events["items"][0]["to_status"] == "ready"
+
+
+def test_api_rejects_invalid_task_transition():
+    app, task, _, _ = make_app()
+
+    status, payload = app.handle(
+        "POST",
+        f"/api/tasks/{task.id}/transition",
+        {"status": "completed", "actor": "reviewer-1"},
+    )
+
+    assert status == 400
+    assert "Invalid task transition" in payload["error"]
 
 
 def test_api_assesses_external_records_with_request_configuration():

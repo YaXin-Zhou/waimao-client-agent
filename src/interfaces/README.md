@@ -18,6 +18,8 @@ python scripts/serve_api.py
 - `GET /api/health`
 - `GET /api/tasks`
 - `POST /api/tasks`：按表单提交任务名称、`criteria` 和可选的 `sender_profile`，创建并持久化草稿任务
+- `POST /api/tasks/{task_id}/transition`：按领域状态机推进任务，并记录操作者和原因
+- `GET /api/tasks/{task_id}/audit-events`：读取任务状态变更记录
 - `POST /api/tasks/{task_id}/sender-profile`：更新已有任务的发件人资料，供下一版开发信使用
 - `GET /api/tasks/{task_id}/leads`
 - `GET /api/tasks/{task_id}/leads/{domain}`

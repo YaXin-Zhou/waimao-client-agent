@@ -10,7 +10,7 @@ from src.application.email_review_service import EmailReviewService
 from src.domain.audit_event import AuditEvent
 from src.domain.lead import LeadRecord
 from src.domain.sender_profile import SenderProfile
-from src.domain.task import AcquisitionCriteria
+from src.domain.task import AcquisitionCriteria, TaskStatus
 
 
 class ApiApplication:
@@ -29,7 +29,7 @@ class ApiApplication:
         self._leads = leads
         self._research = research
         self._drafts = drafts
-        self._acquisition = acquisition or AcquisitionService(tasks, leads)
+        self._acquisition = acquisition or AcquisitionService(tasks, leads, audit_repository=audit)
         self._email_drafts = email_drafts
         self._translation = translation
         self._audit = audit
@@ -44,6 +44,13 @@ class ApiApplication:
                 return self._task_list()
             if method == "POST" and segments == ["api", "tasks"]:
                 return self._create_task(self._parse_body(body))
+            if (
+                method == "POST"
+                and len(segments) == 4
+                and segments[:2] == ["api", "tasks"]
+                and segments[3] == "transition"
+            ):
+                return self._transition_task(segments[2], self._parse_body(body))
             if (
                 method == "POST"
                 and len(segments) == 6
@@ -94,6 +101,13 @@ class ApiApplication:
                 return self._lead_list(segments[2])
             if method == "GET" and len(segments) == 3 and segments[:2] == ["api", "drafts"]:
                 return self._draft_detail(segments[2])
+            if (
+                method == "GET"
+                and len(segments) == 4
+                and segments[:2] == ["api", "tasks"]
+                and segments[3] == "audit-events"
+            ):
+                return self._task_audit_events(segments[2])
             if (
                 method == "GET"
                 and len(segments) == 4
@@ -223,6 +237,23 @@ class ApiApplication:
             position=str(body.get("position", "")),
         )
         return 200, self._task(self._acquisition.update_sender_profile(task_id, profile))
+
+    def _transition_task(self, task_id: str, body: dict) -> tuple[int, dict]:
+        try:
+            target = TaskStatus(str(body.get("status", "")))
+        except ValueError as error:
+            raise ValueError("invalid task status") from error
+        return 200, self._task(self._acquisition.transition_task(
+            task_id,
+            target,
+            str(body.get("actor", "")),
+            str(body.get("note", "")),
+        ))
+
+    def _task_audit_events(self, task_id: str) -> tuple[int, dict]:
+        self._require_task(task_id)
+        events = self._audit.list_for_entity("acquisition_task", task_id) if self._audit else []
+        return 200, {"items": [self._audit_event(event) for event in events]}
 
     def _lead_detail(self, task_id: str, domain: str) -> tuple[int, dict]:
         self._require_task(task_id)

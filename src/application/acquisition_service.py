@@ -4,10 +4,16 @@ from __future__ import annotations
 
 from dataclasses import dataclass, replace
 
-from src.application.ports import LeadRepository, SearchProvider, TaskRepository
+from src.application.ports import (
+    AuditEventRepository,
+    LeadRepository,
+    SearchProvider,
+    TaskRepository,
+)
+from src.domain.audit_event import AuditEvent
 from src.domain.lead import CleanLead, LeadRecord, LeadScore, clean_leads, score_lead
 from src.domain.sender_profile import SenderProfile
-from src.domain.task import AcquisitionCriteria, AcquisitionTask
+from src.domain.task import AcquisitionCriteria, AcquisitionTask, TaskStatus
 
 
 @dataclass(frozen=True)
@@ -22,10 +28,12 @@ class AcquisitionService:
         task_repository: TaskRepository,
         lead_repository: LeadRepository,
         search_provider: SearchProvider | None = None,
+        audit_repository: AuditEventRepository | None = None,
     ):
         self._tasks = task_repository
         self._leads = lead_repository
         self._search = search_provider
+        self._audit = audit_repository
 
     def create_task(
         self,
@@ -111,6 +119,26 @@ class AcquisitionService:
         if task is None:
             raise KeyError(f"Task not found: {task_id}")
         updated = replace(task, sender_profile=sender_profile)
+        self._tasks.save(updated)
+        return updated
+
+    def transition_task(
+        self, task_id: str, target: TaskStatus, actor: str, note: str = ""
+    ) -> AcquisitionTask:
+        task = self._tasks.get(task_id)
+        if task is None:
+            raise KeyError(f"Task not found: {task_id}")
+        updated = task.transition_to(target)
+        if self._audit is not None:
+            self._audit.save(AuditEvent.status_change(
+                entity_type="acquisition_task",
+                entity_id=task.id,
+                action="transition",
+                actor=actor,
+                from_status=task.status.value,
+                to_status=updated.status.value,
+                note=note,
+            ))
         self._tasks.save(updated)
         return updated
 
