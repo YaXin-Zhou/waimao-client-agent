@@ -9,6 +9,15 @@
 - 邮件动作：未发送
 - 样例性质：真实公开网站的单条验证
 
+## 自动采集验证
+
+- 自动采集地址：https://solar-generatoren.de/
+- 自动提取标题：Solar-Generatoren.de - Mobile Solargeneratoren mit 230 Volt - Solar-Generatoren.de
+- 自动提取正文：18,380 字符
+- 自动调用模型：DeepSeek V4-Flash
+- 自动背调置信度：0.90
+- 自动背调证据 URL：https://solar-generatoren.de/
+
 ## 客户档案
 
 | 字段 | 结果 |
@@ -38,3 +47,4 @@ Solar-Generatoren.de 是 McGrip Sharing & Consulting GmbH 旗下业务，经营�
 - 当前客户类型更接近线上零售/终端销售，不应直接标记为批发商或分销商。
 - 若我方产品定位为供应商合作，下一步应核验其是否接受供应商或品牌合作。
 - 当前只完成背调，不允许自动生成并发送开发信。
+- 自动模型返回的客户类型描述较宽泛，后续需增加客户类型枚举和证据约束，再进入评分和开发信流程。
