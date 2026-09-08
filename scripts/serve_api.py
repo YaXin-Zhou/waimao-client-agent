@@ -89,7 +89,13 @@ research_execution = (
     else None
 )
 research_queue = (
-    ResearchJobQueue(research_execution, research_run_repository, lead_repository)
+    ResearchJobQueue(
+        research_execution,
+        research_run_repository,
+        lead_repository,
+        max_workers=int(config_values.get("RESEARCH_QUEUE_WORKERS", "2")),
+        max_pending=int(config_values.get("RESEARCH_QUEUE_MAX_PENDING", "100")),
+    )
     if research_execution is not None
     else None
 )

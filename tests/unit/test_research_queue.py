@@ -1,4 +1,7 @@
+import threading
 import time
+
+import pytest
 
 from src.application.acquisition_service import AssessedLead
 from src.application.research_execution import ResearchExecutionService
@@ -120,4 +123,31 @@ def test_queue_recovers_persisted_running_job():
     while time.monotonic() < deadline and runs.items[stale.id].status.value == "running":
         time.sleep(0.01)
     assert runs.items[stale.id].status.value == "succeeded"
+    queue.close()
+
+
+def test_queue_rejects_jobs_above_configured_capacity():
+    task = AcquisitionTask.create("Test", AcquisitionCriteria(product="solar generator"))
+    runs = Runs()
+    started = threading.Event()
+    release = threading.Event()
+
+    class BlockingWorkflow(Workflow):
+        def run(self, task_id, lead, source_url, weights, progress=None):
+            started.set()
+            release.wait(timeout=2)
+            return super().run(task_id, lead, source_url, weights, progress)
+
+    execution = ResearchExecutionService(Tasks(task), BlockingWorkflow(), runs)
+    queue = ResearchJobQueue(execution, runs, max_workers=1, max_pending=1)
+    lead = CleanLead("Alpine", "alpine.example", ("sales@alpine.example",), "Germany", "complete")
+    first = queue.submit(task.id, lead, "https://alpine.example", {}, request_key="capacity-1")
+    assert started.wait(timeout=1)
+    with pytest.raises(RuntimeError, match="queue is full"):
+        queue.submit(task.id, lead, "https://other.example", {}, request_key="capacity-2")
+    release.set()
+    deadline = time.monotonic() + 2
+    while time.monotonic() < deadline and runs.items[first.id].status.value == "running":
+        time.sleep(0.01)
+    assert runs.items[first.id].status.value == "succeeded"
     queue.close()

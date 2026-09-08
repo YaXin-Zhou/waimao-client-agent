@@ -11,14 +11,18 @@ from src.domain.research_run import ResearchRun
 
 class ResearchJobQueue:
     def __init__(
-        self, execution: ResearchExecutionService, runs, leads=None, max_workers: int = 2
+        self, execution: ResearchExecutionService, runs, leads=None, max_workers: int = 2,
+        max_pending: int = 100,
     ):
         if max_workers <= 0:
             raise ValueError("max_workers must be positive")
+        if max_pending <= 0:
+            raise ValueError("max_pending must be positive")
         self._execution = execution
         self._runs = runs
         self._leads = leads
         self._executor = ThreadPoolExecutor(max_workers=max_workers)
+        self._max_pending = max_pending
         self._jobs: dict[str, Future] = {}
 
     def submit(
@@ -33,6 +37,9 @@ class ResearchJobQueue:
         existing = self._runs.find_by_request_key(task_id, request_key)
         if existing is not None:
             return existing
+        self._prune_finished()
+        if len(self._jobs) >= self._max_pending:
+            raise RuntimeError("research queue is full; retry later")
         if self._execution._tasks.get(task_id) is None:
             raise KeyError(f"Task not found: {task_id}")
         if max_attempts <= 0:
@@ -94,3 +101,8 @@ class ResearchJobQueue:
 
     def close(self) -> None:
         self._executor.shutdown(wait=False, cancel_futures=False)
+
+    def _prune_finished(self) -> None:
+        self._jobs = {
+            run_id: future for run_id, future in self._jobs.items() if not future.done()
+        }
