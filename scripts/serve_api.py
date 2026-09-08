@@ -13,6 +13,7 @@ sys.path.insert(0, str(ROOT))
 
 from src.application.email_draft_service import EmailDraftService  # noqa: E402
 from src.application.email_send_service import EmailSendService  # noqa: E402
+from src.application.follow_up_task_service import FollowUpTaskService  # noqa: E402
 from src.application.mailbox_sync import MailboxSyncService  # noqa: E402
 from src.application.reply_analysis_service import ReplyAnalysisService  # noqa: E402
 from src.application.research_execution import ResearchExecutionService  # noqa: E402
@@ -30,6 +31,7 @@ from src.infrastructure.sqlite_repositories import (  # noqa: E402
     SQLiteAuditEventRepository,
     SQLiteEmailDraftRepository,
     SQLiteEmailSendAttemptRepository,
+    SQLiteFollowUpTaskRepository,
     SQLiteInboundEmailRepository,
     SQLiteLeadRepository,
     SQLiteReplyAnalysisRepository,
@@ -64,6 +66,7 @@ inbound_email_repository = SQLiteInboundEmailRepository(DATABASE)
 reply_analysis_repository = SQLiteReplyAnalysisRepository(DATABASE)
 email_draft_repository = SQLiteEmailDraftRepository(DATABASE)
 email_send_attempt_repository = SQLiteEmailSendAttemptRepository(DATABASE)
+follow_up_task_repository = SQLiteFollowUpTaskRepository(DATABASE)
 try:
     deepseek_provider = DeepSeekProvider(
         DeepSeekConfig.from_env_file(ROOT / "config" / ".env")
@@ -114,7 +117,10 @@ audit_repository = SQLiteAuditEventRepository(DATABASE)
 mailbox_sync = MailboxSyncService(
     lead_repository, inbound_email_repository, audit=audit_repository
 )
-reply_analysis_service = ReplyAnalysisService(inbound_email_repository, reply_analysis_repository)
+follow_up_task_service = FollowUpTaskService(follow_up_task_repository)
+reply_analysis_service = ReplyAnalysisService(
+    inbound_email_repository, reply_analysis_repository, follow_up_task_service
+)
 send_safety_service = SendSafetyService(SQLiteEmailDraftRepository(DATABASE))
 smtp_config = AliSmtpConfig(
     host=config_values.get("ALI_SMTP_HOST", "smtp.qiye.aliyun.com"),
@@ -145,6 +151,7 @@ application = ApiApplication(
     mailbox_sync=mailbox_sync,
     inbound_emails=inbound_email_repository,
     reply_analysis=reply_analysis_service,
+    follow_up_tasks=follow_up_task_service,
     send_safety=send_safety_service,
     email_send=email_send_service,
 )

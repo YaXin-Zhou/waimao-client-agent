@@ -10,6 +10,7 @@ from src.application.acquisition_service import AssessedLead
 from src.domain.audit_event import AuditEvent
 from src.domain.email_draft import EmailDraft, EmailDraftStatus
 from src.domain.email_send import EmailSendAttempt, EmailSendStatus
+from src.domain.follow_up_task import FollowUpStatus, FollowUpTask
 from src.domain.inbound_email import InboundEmail
 from src.domain.lead import CleanLead, LeadScore, LeadStatus
 from src.domain.reply_analysis import ReplyAnalysis, ReplyCategory
@@ -151,6 +152,21 @@ def _connect(database: str | Path) -> sqlite3.Connection:
             task_id TEXT NOT NULL,
             lead_domain TEXT NOT NULL,
             is_bounce INTEGER NOT NULL
+        )
+        """
+    )
+    connection.execute(
+        """
+        CREATE TABLE IF NOT EXISTS follow_up_tasks (
+            id TEXT PRIMARY KEY,
+            task_id TEXT NOT NULL,
+            lead_domain TEXT NOT NULL,
+            message_id TEXT NOT NULL UNIQUE,
+            title TEXT NOT NULL,
+            description TEXT NOT NULL,
+            status TEXT NOT NULL,
+            created_at TEXT NOT NULL,
+            completed_at TEXT NOT NULL DEFAULT ''
         )
         """
     )
@@ -761,6 +777,65 @@ def _reply_analysis(row) -> ReplyAnalysis:
         suggested_action=row["suggested_action"],
         needs_human_review=bool(row["needs_human_review"]),
         evidence=tuple(json.loads(row["evidence_json"])),
+    )
+
+
+class SQLiteFollowUpTaskRepository:
+    def __init__(self, database: str | Path):
+        self._database = database
+
+    def save_new(self, task_id, lead_domain, message_id, title, description):
+        item = FollowUpTask.create(task_id, lead_domain, message_id, title, description)
+        return self.save(item)
+
+    def save(self, item: FollowUpTask):
+        with _connect(self._database) as connection:
+            connection.execute(
+                """
+                INSERT INTO follow_up_tasks (
+                    id, task_id, lead_domain, message_id, title, description,
+                    status, created_at, completed_at
+                ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)
+                ON CONFLICT(id) DO UPDATE SET
+                    status=excluded.status, completed_at=excluded.completed_at
+                """,
+                (
+                    item.id, item.task_id, item.lead_domain, item.message_id,
+                    item.title, item.description, item.status.value,
+                    item.created_at, item.completed_at,
+                ),
+            )
+        return item
+
+    def get_by_message_id(self, message_id):
+        with _connect(self._database) as connection:
+            row = connection.execute(
+                "SELECT * FROM follow_up_tasks WHERE message_id = ?", (message_id,)
+            ).fetchone()
+        return _follow_up_task(row) if row else None
+
+    def get(self, item_id):
+        with _connect(self._database) as connection:
+            row = connection.execute(
+                "SELECT * FROM follow_up_tasks WHERE id = ?", (item_id,)
+            ).fetchone()
+        return _follow_up_task(row) if row else None
+
+    def list_for_task(self, task_id):
+        with _connect(self._database) as connection:
+            rows = connection.execute(
+                "SELECT * FROM follow_up_tasks WHERE task_id = ? ORDER BY rowid",
+                (task_id,),
+            ).fetchall()
+        return [_follow_up_task(row) for row in rows]
+
+
+def _follow_up_task(row) -> FollowUpTask:
+    return FollowUpTask(
+        id=row["id"], task_id=row["task_id"], lead_domain=row["lead_domain"],
+        message_id=row["message_id"], title=row["title"], description=row["description"],
+        status=FollowUpStatus(row["status"]), created_at=row["created_at"],
+        completed_at=row["completed_at"],
     )
 
 

@@ -9,6 +9,7 @@ from src.application.acquisition_service import AcquisitionService
 from src.application.email_review_service import EmailReviewService
 from src.domain.audit_event import AuditEvent
 from src.domain.email_send import EmailSendAttempt
+from src.domain.follow_up_task import FollowUpTask
 from src.domain.inbound_email import InboundEmail
 from src.domain.lead import LeadRecord, LeadStatus
 from src.domain.reply_analysis import ReplyAnalysis
@@ -38,6 +39,7 @@ class ApiApplication:
         reply_analysis=None,
         send_safety=None,
         email_send=None,
+        follow_up_tasks=None,
     ):
         self._tasks = tasks
         self._leads = leads
@@ -56,6 +58,7 @@ class ApiApplication:
         self._reply_analysis = reply_analysis
         self._send_safety = send_safety
         self._email_send = email_send
+        self._follow_up_tasks = follow_up_tasks
         self._reviews = EmailReviewService(drafts, audit)
 
     def handle(self, method: str, path: str, body=None) -> tuple[int, dict]:
@@ -118,6 +121,22 @@ class ApiApplication:
                 and segments[3] == "reply-analyses"
             ):
                 return self._reply_analyses(segments[2])
+            if (
+                method == "GET"
+                and len(segments) == 4
+                and segments[:2] == ["api", "tasks"]
+                and segments[3] == "follow-up-tasks"
+            ):
+                return self._follow_up_tasks_list(segments[2])
+            if (
+                method == "PATCH"
+                and len(segments) == 5
+                and segments[:2] == ["api", "tasks"]
+                and segments[3] == "follow-up-tasks"
+            ):
+                return self._follow_up_task_status(
+                    segments[2], segments[4], self._parse_body(body)
+                )
             if method == "GET" and segments == ["api", "tasks"]:
                 return self._task_list()
             if method == "POST" and segments == ["api", "tasks"]:
@@ -360,6 +379,29 @@ class ApiApplication:
             raise RuntimeError("reply analysis service is not configured")
         analyses = self._reply_analysis.list_for_task(task_id)
         return 200, {"items": [self._reply_analysis_item(item) for item in analyses]}
+
+    def _follow_up_tasks_list(self, task_id: str) -> tuple[int, dict]:
+        self._require_task(task_id)
+        if self._follow_up_tasks is None:
+            raise RuntimeError("follow-up task service is not configured")
+        return 200, {
+            "items": [
+                self._follow_up_task(item)
+                for item in self._follow_up_tasks.list_for_task(task_id)
+            ]
+        }
+
+    def _follow_up_task_status(
+        self, task_id: str, follow_up_id: str, body: dict
+    ) -> tuple[int, dict]:
+        self._require_task(task_id)
+        if self._follow_up_tasks is None:
+            raise RuntimeError("follow-up task service is not configured")
+        status = str(body.get("status", "")).strip()
+        if not status:
+            raise ValueError("status is required")
+        item = self._follow_up_tasks.change_status(task_id, follow_up_id, status)
+        return 200, {"item": self._follow_up_task(item)}
 
     def _task_list(self) -> tuple[int, dict]:
         return 200, {"items": [self._task(task) for task in self._tasks.list()]}
@@ -715,6 +757,20 @@ class ApiApplication:
             "suggested_action": item.suggested_action,
             "needs_human_review": item.needs_human_review,
             "evidence": item.evidence,
+        }
+
+    @staticmethod
+    def _follow_up_task(item: FollowUpTask) -> dict:
+        return {
+            "id": item.id,
+            "task_id": item.task_id,
+            "lead_domain": item.lead_domain,
+            "message_id": item.message_id,
+            "title": item.title,
+            "description": item.description,
+            "status": item.status.value,
+            "created_at": item.created_at,
+            "completed_at": item.completed_at,
         }
 
     @staticmethod

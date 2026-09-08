@@ -41,6 +41,7 @@ function App() {
   const [mailboxStatus, setMailboxStatus] = useState(null)
   const [mailThreads, setMailThreads] = useState([])
   const [replyAnalyses, setReplyAnalyses] = useState([])
+  const [followUpTasks, setFollowUpTasks] = useState([])
   const [replyLoading, setReplyLoading] = useState(false)
   const [selectedResearch, setSelectedResearch] = useState(null)
   const [selectedDraft, setSelectedDraft] = useState(null)
@@ -107,12 +108,13 @@ function App() {
       fetch('/api/mailbox/status'),
       fetch(`/api/tasks/${remoteTaskId}/mail-threads`),
       fetch(`/api/tasks/${remoteTaskId}/reply-analyses`),
-    ]).then(async ([statusResponse, threadsResponse, analysesResponse]) => {
-      if (!statusResponse.ok || !threadsResponse.ok || !analysesResponse.ok) throw new Error('mail data failed')
-      return Promise.all([statusResponse.json(), threadsResponse.json(), analysesResponse.json()])
-    }).then(([status, threads, analyses]) => {
-      if (!cancelled) { setMailboxStatus(status); setMailThreads(threads.items || []); setReplyAnalyses(analyses.items || []) }
-    }).catch(() => { if (!cancelled) { setMailboxStatus(null); setMailThreads([]); setReplyAnalyses([]) } })
+      fetch(`/api/tasks/${remoteTaskId}/follow-up-tasks`),
+    ]).then(async ([statusResponse, threadsResponse, analysesResponse, followUpResponse]) => {
+      if (!statusResponse.ok || !threadsResponse.ok || !analysesResponse.ok || !followUpResponse.ok) throw new Error('mail data failed')
+      return Promise.all([statusResponse.json(), threadsResponse.json(), analysesResponse.json(), followUpResponse.json()])
+    }).then(([status, threads, analyses, followUps]) => {
+      if (!cancelled) { setMailboxStatus(status); setMailThreads(threads.items || []); setReplyAnalyses(analyses.items || []); setFollowUpTasks(followUps.items || []) }
+    }).catch(() => { if (!cancelled) { setMailboxStatus(null); setMailThreads([]); setReplyAnalyses([]); setFollowUpTasks([]) } })
     return () => { cancelled = true }
   }, [remoteTaskId])
   useEffect(() => {
@@ -180,6 +182,7 @@ function App() {
     setResearchRuns([])
     setMailThreads([])
     setReplyAnalyses([])
+    setFollowUpTasks([])
     setApiState('loading')
     setSelected(null)
     setSelectedResearch(null)
@@ -279,8 +282,22 @@ function App() {
       const payload = await response.json()
       if (!response.ok) throw new Error(payload.error || 'reply analysis failed')
       setReplyAnalyses(payload.items || [])
+      const followUpResponse = await fetch(`/api/tasks/${remoteTaskId}/follow-up-tasks`)
+      if (followUpResponse.ok) setFollowUpTasks((await followUpResponse.json()).items || [])
       notify(`回复分析完成：${payload.analyzed} 条新分析，${payload.reused} 条复用`)
     } catch (error) { notify(error.message || '回复分析失败') } finally { setReplyLoading(false) }
+  }
+  const updateFollowUpStatus = async (followUpId, status) => {
+    if (!remoteTaskId) return
+    try {
+      const response = await fetch(`/api/tasks/${remoteTaskId}/follow-up-tasks/${followUpId}`, {
+        method: 'PATCH', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ status }),
+      })
+      const payload = await response.json()
+      if (!response.ok) throw new Error(payload.error || 'follow-up update failed')
+      setFollowUpTasks((items) => items.map((item) => item.id === followUpId ? payload.item : item))
+      notify('跟进待办状态已更新')
+    } catch (error) { notify(error.message || '跟进待办更新失败') }
   }
   const saveSenderProfile = async (profile) => {
     if (!remoteTaskId) return
@@ -338,7 +355,7 @@ function App() {
         <div className={`data-notice ${apiState}`}><span />{apiState === 'loading' ? '正在读取本地任务数据…' : apiState === 'connected' ? '已连接本地 API · 当前显示持久化客户档案' : apiState === 'empty' ? 'API 已连接 · 当前没有可显示的真实客户档案' : 'API 连接失败 · 为避免混淆，已隐藏演示数据'}</div>
         <div className="task-context"><label>当前获客任务<select value={remoteTaskId} onChange={selectTask} disabled={!remoteTasks.length}><option value="">暂无可选任务</option>{remoteTasks.map((task) => <option key={task.id} value={task.id}>{task.name}</option>)}</select></label>{remoteTaskConfig && <span>任务条件：{remoteTaskConfig.criteria?.product || '未配置产品'} · {remoteTaskConfig.criteria?.countries?.join('、') || '未配置市场'}</span>}</div>
         <section className="metric-row"><Metric icon="clipboard" label="待审核" value="—" note="统计接口尚未接入"/><Metric icon="users" label="高匹配客户" value="—" note="统计接口尚未接入"/><Metric icon="researching" label="本周新增" value="—" note="统计接口尚未接入"/></section>
-        <ReplyCenter mailboxStatus={mailboxStatus} threads={mailThreads} analyses={replyAnalyses} loading={replyLoading} onSync={syncMailbox} onAnalyze={analyzeReplies}/>
+        <ReplyCenter mailboxStatus={mailboxStatus} threads={mailThreads} analyses={replyAnalyses} followUpTasks={followUpTasks} loading={replyLoading} onSync={syncMailbox} onAnalyze={analyzeReplies} onFollowUpStatus={updateFollowUpStatus}/>
         <section className="workspace-grid">
           <div className="lead-panel panel"><div className="panel-heading"><div><h2>客户列表 <span>共 {filteredLeads.length} 个</span></h2><p>已按当前任务条件筛选</p></div><button className="filter-button" onClick={() => notify('筛选条件：国家、类型、评分、状态')}><Icon name="filter" size={16}/>筛选</button></div><div className="table-head"><span className="checkbox"/><span>公司名称</span><span>国家 / 地区</span><span>客户类型</span><span>匹配分数</span><span>状态</span><span/></div><div className="lead-list">{filteredLeads.length ? filteredLeads.map((lead) => <button className={`lead-row ${selected?.name === lead.name ? 'selected' : ''}`} key={lead.name} onClick={() => selectLead(lead)}><span className={`checkbox ${selected?.name === lead.name ? 'checked' : ''}`}>{selected?.name === lead.name && <Icon name="check" size={13}/>}</span><strong>{lead.name}</strong><span className="country"><span>{lead.flag}</span>{lead.country}</span><span>{lead.type}</span><span className="score"><b>{lead.score}</b> / 100</span><Status status={lead.status}/><span className="more">···</span></button>) : <div className="empty-results">没有匹配的客户，请调整搜索词</div>}</div><div className="table-footer"><span>当前筛选 {filteredLeads.length} 条</span><div className="pagination"><button>‹</button><button className="page-active">1</button><button>2</button><button>3</button><button>4</button><span>…</span><button>13</button><button>›</button></div></div></div>
           <aside className={`detail-panel panel ${filteredLeads.length && activeLead ? '' : 'detail-empty'}`}>{filteredLeads.length && activeLead ? <><div className="detail-top"><div className="company-symbol">◎</div><div className="company-title"><div><h2>{activeLead.name} <a href={activeLead.website} target="_blank" rel="noreferrer"><Icon name="external" size={14}/></a></h2><p>{activeLead.country} <i/> {activeLead.type} <i/> {activeLead.research ? '已完成官网背调' : '待背调'}</p></div><div className="score-block"><Status status={activeLead.status}/><strong>{activeLead.score}<small> / 100</small></strong><span>匹配分数</span></div></div></div><div className="detail-tabs">{['概览', '来源证据', '开发信草稿'].map((tab) => <button className={detailTab === tab ? 'active' : ''} key={tab} onClick={() => setDetailTab(tab)}>{tab}</button>)}</div>{detailTab === '概览' && <><Overview lead={activeLead} onEvidence={() => setDetailTab('来源证据')} onDraft={() => setDetailTab('开发信草稿')}/><ResearchPanel lead={activeLead} loading={researchLoading} onStart={startResearch}/><LeadTimeline lead={activeLead} events={activeLead.auditEvents} onTransition={transitionLead} loading={leadTransitionLoading}/></>} {detailTab === '来源证据' && <Evidence lead={activeLead}/>} {detailTab === '开发信草稿' && <><Draft lead={activeLead} language={language} setLanguage={setLanguage} translatedDraft={translatedDraft} translationLoading={translationLoading} onTranslate={translateDraft} onReview={reviewDraft} reviewLoading={reviewLoading} status={draftStatus} setStatus={setDraftStatus} notify={notify}/><ContactForm lead={activeLead} onUpdate={updateContact}/><SenderProfileEditor taskConfig={remoteTaskConfig} onSave={saveSenderProfile}/><DraftGenerator lead={activeLead} taskConfig={remoteTaskConfig} loading={reviewLoading} onGenerate={generateDraft}/><ReviewControls lead={activeLead} onReview={reviewDraft} loading={reviewLoading}/></>}</> : <div className="detail-empty-state"><strong>没有选中的客户</strong><span>调整搜索词后选择一条客户记录</span></div>}</aside>
@@ -373,9 +390,9 @@ function customerTypeLabel(value) {
 }
 
 function Metric({ icon, label, value, note }) { return <div className="metric"><span className={`metric-icon ${icon}`}><Icon name={icon === 'researching' ? 'users' : icon} size={20}/></span><div><span>{label}</span><strong>{value}<Icon name="arrow" size={16}/></strong><small>{note}</small></div></div> }
-function ReplyCenter({ mailboxStatus, threads, analyses, loading, onSync, onAnalyze }) {
+function ReplyCenter({ mailboxStatus, threads, analyses, followUpTasks, loading, onSync, onAnalyze, onFollowUpStatus }) {
   const humanReview = analyses.filter((item) => item.needs_human_review).length
-  return <section className="reply-center panel"><div className="reply-center-heading"><div><h2>收件与回复分析 <span>{threads.length} 封来信 · {analyses.length} 条分析</span></h2><p>{mailboxStatus?.configured ? '阿里邮箱 IMAP 已配置 · 只读模式' : '阿里邮箱尚未配置 · 不会连接或发送邮件'}</p></div><div className="reply-actions"><button className="outline-button" disabled={loading || !mailboxStatus?.configured} onClick={onSync}>同步收件箱</button><button className="primary-button" disabled={loading || !threads.length} onClick={onAnalyze}>{loading ? '处理中…' : '分析已同步来信'}</button></div></div>{threads.length ? <><div className="reply-summary"><span>人工复核 {humanReview} 条</span>{analyses.length ? <span>已生成安全建议</span> : <span>尚未分析</span>}</div><div className="reply-list">{threads.map((thread) => { const analysis = analyses.find((item) => item.message_id === thread.message_id); return <article className="reply-item" key={thread.message_id}><div><strong>{thread.from_email || '未知发件人'}</strong><span>{thread.subject || '无主题'}{thread.is_bounce ? ' · 退信' : ''}</span></div>{analysis ? <div className="reply-analysis"><b>{replyCategoryLabel(analysis.category)}</b><span>{(analysis.confidence * 100).toFixed(0)}% · {analysis.risk_level === 'high' ? '高风险' : analysis.risk_level === 'medium' ? '中风险' : '低风险'}</span><p>{analysis.suggested_action}{analysis.needs_human_review ? ' · 需要人工复核' : ''}</p></div> : <em>尚未分析</em>}</article> })}</div></> : <div className="reply-empty"><strong>当前没有真实来信</strong><span>配置专用测试邮箱并完成只读同步后，这里才会显示邮件与分类建议。</span></div>}</section>
+  return <section className="reply-center panel"><div className="reply-center-heading"><div><h2>收件与回复分析 <span>{threads.length} 封来信 · {analyses.length} 条分析</span></h2><p>{mailboxStatus?.configured ? '阿里邮箱 IMAP 已配置 · 只读模式' : '阿里邮箱尚未配置 · 不会连接或发送邮件'}</p></div><div className="reply-actions"><button className="outline-button" disabled={loading || !mailboxStatus?.configured} onClick={onSync}>同步收件箱</button><button className="primary-button" disabled={loading || !threads.length} onClick={onAnalyze}>{loading ? '处理中…' : '分析已同步来信'}</button></div></div>{threads.length ? <><div className="reply-summary"><span>人工复核 {humanReview} 条</span>{analyses.length ? <span>已生成安全建议</span> : <span>尚未分析</span>}<span>待办 {followUpTasks.length} 条</span></div><div className="reply-list">{threads.map((thread) => { const analysis = analyses.find((item) => item.message_id === thread.message_id); const followUp = followUpTasks.find((item) => item.message_id === thread.message_id); return <article className="reply-item" key={thread.message_id}><div><strong>{thread.from_email || '未知发件人'}</strong><span>{thread.subject || '无主题'}{thread.is_bounce ? ' · 退信' : ''}</span></div>{analysis ? <div className="reply-analysis"><b>{replyCategoryLabel(analysis.category)}</b><span>{(analysis.confidence * 100).toFixed(0)}% · {analysis.risk_level === 'high' ? '高风险' : analysis.risk_level === 'medium' ? '中风险' : '低风险'}</span><p>{analysis.suggested_action}{analysis.needs_human_review ? ' · 需要人工复核' : ''}</p>{followUp && <label className="follow-up-status">跟进待办：<select value={followUp.status} onChange={(event) => onFollowUpStatus(followUp.id, event.target.value)}><option value="open">待处理</option><option value="in_progress">处理中</option><option value="completed">已完成</option><option value="cancelled">已取消</option></select></label>}</div> : <em>尚未分析</em>}</article> })}</div></> : <div className="reply-empty"><strong>当前没有真实来信</strong><span>配置专用测试邮箱并完成只读同步后，这里才会显示邮件与分类建议。</span></div>}</section>
 }
 
 function replyCategoryLabel(category) { return { interested: '有意向', pricing: '询价', delivery: '交期/物流', complaint: '投诉', bounce: '退信', not_interested: '暂不考虑', other: '其他' }[category] || category }

@@ -15,9 +15,10 @@ class ReplyAnalysisBatchResult:
 
 
 class ReplyAnalysisService:
-    def __init__(self, messages, analyses):
+    def __init__(self, messages, analyses, follow_up_tasks=None):
         self._messages = messages
         self._analyses = analyses
+        self._follow_up_tasks = follow_up_tasks
 
     def analyze_task(self, task_id: str) -> ReplyAnalysisBatchResult:
         analyzed = 0
@@ -31,6 +32,8 @@ class ReplyAnalysisService:
                 continue
             analysis = classify_inbound(message)
             self._analyses.save(analysis)
+            if self._follow_up_tasks is not None:
+                self._follow_up_tasks.create_for_analysis(analysis)
             analyzed += 1
             items.append(analysis)
         return ReplyAnalysisBatchResult(analyzed, reused, tuple(items))
