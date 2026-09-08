@@ -79,7 +79,9 @@ research_execution = (
         task_repository,
         ResearchWorkflow(
             task_repository,
-            WebsiteFetcher(),
+            WebsiteFetcher(
+                timeout=int(config_values.get("WEBSITE_FETCH_TIMEOUT_SECONDS", "15"))
+            ),
             deepseek_provider,
             research_repository,
         ),
@@ -95,6 +97,7 @@ research_queue = (
         lead_repository,
         max_workers=int(config_values.get("RESEARCH_QUEUE_WORKERS", "2")),
         max_pending=int(config_values.get("RESEARCH_QUEUE_MAX_PENDING", "100")),
+        timeout_seconds=int(config_values.get("RESEARCH_TIMEOUT_SECONDS", "120")),
     )
     if research_execution is not None
     else None

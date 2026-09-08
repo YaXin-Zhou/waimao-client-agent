@@ -113,8 +113,12 @@ class ResearchExecution:
         self.result = result
         self.calls = []
 
-    def execute(self, task_id, lead, source_url, weights, max_attempts=2):
-        self.calls.append((task_id, lead.domain, source_url, weights, max_attempts))
+    def execute(
+        self, task_id, lead, source_url, weights, max_attempts=2, timeout_seconds=120
+    ):
+        self.calls.append(
+            (task_id, lead.domain, source_url, weights, max_attempts, timeout_seconds)
+        )
         return self.result
 
 
@@ -191,7 +195,7 @@ def test_api_exposes_research_run_list_and_research_result():
     assert status == 200
     assert payload["run"]["status"] == "succeeded"
     assert payload["research"]["evidence_status"] == "sufficient"
-    assert execution.calls[0][-1] == 3
+    assert execution.calls[0][4] == 3
 
     status, payload = app.handle("GET", f"/api/tasks/{task.id}/research-runs")
     assert status == 200

@@ -14,6 +14,7 @@ class DeepSeekConfig:
     api_key: str
     base_url: str = "https://api.deepseek.com"
     model: str = "deepseek-v4-flash"
+    timeout_seconds: float = 60
 
     @classmethod
     def from_env_file(cls, path: str | Path) -> "DeepSeekConfig":
@@ -31,6 +32,7 @@ class DeepSeekConfig:
             api_key=api_key,
             base_url=values.get("DEEPSEEK_BASE_URL", cls.base_url).rstrip("/"),
             model=values.get("DEEPSEEK_MODEL", cls.model),
+            timeout_seconds=float(values.get("DEEPSEEK_TIMEOUT_SECONDS", cls.timeout_seconds)),
         )
 
 
@@ -73,5 +75,5 @@ class DeepSeekProvider:
             },
             method="POST",
         )
-        with request.urlopen(http_request, timeout=60) as response:
+        with request.urlopen(http_request, timeout=self._config.timeout_seconds) as response:
             return json.loads(response.read().decode("utf-8"))

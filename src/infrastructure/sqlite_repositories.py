@@ -67,7 +67,8 @@ def _connect(database: str | Path) -> sqlite3.Connection:
             request_key TEXT NOT NULL DEFAULT '',
             source_url TEXT NOT NULL DEFAULT '',
             weights_json TEXT NOT NULL DEFAULT '{}',
-            max_attempts INTEGER NOT NULL DEFAULT 2
+            max_attempts INTEGER NOT NULL DEFAULT 2,
+            timeout_seconds INTEGER NOT NULL DEFAULT 120
         )
         """
     )
@@ -94,6 +95,10 @@ def _connect(database: str | Path) -> sqlite3.Connection:
     if "max_attempts" not in columns:
         connection.execute(
             "ALTER TABLE research_runs ADD COLUMN max_attempts INTEGER NOT NULL DEFAULT 2"
+        )
+    if "timeout_seconds" not in columns:
+        connection.execute(
+            "ALTER TABLE research_runs ADD COLUMN timeout_seconds INTEGER NOT NULL DEFAULT 120"
         )
     connection.execute(
         "CREATE UNIQUE INDEX IF NOT EXISTS research_runs_request_key "
@@ -403,8 +408,8 @@ class SQLiteResearchRunRepository:
                 """
                 INSERT INTO research_runs (
                     id, task_id, domain, status, step, attempts, error, request_key,
-                    source_url, weights_json, max_attempts
-                ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+                    source_url, weights_json, max_attempts, timeout_seconds
+                ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
                 ON CONFLICT(id) DO UPDATE SET
                     task_id=excluded.task_id,
                     domain=excluded.domain,
@@ -415,7 +420,8 @@ class SQLiteResearchRunRepository:
                     request_key=excluded.request_key,
                     source_url=excluded.source_url,
                     weights_json=excluded.weights_json,
-                    max_attempts=excluded.max_attempts
+                    max_attempts=excluded.max_attempts,
+                    timeout_seconds=excluded.timeout_seconds
                 """,
                 (
                     run.id,
@@ -429,6 +435,7 @@ class SQLiteResearchRunRepository:
                     run.source_url,
                     json.dumps(dict(run.weights)),
                     run.max_attempts,
+                    run.timeout_seconds,
                 ),
             )
 
@@ -437,7 +444,7 @@ class SQLiteResearchRunRepository:
             row = connection.execute(
                 """
                 SELECT id, task_id, domain, status, step, attempts, error, request_key,
-                       source_url, weights_json, max_attempts
+                       source_url, weights_json, max_attempts, timeout_seconds
                 FROM research_runs
                 WHERE id = ?
                 """,
@@ -460,6 +467,7 @@ class SQLiteResearchRunRepository:
             source_url=row["source_url"],
             weights=tuple(json.loads(row["weights_json"]).items()),
             max_attempts=row["max_attempts"],
+            timeout_seconds=row["timeout_seconds"],
         )
 
     def list_for_task(self, task_id: str) -> list[ResearchRun]:
@@ -467,7 +475,7 @@ class SQLiteResearchRunRepository:
             rows = connection.execute(
                 """
                 SELECT id, task_id, domain, status, step, attempts, error, request_key,
-                       source_url, weights_json, max_attempts
+                       source_url, weights_json, max_attempts, timeout_seconds
                 FROM research_runs
                 WHERE task_id = ?
                 ORDER BY rowid
@@ -489,6 +497,7 @@ class SQLiteResearchRunRepository:
                 source_url=row["source_url"],
                 weights=tuple(json.loads(row["weights_json"]).items()),
                 max_attempts=row["max_attempts"],
+                timeout_seconds=row["timeout_seconds"],
             )
             for row in rows
         ]

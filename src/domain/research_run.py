@@ -37,16 +37,18 @@ class ResearchRun:
     source_url: str = ""
     weights: tuple[tuple[str, int], ...] = ()
     max_attempts: int = 2
+    timeout_seconds: int = 120
 
     @classmethod
     def start(
         cls, task_id: str, domain: str, request_key: str = "", source_url: str = "",
         weights: dict[str, int] | None = None, max_attempts: int = 2,
+        timeout_seconds: int = 120,
     ) -> "ResearchRun":
         return cls(
             id=str(uuid4()), task_id=task_id, domain=domain, request_key=request_key,
             source_url=source_url, weights=tuple(sorted((weights or {}).items())),
-            max_attempts=max_attempts,
+            max_attempts=max_attempts, timeout_seconds=timeout_seconds,
         )
 
     def attempted(self) -> "ResearchRun":

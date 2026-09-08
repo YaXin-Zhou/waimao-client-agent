@@ -12,17 +12,20 @@ from src.domain.research_run import ResearchRun
 class ResearchJobQueue:
     def __init__(
         self, execution: ResearchExecutionService, runs, leads=None, max_workers: int = 2,
-        max_pending: int = 100,
+        max_pending: int = 100, timeout_seconds: int = 120,
     ):
         if max_workers <= 0:
             raise ValueError("max_workers must be positive")
         if max_pending <= 0:
             raise ValueError("max_pending must be positive")
+        if timeout_seconds <= 0:
+            raise ValueError("timeout_seconds must be positive")
         self._execution = execution
         self._runs = runs
         self._leads = leads
         self._executor = ThreadPoolExecutor(max_workers=max_workers)
         self._max_pending = max_pending
+        self._timeout_seconds = timeout_seconds
         self._jobs: dict[str, Future] = {}
 
     def submit(
@@ -33,6 +36,7 @@ class ResearchJobQueue:
         weights: dict[str, int],
         max_attempts: int = 2,
         request_key: str = "",
+        timeout_seconds: int | None = None,
     ) -> ResearchRun:
         existing = self._runs.find_by_request_key(task_id, request_key)
         if existing is not None:
@@ -47,6 +51,7 @@ class ResearchJobQueue:
         run = ResearchRun.start(
             task_id, lead.domain, request_key=request_key, source_url=source_url,
             weights=weights, max_attempts=max_attempts,
+            timeout_seconds=timeout_seconds or self._timeout_seconds,
         )
         self._runs.save(run)
         self._jobs[run.id] = self._executor.submit(
@@ -57,6 +62,7 @@ class ResearchJobQueue:
             source_url,
             weights,
             max_attempts,
+            timeout_seconds or self._timeout_seconds,
         )
         return run
 
@@ -80,12 +86,12 @@ class ResearchJobQueue:
                 continue
             self._jobs[run.id] = self._executor.submit(
                 self._run, run, run.task_id, assessed.lead, run.source_url,
-                dict(run.weights), run.max_attempts,
+                dict(run.weights), run.max_attempts, run.timeout_seconds,
             )
             recovered += 1
         return recovered
 
-    def _run(self, run, task_id, lead, source_url, weights, max_attempts):
+    def _run(self, run, task_id, lead, source_url, weights, max_attempts, timeout_seconds):
         try:
             self._execution.execute(
                 task_id,
@@ -93,6 +99,7 @@ class ResearchJobQueue:
                 source_url,
                 weights,
                 max_attempts=max_attempts,
+                timeout_seconds=timeout_seconds,
                 run=run,
             )
         except Exception:

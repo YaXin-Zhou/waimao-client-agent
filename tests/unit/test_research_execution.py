@@ -1,3 +1,5 @@
+import time
+
 import pytest
 
 from src.application.research_execution import ResearchExecutionService
@@ -124,3 +126,31 @@ def test_execution_does_not_retry_invalid_workflow_input():
     run = next(iter(repository.items.values()))
     assert run.status.value == "failed"
     assert run.attempts == 1
+
+
+def test_execution_persists_timeout_when_workflow_exceeds_deadline():
+    task = AcquisitionTask.create("Test", AcquisitionCriteria(product="power station"))
+    repository = MemoryRunRepository()
+
+    class SlowWorkflow(FlakyWorkflow):
+        def run(self, task_id, lead, source_url, weights, progress=None):
+            time.sleep(0.02)
+            return super().run(task_id, lead, source_url, weights, progress)
+
+    service = ResearchExecutionService(
+        FakeTaskRepository(task), SlowWorkflow(failures=0), repository
+    )
+
+    with pytest.raises(TimeoutError, match="exceeded timeout_seconds"):
+        service.execute(
+            task.id,
+            clean_alpine(),
+            "https://alpine.example",
+            {},
+            max_attempts=1,
+            timeout_seconds=0.01,
+        )
+
+    run = next(iter(repository.items.values()))
+    assert run.status.value == "failed"
+    assert run.error == "research run exceeded timeout_seconds"

@@ -438,6 +438,7 @@ class ApiApplication:
             raise ValueError("weights must be an object")
         normalized_weights = {str(key): int(value) for key, value in weights.items()}
         max_attempts = int(body.get("max_attempts", 2))
+        timeout_seconds = int(body.get("timeout_seconds", 120))
         request_key = str(body.get("idempotency_key", "")).strip()
         if self._research_queue is not None:
             run = self._research_queue.submit(
@@ -447,10 +448,16 @@ class ApiApplication:
                 normalized_weights,
                 max_attempts=max_attempts,
                 request_key=request_key,
+                timeout_seconds=timeout_seconds,
             )
             return 202, {"run": self._research_run(run)}
         result = self._research_execution.execute(
-            task_id, assessed.lead, source_url, normalized_weights, max_attempts=max_attempts
+            task_id,
+            assessed.lead,
+            source_url,
+            normalized_weights,
+            max_attempts=max_attempts,
+            timeout_seconds=timeout_seconds,
         )
         return 200, {
             "run": self._research_run(result.run),
@@ -675,6 +682,7 @@ class ApiApplication:
             "step": run.step.value,
             "attempts": run.attempts,
             "error": run.error,
+            "timeout_seconds": run.timeout_seconds,
         }
 
     @staticmethod

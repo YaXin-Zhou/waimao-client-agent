@@ -3,6 +3,7 @@
 from __future__ import annotations
 
 from dataclasses import dataclass
+from time import monotonic
 
 from src.application.research_workflow import ResearchAssessment
 from src.domain.lead import CleanLead
@@ -14,6 +15,10 @@ from src.domain.research_run import ResearchRun, ResearchRunStep
 class ResearchExecutionResult:
     run: ResearchRun
     assessment: ResearchAssessment
+
+
+class ResearchTimeoutError(TimeoutError):
+    """研究运行超过整体截止时间。"""
 
 
 class ResearchExecutionService:
@@ -29,23 +34,32 @@ class ResearchExecutionService:
         source_url: str,
         weights: dict[str, int],
         max_attempts: int = 2,
+        timeout_seconds: int = 120,
         run: ResearchRun | None = None,
     ) -> ResearchExecutionResult:
         if self._tasks.get(task_id) is None:
             raise KeyError(f"Task not found: {task_id}")
         if max_attempts <= 0:
             raise ValueError("max_attempts must be positive")
-        run = run or ResearchRun.start(task_id, lead.domain)
+        if timeout_seconds <= 0:
+            raise ValueError("timeout_seconds must be positive")
+        run = run or ResearchRun.start(
+            task_id, lead.domain, timeout_seconds=timeout_seconds
+        )
+        timeout_seconds = run.timeout_seconds or timeout_seconds
+        deadline = monotonic() + timeout_seconds
         self._runs.save(run)
         last_error: Exception | None = None
         for _ in range(max_attempts):
             run = run.attempted()
             self._runs.save(run)
             try:
+                self._check_deadline(deadline)
                 assessment = self._workflow.run(
                     task_id, lead, source_url, weights,
-                    progress=lambda step: self._save_progress(run, step),
+                    progress=lambda step: self._progress(run, step, deadline),
                 )
+                self._check_deadline(deadline)
             except (ConnectionError, OSError, TimeoutError) as error:
                 last_error = error
                 continue
@@ -61,6 +75,11 @@ class ResearchExecutionService:
         self._runs.save(run)
         raise last_error or RuntimeError("research failed")
 
-    def _save_progress(self, run: ResearchRun, step: ResearchRunStep) -> None:
-        run = run.progress(step)
-        self._runs.save(run)
+    def _progress(self, run: ResearchRun, step: ResearchRunStep, deadline: float) -> None:
+        self._check_deadline(deadline)
+        self._runs.save(run.progress(step))
+
+    @staticmethod
+    def _check_deadline(deadline: float) -> None:
+        if monotonic() > deadline:
+            raise ResearchTimeoutError("research run exceeded timeout_seconds")

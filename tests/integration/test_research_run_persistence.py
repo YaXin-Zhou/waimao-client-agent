@@ -7,6 +7,7 @@ def test_research_run_survives_repository_recreation(tmp_path):
     run = ResearchRun.start(
         "task-1", "example.com", source_url="https://example.com",
         weights={"product": 40}, max_attempts=3,
+        timeout_seconds=90,
     ).attempted()
     run = run.succeed(review_required=True)
 
@@ -19,6 +20,7 @@ def test_research_run_survives_repository_recreation(tmp_path):
     assert restored.source_url == "https://example.com"
     assert restored.weights == (("product", 40),)
     assert restored.max_attempts == 3
+    assert restored.timeout_seconds == 90
 
 
 def test_research_runs_can_be_listed_by_task(tmp_path):
