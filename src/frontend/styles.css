@@ -101,6 +101,17 @@ h1 { color: #132238; font-size: 29px; font-weight: 700; letter-spacing: -.8px; }
 .research-fields { display: grid; grid-template-columns: 1fr 1.4fr; gap: 9px; }
 .research-success { margin-top: 9px; color: #198754; font-size: 10px; }
 .task-context { margin: -2px 0 14px; padding: 11px 13px; border: 1px solid #dce8f2; border-radius: 6px; display: flex; align-items: center; gap: 14px; color: #718196; background: #fff; font-size: 11px; }
+.reply-center { margin-bottom: 16px; padding: 16px 18px; overflow: visible; }
+.reply-center-heading { display: flex; align-items: center; justify-content: space-between; gap: 16px; }
+.reply-center-heading h2 { color: #17283c; font-size: 16px; }
+.reply-center-heading h2 span { margin-left: 6px; color: #9aa8b7; font-size: 11px; font-weight: 400; }
+.reply-center-heading p { margin-top: 5px; color: #8d9bab; font-size: 11px; }
+.reply-actions { display: flex; gap: 8px; }
+.reply-summary { margin-top: 13px; padding-top: 11px; border-top: 1px solid #e8edf3; display: flex; gap: 18px; color: #52667c; font-size: 11px; }
+.reply-empty { margin-top: 13px; padding-top: 12px; border-top: 1px solid #e8edf3; color: #8292a4; font-size: 11px; }
+.reply-empty strong, .reply-empty span { display: block; }
+.reply-empty strong { color: #52667c; font-size: 12px; }
+.reply-empty span { margin-top: 5px; }
 .task-context label { display: flex; align-items: center; gap: 8px; color: #41566d; font-weight: 600; white-space: nowrap; }
 .task-context select { min-width: 230px; padding: 7px 28px 7px 9px; border: 1px solid #d6e1eb; border-radius: 5px; outline: 0; color: #263a51; background: #fbfcfd; font-size: 11px; }
 .task-context select:focus { border-color: #62b4f3; box-shadow: 0 0 0 3px rgba(98, 180, 243, .13); }
