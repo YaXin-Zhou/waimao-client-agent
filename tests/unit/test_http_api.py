@@ -26,6 +26,9 @@ class Leads:
     def list_assessments(self, task_id):
         return self.results
 
+    def save_assessments(self, task_id, results):
+        self.results = results
+
 
 class Research:
     def get(self, task_id, domain):
@@ -86,6 +89,44 @@ def test_api_returns_lead_list():
 
     assert status == 200
     assert payload["items"][0]["lead"]["domain"] == "alpine.example"
+
+
+def test_api_assesses_external_records_with_request_configuration():
+    app, task, _ = make_app()
+
+    status, payload = app.handle(
+        "POST",
+        f"/api/tasks/{task.id}/assess",
+        {
+            "records": [{
+                "company_name": " Alpine Energy ",
+                "website": "https://www.alpine.example/contact",
+                "email": "Sales@alpine.example",
+                "country": "DE",
+                "source_url": "https://alpine.example/contact",
+                "source_excerpt": "Distributor contact",
+            }],
+            "weights": {"product_fit": 40, "country_fit": 30},
+            "signals_by_domain": {
+                "alpine.example": {"product_fit": 35, "country_fit": 30}
+            },
+        },
+    )
+
+    assert status == 200
+    assert payload["items"][0]["lead"]["domain"] == "alpine.example"
+    assert payload["items"][0]["score"]["total"] == 65
+
+
+def test_api_rejects_non_object_scoring_configuration():
+    app, task, _ = make_app()
+
+    status, payload = app.handle(
+        "POST", f"/api/tasks/{task.id}/assess", {"records": [], "weights": []}
+    )
+
+    assert status == 400
+    assert "must be objects" in payload["error"]
 
 
 def test_api_approval_updates_draft_without_sending():

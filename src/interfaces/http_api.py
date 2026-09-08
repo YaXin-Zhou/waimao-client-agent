@@ -5,15 +5,18 @@ from __future__ import annotations
 import json
 from urllib.parse import unquote, urlsplit
 
+from src.application.acquisition_service import AcquisitionService
 from src.application.email_review_service import EmailReviewService
+from src.domain.lead import LeadRecord
 
 
 class ApiApplication:
-    def __init__(self, tasks, leads, research, drafts):
+    def __init__(self, tasks, leads, research, drafts, acquisition=None):
         self._tasks = tasks
         self._leads = leads
         self._research = research
         self._drafts = drafts
+        self._acquisition = acquisition or AcquisitionService(tasks, leads)
         self._reviews = EmailReviewService(drafts)
 
     def handle(self, method: str, path: str, body=None) -> tuple[int, dict]:
@@ -23,6 +26,13 @@ class ApiApplication:
                 return 200, {"status": "ok"}
             if method == "GET" and segments == ["api", "tasks"]:
                 return self._task_list()
+            if (
+                method == "POST"
+                and len(segments) == 4
+                and segments[:2] == ["api", "tasks"]
+                and segments[3] == "assess"
+            ):
+                return self._assess_leads(segments[2], self._parse_body(body))
             if (
                 method == "GET"
                 and len(segments) == 5
@@ -59,6 +69,36 @@ class ApiApplication:
                 for task in self._tasks.list()
             ]
         }
+
+    def _assess_leads(self, task_id: str, body: dict) -> tuple[int, dict]:
+        """接收外部搜索适配器的原始记录，统一清洗、评分并持久化。"""
+        records = [
+            LeadRecord(
+                company_name=item.get("company_name", ""),
+                website=item.get("website", ""),
+                email=item.get("email", ""),
+                country=item.get("country", ""),
+                source_url=item.get("source_url", ""),
+                source_excerpt=item.get("source_excerpt", ""),
+            )
+            for item in body.get("records", [])
+            if isinstance(item, dict)
+        ]
+        weights = body.get("weights", {})
+        signals_by_domain = body.get("signals_by_domain", {})
+        if not isinstance(weights, dict) or not isinstance(signals_by_domain, dict):
+            raise ValueError("weights and signals_by_domain must be objects")
+        results = self._acquisition.assess_leads(
+            task_id,
+            records,
+            {str(key): int(value) for key, value in weights.items()},
+            {
+                str(domain): {str(key): int(value) for key, value in signals.items()}
+                for domain, signals in signals_by_domain.items()
+                if isinstance(signals, dict)
+            },
+        )
+        return 200, {"items": [self._assessed(item) for item in results]}
 
     def _lead_detail(self, task_id: str, domain: str) -> tuple[int, dict]:
         self._require_task(task_id)
