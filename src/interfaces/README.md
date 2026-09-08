@@ -40,7 +40,7 @@ python scripts/serve_api.py
 - `POST /api/drafts/{draft_id}/reject`
 
 接口只返回数据库已有数据；找不到客户、草稿或任务时返回明确错误，不生成替代数据。
-发送预检可接收 `contacted_recently`、`attachment_names`、`max_attachments` 和允许扩展名配置；预检只检查元数据，不读取或发送附件内容。
+发送预检可接收 `contacted_recently`、`attachments`（文件名和字节数）、`max_attachments`、单文件/总大小和允许扩展名配置；预检只检查元数据，不读取或发送附件内容。
 开发信生成接口只生成待审核草稿，不执行发送；发送联调不属于当前阶段验收范围。
 
 评估接口的评分项由请求配置，不在接口中硬编码。例如：

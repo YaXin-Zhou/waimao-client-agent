@@ -56,3 +56,20 @@ def test_recent_contact_and_unsafe_attachments_are_blocked():
     assert "recipient was contacted recently" in result.reasons
     assert "attachment count" in result.reasons[1]
     assert any("secrets.txt" in reason for reason in result.reasons)
+
+
+def test_attachment_size_limits_are_checked_without_opening_files():
+    from src.domain.email_draft import EmailDraftStatus
+
+    result = check_send_safety(
+        draft(EmailDraftStatus.APPROVED),
+        SendPolicy(
+            attachment_sizes=(("catalog.pdf", 11), ("price.xlsx", 9)),
+            max_attachment_bytes=10,
+            max_total_attachment_bytes=15,
+        ),
+    )
+
+    assert not result.allowed
+    assert "attachment is too large: catalog.pdf" in result.reasons
+    assert "total attachment size" in result.reasons[-1]

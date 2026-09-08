@@ -297,7 +297,16 @@ class ApiApplication:
             contacted_recently=bool(body.get("contacted_recently", False)),
             recent_contact_days=int(body.get("recent_contact_days", 7)),
             attachment_names=tuple(str(item) for item in body.get("attachment_names", [])),
+            attachment_sizes=tuple(
+                (str(item.get("name", "")), int(item.get("size_bytes", 0)))
+                for item in body.get("attachments", [])
+                if isinstance(item, dict)
+            ),
             max_attachments=int(body.get("max_attachments", 5)),
+            max_attachment_bytes=int(body.get("max_attachment_bytes", 10 * 1024 * 1024)),
+            max_total_attachment_bytes=int(
+                body.get("max_total_attachment_bytes", 25 * 1024 * 1024)
+            ),
             allowed_attachment_extensions=tuple(
                 str(item)
                 for item in body.get(
@@ -325,7 +334,16 @@ class ApiApplication:
             contacted_recently=bool(body.get("contacted_recently", False)),
             recent_contact_days=int(body.get("recent_contact_days", 7)),
             attachment_names=tuple(str(item) for item in body.get("attachment_names", [])),
+            attachment_sizes=tuple(
+                (str(item.get("name", "")), int(item.get("size_bytes", 0)))
+                for item in body.get("attachments", [])
+                if isinstance(item, dict)
+            ),
             max_attachments=int(body.get("max_attachments", 5)),
+            max_attachment_bytes=int(body.get("max_attachment_bytes", 10 * 1024 * 1024)),
+            max_total_attachment_bytes=int(
+                body.get("max_total_attachment_bytes", 25 * 1024 * 1024)
+            ),
             allowed_attachment_extensions=tuple(
                 str(item)
                 for item in body.get(

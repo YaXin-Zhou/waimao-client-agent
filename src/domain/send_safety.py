@@ -18,7 +18,10 @@ class SendPolicy:
     contacted_recently: bool = False
     recent_contact_days: int = 7
     attachment_names: tuple[str, ...] = ()
+    attachment_sizes: tuple[tuple[str, int], ...] = ()
     max_attachments: int = 5
+    max_attachment_bytes: int = 10 * 1024 * 1024
+    max_total_attachment_bytes: int = 25 * 1024 * 1024
     allowed_attachment_extensions: tuple[str, ...] = (
         ".pdf", ".doc", ".docx", ".xls", ".xlsx", ".png", ".jpg", ".jpeg"
     )
@@ -55,6 +58,15 @@ def check_send_safety(draft: EmailDraft, policy: SendPolicy) -> SendSafetyResult
         suffix = path.suffix.lower()
         if not name.strip() or path.name != name or suffix not in allowed_extensions:
             reasons.append(f"attachment is not allowed: {name}")
+    total_bytes = 0
+    for name, size in policy.attachment_sizes:
+        if size < 0:
+            reasons.append(f"attachment size is invalid: {name}")
+        elif size > policy.max_attachment_bytes:
+            reasons.append(f"attachment is too large: {name}")
+        total_bytes += max(size, 0)
+    if total_bytes > policy.max_total_attachment_bytes:
+        reasons.append("total attachment size exceeds the configured limit")
     return SendSafetyResult(
         allowed=not reasons,
         requires_manual_confirmation=True,
