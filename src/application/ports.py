@@ -5,6 +5,7 @@ from __future__ import annotations
 from typing import TYPE_CHECKING, Protocol
 
 from src.domain.lead import LeadRecord
+from src.domain.research_run import ResearchRun
 from src.domain.task import AcquisitionTask
 
 if TYPE_CHECKING:
@@ -25,3 +26,9 @@ class LeadRepository(Protocol):
 
 class SearchProvider(Protocol):
     def search(self, criteria: object) -> list[LeadRecord]: ...
+
+
+class ResearchRunRepository(Protocol):
+    def save(self, run: ResearchRun) -> None: ...
+
+    def get(self, run_id: str) -> ResearchRun | None: ...

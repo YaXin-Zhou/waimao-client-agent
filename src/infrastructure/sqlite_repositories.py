@@ -9,6 +9,7 @@ from pathlib import Path
 from src.application.acquisition_service import AssessedLead
 from src.domain.lead import CleanLead, LeadScore
 from src.domain.research import CustomerType, EvidenceStatus, ResearchResult
+from src.domain.research_run import ResearchRun, ResearchRunStatus
 from src.domain.task import AcquisitionCriteria, AcquisitionTask, TaskStatus
 
 
@@ -44,6 +45,18 @@ def _connect(database: str | Path) -> sqlite3.Connection:
             domain TEXT NOT NULL,
             report_json TEXT NOT NULL,
             PRIMARY KEY (task_id, domain)
+        )
+        """
+    )
+    connection.execute(
+        """
+        CREATE TABLE IF NOT EXISTS research_runs (
+            id TEXT PRIMARY KEY,
+            task_id TEXT NOT NULL,
+            domain TEXT NOT NULL,
+            status TEXT NOT NULL,
+            attempts INTEGER NOT NULL,
+            error TEXT NOT NULL
         )
         """
     )
@@ -220,4 +233,53 @@ class SQLiteResearchRepository:
             confidence=data["confidence"],
             evidence_url=data["evidence_url"],
             evidence_status=EvidenceStatus(data["evidence_status"]),
+        )
+
+
+class SQLiteResearchRunRepository:
+    def __init__(self, database: str | Path):
+        self._database = database
+
+    def save(self, run: ResearchRun) -> None:
+        with _connect(self._database) as connection:
+            connection.execute(
+                """
+                INSERT INTO research_runs (id, task_id, domain, status, attempts, error)
+                VALUES (?, ?, ?, ?, ?, ?)
+                ON CONFLICT(id) DO UPDATE SET
+                    task_id=excluded.task_id,
+                    domain=excluded.domain,
+                    status=excluded.status,
+                    attempts=excluded.attempts,
+                    error=excluded.error
+                """,
+                (
+                    run.id,
+                    run.task_id,
+                    run.domain,
+                    run.status.value,
+                    run.attempts,
+                    run.error,
+                ),
+            )
+
+    def get(self, run_id: str) -> ResearchRun | None:
+        with _connect(self._database) as connection:
+            row = connection.execute(
+                """
+                SELECT id, task_id, domain, status, attempts, error
+                FROM research_runs
+                WHERE id = ?
+                """,
+                (run_id,),
+            ).fetchone()
+        if row is None:
+            return None
+        return ResearchRun(
+            id=row["id"],
+            task_id=row["task_id"],
+            domain=row["domain"],
+            status=ResearchRunStatus(row["status"]),
+            attempts=row["attempts"],
+            error=row["error"],
         )
