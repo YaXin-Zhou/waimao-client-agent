@@ -16,6 +16,7 @@ class SendPolicy:
     daily_limit: int = 0
     sent_today: int = 0
     contacted_recently: bool = False
+    recent_contact_days: int = 7
     attachment_names: tuple[str, ...] = ()
     max_attachments: int = 5
     allowed_attachment_extensions: tuple[str, ...] = (

@@ -878,6 +878,22 @@ class SQLiteEmailSendAttemptRepository:
             for row in rows
         ]
 
+    def was_recipient_contacted_since(self, recipient_email: str, days: int) -> bool:
+        from datetime import datetime, timedelta, timezone
+
+        cutoff = (datetime.now(timezone.utc) - timedelta(days=days)).isoformat()
+        with _connect(self._database) as connection:
+            row = connection.execute(
+                """
+                SELECT 1 FROM email_send_attempts
+                WHERE lower(recipient_email) = lower(?)
+                  AND status = 'sent' AND created_at >= ?
+                LIMIT 1
+                """,
+                (recipient_email, cutoff),
+            ).fetchone()
+        return row is not None
+
     def find_by_request_key(self, draft_id: str, request_key: str) -> EmailSendAttempt | None:
         if not request_key:
             return None

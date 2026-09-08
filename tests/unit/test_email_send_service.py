@@ -14,8 +14,9 @@ class Drafts:
 
 
 class Attempts:
-    def __init__(self):
+    def __init__(self, contacted=False):
         self.items = []
+        self.contacted = contacted
 
     def save(self, attempt):
         self.items.append(attempt)
@@ -28,6 +29,9 @@ class Attempts:
             ),
             None,
         )
+
+    def was_recipient_contacted_since(self, recipient_email, days):
+        return self.contacted
 
 
 class FakeSender:
@@ -103,3 +107,14 @@ def test_same_send_request_is_reused_but_content_change_is_rejected():
             item.id, SendPolicy(), True, item.recipient_email, item.subject, "Changed",
             request_key="send-1",
         )
+
+
+def test_send_blocks_when_history_reports_recent_contact():
+    item = approved_draft()
+    sender = FakeSender()
+    service = EmailSendService(Drafts(item), sender, Attempts(contacted=True))
+
+    with pytest.raises(ValueError, match="contacted recently"):
+        service.send(item.id, SendPolicy(), True, item.recipient_email, item.subject, item.body)
+
+    assert sender.calls == 0

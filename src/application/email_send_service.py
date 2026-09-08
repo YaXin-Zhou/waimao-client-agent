@@ -3,6 +3,7 @@
 from __future__ import annotations
 
 import hashlib
+from dataclasses import replace
 from typing import Protocol
 
 from src.domain.email_send import EmailSendAttempt
@@ -41,6 +42,16 @@ class EmailSendService:
                 if existing.body_hash != body_hash:
                     raise ValueError("send idempotency key was reused with different content")
                 return existing
+        if (
+            policy.recent_contact_days > 0
+            and hasattr(self._attempts, "was_recipient_contacted_since")
+        ):
+            policy = replace(
+                policy,
+                contacted_recently=self._attempts.was_recipient_contacted_since(
+                    draft.recipient_email, policy.recent_contact_days
+                ),
+            )
         safety = check_send_safety(draft, policy)
         if not safety.allowed:
             raise ValueError("send blocked: " + "; ".join(safety.reasons))

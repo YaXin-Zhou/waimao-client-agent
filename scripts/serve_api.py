@@ -121,7 +121,9 @@ follow_up_task_service = FollowUpTaskService(follow_up_task_repository)
 reply_analysis_service = ReplyAnalysisService(
     inbound_email_repository, reply_analysis_repository, follow_up_task_service
 )
-send_safety_service = SendSafetyService(SQLiteEmailDraftRepository(DATABASE))
+send_safety_service = SendSafetyService(
+    SQLiteEmailDraftRepository(DATABASE), email_send_attempt_repository
+)
 smtp_config = AliSmtpConfig(
     host=config_values.get("ALI_SMTP_HOST", "smtp.qiye.aliyun.com"),
     username=config_values.get("ALI_SMTP_USERNAME", ""),

@@ -295,6 +295,7 @@ class ApiApplication:
             daily_limit=int(body.get("daily_limit", 0)),
             sent_today=int(body.get("sent_today", 0)),
             contacted_recently=bool(body.get("contacted_recently", False)),
+            recent_contact_days=int(body.get("recent_contact_days", 7)),
             attachment_names=tuple(str(item) for item in body.get("attachment_names", [])),
             max_attachments=int(body.get("max_attachments", 5)),
             allowed_attachment_extensions=tuple(
@@ -322,6 +323,7 @@ class ApiApplication:
             daily_limit=int(body.get("daily_limit", 0)),
             sent_today=int(body.get("sent_today", 0)),
             contacted_recently=bool(body.get("contacted_recently", False)),
+            recent_contact_days=int(body.get("recent_contact_days", 7)),
             attachment_names=tuple(str(item) for item in body.get("attachment_names", [])),
             max_attachments=int(body.get("max_attachments", 5)),
             allowed_attachment_extensions=tuple(
