@@ -12,10 +12,12 @@ ROOT = Path(__file__).resolve().parents[1]
 sys.path.insert(0, str(ROOT))
 
 from src.application.email_draft_service import EmailDraftService  # noqa: E402
+from src.application.mailbox_sync import MailboxSyncService  # noqa: E402
 from src.application.research_execution import ResearchExecutionService  # noqa: E402
 from src.application.research_queue import ResearchJobQueue  # noqa: E402
 from src.application.research_workflow import ResearchWorkflow  # noqa: E402
 from src.application.translation_service import TranslationService  # noqa: E402
+from src.infrastructure.ali_imap import AliImapConfig, AliImapMailbox  # noqa: E402
 from src.infrastructure.deepseek_provider import DeepSeekConfig, DeepSeekProvider  # noqa: E402
 from src.infrastructure.machine_translation_provider import (  # noqa: E402
     GoogleMachineTranslationProvider,
@@ -23,6 +25,7 @@ from src.infrastructure.machine_translation_provider import (  # noqa: E402
 from src.infrastructure.sqlite_repositories import (  # noqa: E402
     SQLiteAuditEventRepository,
     SQLiteEmailDraftRepository,
+    SQLiteInboundEmailRepository,
     SQLiteLeadRepository,
     SQLiteResearchRepository,
     SQLiteResearchRunRepository,
@@ -32,10 +35,26 @@ from src.infrastructure.website_fetcher import WebsiteFetcher  # noqa: E402
 from src.interfaces.http_api import ApiApplication  # noqa: E402
 
 DATABASE = ROOT / "data" / "runtime" / "acquisition.db"
+
+
+def _config_values(path: Path) -> dict[str, str]:
+    if not path.exists():
+        return {}
+    values = {}
+    for line in path.read_text(encoding="utf-8").splitlines():
+        line = line.strip()
+        if line and not line.startswith("#") and "=" in line:
+            key, value = line.split("=", 1)
+            values[key.strip()] = value.strip()
+    return values
+
+
+config_values = _config_values(ROOT / "config" / ".env")
 task_repository = SQLiteTaskRepository(DATABASE)
 lead_repository = SQLiteLeadRepository(DATABASE)
 research_repository = SQLiteResearchRepository(DATABASE)
 research_run_repository = SQLiteResearchRunRepository(DATABASE)
+inbound_email_repository = SQLiteInboundEmailRepository(DATABASE)
 try:
     deepseek_provider = DeepSeekProvider(
         DeepSeekConfig.from_env_file(ROOT / "config" / ".env")
@@ -65,6 +84,15 @@ research_queue = (
     if research_execution is not None
     else None
 )
+imap_config = AliImapConfig(
+    host=config_values.get("ALI_IMAP_HOST", "imap.qiye.aliyun.com"),
+    username=config_values.get("ALI_IMAP_USERNAME", ""),
+    password=config_values.get("ALI_IMAP_PASSWORD", ""),
+    port=int(config_values.get("ALI_IMAP_PORT", "993")),
+    mailbox=config_values.get("ALI_IMAP_MAILBOX", "INBOX"),
+)
+mailbox = AliImapMailbox(imap_config) if imap_config.configured else None
+mailbox_sync = MailboxSyncService(lead_repository, inbound_email_repository)
 application = ApiApplication(
     task_repository,
     lead_repository,
@@ -76,6 +104,9 @@ application = ApiApplication(
     research_execution=research_execution,
     research_runs=research_run_repository,
     research_queue=research_queue,
+    mailbox=mailbox,
+    mailbox_sync=mailbox_sync,
+    inbound_emails=inbound_email_repository,
 )
 
 

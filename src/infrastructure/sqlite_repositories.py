@@ -9,6 +9,7 @@ from pathlib import Path
 from src.application.acquisition_service import AssessedLead
 from src.domain.audit_event import AuditEvent
 from src.domain.email_draft import EmailDraft, EmailDraftStatus
+from src.domain.inbound_email import InboundEmail
 from src.domain.lead import CleanLead, LeadScore, LeadStatus
 from src.domain.research import CustomerType, EvidenceStatus, ResearchResult
 from src.domain.research_run import ResearchRun, ResearchRunStatus, ResearchRunStep
@@ -109,6 +110,25 @@ def _connect(database: str | Path) -> sqlite3.Connection:
             to_status TEXT NOT NULL,
             note TEXT NOT NULL,
             occurred_at TEXT NOT NULL
+        )
+        """
+    )
+    connection.execute(
+        """
+        CREATE TABLE IF NOT EXISTS inbound_emails (
+            message_id TEXT PRIMARY KEY,
+            uid TEXT NOT NULL,
+            in_reply_to TEXT NOT NULL,
+            references_json TEXT NOT NULL,
+            from_email TEXT NOT NULL,
+            to_emails_json TEXT NOT NULL,
+            subject TEXT NOT NULL,
+            body TEXT NOT NULL,
+            received_at TEXT NOT NULL,
+            thread_key TEXT NOT NULL,
+            task_id TEXT NOT NULL,
+            lead_domain TEXT NOT NULL,
+            is_bounce INTEGER NOT NULL
         )
         """
     )
@@ -518,3 +538,71 @@ class SQLiteAuditEventRepository:
             )
             for row in rows
         ]
+
+
+class SQLiteInboundEmailRepository:
+    def __init__(self, database: str | Path):
+        self._database = database
+
+    def save(self, message: InboundEmail) -> None:
+        with _connect(self._database) as connection:
+            connection.execute(
+                """
+                INSERT INTO inbound_emails (
+                    message_id, uid, in_reply_to, references_json, from_email,
+                    to_emails_json, subject, body, received_at, thread_key,
+                    task_id, lead_domain, is_bounce
+                ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+                ON CONFLICT(message_id) DO UPDATE SET
+                    uid=excluded.uid, task_id=excluded.task_id,
+                    lead_domain=excluded.lead_domain, is_bounce=excluded.is_bounce
+                """,
+                (
+                    message.message_id,
+                    message.uid,
+                    message.in_reply_to,
+                    json.dumps(message.references),
+                    message.from_email,
+                    json.dumps(message.to_emails),
+                    message.subject,
+                    message.body,
+                    message.received_at,
+                    message.thread_key,
+                    message.task_id,
+                    message.lead_domain,
+                    int(message.is_bounce),
+                ),
+            )
+
+    def get_by_message_id(self, message_id: str) -> InboundEmail | None:
+        with _connect(self._database) as connection:
+            row = connection.execute(
+                "SELECT * FROM inbound_emails WHERE message_id = ?", (message_id,)
+            ).fetchone()
+        return _inbound_email(row) if row else None
+
+    def list_for_task(self, task_id: str) -> list[InboundEmail]:
+        with _connect(self._database) as connection:
+            rows = connection.execute(
+                "SELECT * FROM inbound_emails WHERE task_id = ? ORDER BY rowid",
+                (task_id,),
+            ).fetchall()
+        return [_inbound_email(row) for row in rows]
+
+
+def _inbound_email(row) -> InboundEmail:
+    return InboundEmail(
+        uid=row["uid"],
+        message_id=row["message_id"],
+        in_reply_to=row["in_reply_to"],
+        references=tuple(json.loads(row["references_json"])),
+        from_email=row["from_email"],
+        to_emails=tuple(json.loads(row["to_emails_json"])),
+        subject=row["subject"],
+        body=row["body"],
+        received_at=row["received_at"],
+        thread_key=row["thread_key"],
+        task_id=row["task_id"],
+        lead_domain=row["lead_domain"],
+        is_bounce=bool(row["is_bounce"]),
+    )

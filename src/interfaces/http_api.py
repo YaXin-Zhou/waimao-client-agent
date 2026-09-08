@@ -8,6 +8,7 @@ from urllib.parse import unquote, urlsplit
 from src.application.acquisition_service import AcquisitionService
 from src.application.email_review_service import EmailReviewService
 from src.domain.audit_event import AuditEvent
+from src.domain.inbound_email import InboundEmail
 from src.domain.lead import LeadRecord, LeadStatus
 from src.domain.research_run import ResearchRun
 from src.domain.sender_profile import SenderProfile
@@ -28,6 +29,9 @@ class ApiApplication:
         research_execution=None,
         research_runs=None,
         research_queue=None,
+        mailbox=None,
+        mailbox_sync=None,
+        inbound_emails=None,
     ):
         self._tasks = tasks
         self._leads = leads
@@ -40,6 +44,9 @@ class ApiApplication:
         self._research_execution = research_execution
         self._research_runs_repository = research_runs
         self._research_queue = research_queue
+        self._mailbox = mailbox
+        self._mailbox_sync = mailbox_sync
+        self._inbound_emails = inbound_emails
         self._reviews = EmailReviewService(drafts, audit)
 
     def handle(self, method: str, path: str, body=None) -> tuple[int, dict]:
@@ -47,6 +54,23 @@ class ApiApplication:
             segments = [unquote(item) for item in urlsplit(path).path.split("/") if item]
             if method == "GET" and segments == ["api", "health"]:
                 return 200, {"status": "ok"}
+            if method == "GET" and segments == ["api", "mailbox", "status"]:
+                return self._mailbox_status()
+            if (
+                method == "POST"
+                and len(segments) == 5
+                and segments[:2] == ["api", "tasks"]
+                and segments[3] == "mailbox"
+                and segments[4] == "sync"
+            ):
+                return self._sync_mailbox(segments[2])
+            if (
+                method == "GET"
+                and len(segments) == 4
+                and segments[:2] == ["api", "tasks"]
+                and segments[3] == "mail-threads"
+            ):
+                return self._mail_threads(segments[2])
             if method == "GET" and segments == ["api", "tasks"]:
                 return self._task_list()
             if method == "POST" and segments == ["api", "tasks"]:
@@ -174,6 +198,37 @@ class ApiApplication:
         self._require_task(task_id)
         items = [self._assessed(item) for item in self._leads.list_assessments(task_id)]
         return 200, {"items": items}
+
+    def _mailbox_status(self) -> tuple[int, dict]:
+        return 200, {
+            "provider": "ali_imap",
+            "configured": self._mailbox is not None,
+            "mode": "read_only",
+            "sending_enabled": False,
+        }
+
+    def _sync_mailbox(self, task_id: str) -> tuple[int, dict]:
+        if self._mailbox_sync is None or self._mailbox is None:
+            raise RuntimeError("Ali IMAP mailbox is not configured")
+        self._require_task(task_id)
+        result = self._mailbox_sync.sync(task_id, self._mailbox)
+        return 200, {
+            "fetched": result.fetched,
+            "inserted": result.inserted,
+            "skipped_duplicates": result.skipped_duplicates,
+            "bounce_count": result.bounce_count,
+        }
+
+    def _mail_threads(self, task_id: str) -> tuple[int, dict]:
+        self._require_task(task_id)
+        if self._inbound_emails is None:
+            raise RuntimeError("inbound email repository is not configured")
+        return 200, {
+            "items": [
+                self._inbound_email(item)
+                for item in self._inbound_emails.list_for_task(task_id)
+            ]
+        }
 
     def _task_list(self) -> tuple[int, dict]:
         return 200, {"items": [self._task(task) for task in self._tasks.list()]}
@@ -489,6 +544,23 @@ class ApiApplication:
             "step": run.step.value,
             "attempts": run.attempts,
             "error": run.error,
+        }
+
+    @staticmethod
+    def _inbound_email(message: InboundEmail) -> dict:
+        return {
+            "uid": message.uid,
+            "message_id": message.message_id,
+            "in_reply_to": message.in_reply_to,
+            "references": message.references,
+            "from_email": message.from_email,
+            "to_emails": message.to_emails,
+            "subject": message.subject,
+            "body": message.body,
+            "received_at": message.received_at,
+            "thread_key": message.thread_key,
+            "lead_domain": message.lead_domain,
+            "is_bounce": message.is_bounce,
         }
 
     @staticmethod
