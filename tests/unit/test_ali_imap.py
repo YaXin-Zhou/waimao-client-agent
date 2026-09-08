@@ -36,3 +36,33 @@ def test_bounce_is_detected_without_model_call():
 
 def test_incomplete_imap_config_is_not_configured():
     assert not AliImapConfig("imap.example", "user", "").configured
+
+
+def test_connection_check_opens_mailbox_read_only_without_searching():
+    calls = []
+
+    class Connection:
+        def login(self, username, password):
+            calls.append(("login", username, password))
+
+        def select(self, mailbox, readonly=False):
+            calls.append(("select", mailbox, readonly))
+            return "OK", []
+
+        def logout(self):
+            calls.append(("logout",))
+
+    from src.infrastructure.ali_imap import AliImapMailbox
+
+    mailbox = AliImapMailbox(
+        AliImapConfig("imap.example", "user", "secret"),
+        connection_factory=lambda host, port: Connection(),
+    )
+
+    mailbox.test_connection()
+
+    assert calls == [
+        ("login", "user", "secret"),
+        ("select", "INBOX", True),
+        ("logout",),
+    ]

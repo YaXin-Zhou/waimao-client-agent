@@ -22,6 +22,7 @@
 
 - `GET /api/health`：进程存活检查。
 - `GET /api/ready`：核心依赖就绪检查。
+- `POST /api/mailbox/test`：只验证 IMAP 登录和只读打开，不读取邮件正文。
 - `python scripts/backup_runtime.py`：创建不覆盖旧文件的 SQLite 备份。
 - API 标准输出：每行一个 JSON 请求事件，可由部署环境收集，不包含敏感字段。
 - `config/.env` 仅作为本机配置文件，已被 Git 忽略；正式部署应使用主机密钥管理或受限权限注入，不提交真实凭据。

@@ -56,6 +56,22 @@ class AliImapMailbox:
             except Exception:
                 pass
 
+    def test_connection(self) -> None:
+        """只验证登录和只读打开，不搜索或读取邮件。"""
+        if not self._config.configured:
+            raise RuntimeError("Ali IMAP is not configured")
+        connection = self._connection_factory(self._config.host, self._config.port)
+        try:
+            connection.login(self._config.username, self._config.password)
+            status, _ = connection.select(self._config.mailbox, readonly=True)
+            if status != "OK":
+                raise RuntimeError("Ali IMAP mailbox cannot be opened read-only")
+        finally:
+            try:
+                connection.logout()
+            except Exception:
+                pass
+
 
 def parse_email(uid: str, raw: bytes) -> InboundEmail:
     message = BytesParser(policy=policy.default).parsebytes(raw)

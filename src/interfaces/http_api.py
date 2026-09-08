@@ -70,6 +70,8 @@ class ApiApplication:
                 return self._ready()
             if method == "GET" and segments == ["api", "mailbox", "status"]:
                 return self._mailbox_status()
+            if method == "POST" and segments == ["api", "mailbox", "test"]:
+                return self._test_mailbox()
             if (
                 method == "POST"
                 and len(segments) == 4
@@ -272,6 +274,12 @@ class ApiApplication:
             "mode": "read_only",
             "sending_enabled": False,
         }
+
+    def _test_mailbox(self) -> tuple[int, dict]:
+        if self._mailbox is None:
+            raise RuntimeError("Ali IMAP mailbox is not configured")
+        self._mailbox.test_connection()
+        return 200, {"connected": True, "read_only": True, "mail_read": False}
 
     def _ready(self) -> tuple[int, dict]:
         checks = {

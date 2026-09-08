@@ -27,6 +27,7 @@ python scripts/serve_api.py
 - `GET /api/tasks/{task_id}/leads/{domain}/audit-events`：读取客户状态变更记录
 - `GET /api/tasks/{task_id}/follow-up-tasks`：读取来信分析生成的人工跟进待办
 - `PATCH /api/tasks/{task_id}/follow-up-tasks/{follow_up_id}`：更新人工跟进待办状态
+- `POST /api/mailbox/test`：只验证阿里 IMAP 登录和只读打开，不读取邮件
 - `POST /api/tasks/{task_id}/assess`：提交 `records`、`weights` 和 `signals_by_domain`，执行清洗、评分并持久化
 - `POST /api/tasks/{task_id}/leads/{domain}/draft`：仅在真实邮箱和真实背调存在时调用 DeepSeek 生成待审核草稿，不发送邮件
 - `GET /api/drafts/{draft_id}`
