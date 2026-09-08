@@ -14,16 +14,33 @@ def classify_inbound(message: InboundEmail) -> ReplyAnalysis:
             "暂停该地址并人工检查退信原因", True, ("bounce signal",)
         )
     rules = (
-        (ReplyCategory.COMPLAINT, ("complaint", "破损", "投诉", "法律", "refund"),
+        (ReplyCategory.COMPLAINT, (
+            "complaint", "破损", "投诉", "法律", "refund", "beschwerde",
+            "réclamation", "reclamation", "queja", "reclamo", "reclamação",
+        ),
          0.94, "high", "暂停自动跟进，转人工处理", True),
-        (ReplyCategory.PRICING, ("price", "pricing", "quote", "报价", "价格"),
+        (ReplyCategory.PRICING, (
+            "price", "pricing", "quote", "报价", "价格", "preis", "angebot",
+            "prix", "devis", "precio", "cotización", "prezzo", "preventivo",
+            "preço", "cotação",
+        ),
          0.91, "medium", "准备报价和成本信息供人工确认", False),
-        (ReplyCategory.DELIVERY, ("lead time", "delivery", "shipping", "交期", "交货"),
+        (ReplyCategory.DELIVERY, (
+            "lead time", "delivery", "shipping", "交期", "交货", "lieferzeit",
+            "versand", "délai", "livraison", "plazo de entrega", "envío",
+            "tempo di consegna", "spedizione", "prazo de entrega", "envio",
+        ),
          0.91, "medium", "准备交期和物流信息供人工确认", False),
-        (ReplyCategory.NOT_INTERESTED, ("not interested", "no thanks", "不要", "不感兴趣"),
+        (ReplyCategory.NOT_INTERESTED, (
+            "not interested", "no thanks", "不要", "不感兴趣", "kein interesse",
+            "pas intéressé", "no me interesa", "non interessato", "não interessado",
+        ),
          0.93, "low", "停止当前跟进并记录拒绝", False),
         (ReplyCategory.INTERESTED, (
-            "interested", "catalogue", "catalog", "sample", "感兴趣", "目录", "样品"
+            "interested", "catalogue", "catalog", "sample", "感兴趣", "目录", "样品",
+            "interessiert", "katalog", "muster", "intéressé", "échantillon",
+            "interesado", "catálogo", "muestra", "interessato", "campione",
+            "interessado", "amostra",
         ),
          0.88, "low", "创建人工跟进待办", False),
     )

@@ -28,3 +28,12 @@ def test_bounce_reply_is_high_risk_and_requires_human_review():
     assert analysis.category is ReplyCategory.BOUNCE
     assert analysis.risk_level == "high"
     assert analysis.needs_human_review
+
+
+def test_multilingual_pricing_and_complaint_are_classified_without_model():
+    pricing = classify_inbound(make_message("Re: Angebot", "Bitte senden Sie Ihren Preis."))
+    complaint = classify_inbound(make_message("Réclamation", "Nous demandons un refund."))
+
+    assert pricing.category is ReplyCategory.PRICING
+    assert complaint.category is ReplyCategory.COMPLAINT
+    assert complaint.needs_human_review
