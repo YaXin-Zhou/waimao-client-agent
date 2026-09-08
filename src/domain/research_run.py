@@ -30,10 +30,11 @@ class ResearchRun:
     step: ResearchRunStep = ResearchRunStep.QUEUED
     attempts: int = 0
     error: str = ""
+    request_key: str = ""
 
     @classmethod
-    def start(cls, task_id: str, domain: str) -> "ResearchRun":
-        return cls(id=str(uuid4()), task_id=task_id, domain=domain)
+    def start(cls, task_id: str, domain: str, request_key: str = "") -> "ResearchRun":
+        return cls(id=str(uuid4()), task_id=task_id, domain=domain, request_key=request_key)
 
     def attempted(self) -> "ResearchRun":
         return replace(self, attempts=self.attempts + 1, step=ResearchRunStep.EXECUTING)

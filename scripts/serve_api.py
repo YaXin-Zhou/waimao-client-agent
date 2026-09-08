@@ -13,6 +13,7 @@ sys.path.insert(0, str(ROOT))
 
 from src.application.email_draft_service import EmailDraftService  # noqa: E402
 from src.application.research_execution import ResearchExecutionService  # noqa: E402
+from src.application.research_queue import ResearchJobQueue  # noqa: E402
 from src.application.research_workflow import ResearchWorkflow  # noqa: E402
 from src.application.translation_service import TranslationService  # noqa: E402
 from src.infrastructure.deepseek_provider import DeepSeekConfig, DeepSeekProvider  # noqa: E402
@@ -45,6 +46,25 @@ try:
     email_draft_service = EmailDraftService(deepseek_provider) if deepseek_provider else None
 except (FileNotFoundError, ValueError):
     email_draft_service = None
+research_execution = (
+    ResearchExecutionService(
+        task_repository,
+        ResearchWorkflow(
+            task_repository,
+            WebsiteFetcher(),
+            deepseek_provider,
+            research_repository,
+        ),
+        research_run_repository,
+    )
+    if deepseek_provider is not None
+    else None
+)
+research_queue = (
+    ResearchJobQueue(research_execution, research_run_repository)
+    if research_execution is not None
+    else None
+)
 application = ApiApplication(
     task_repository,
     lead_repository,
@@ -53,21 +73,9 @@ application = ApiApplication(
     email_drafts=email_draft_service,
     translation=TranslationService(GoogleMachineTranslationProvider()),
     audit=SQLiteAuditEventRepository(DATABASE),
-    research_execution=(
-        ResearchExecutionService(
-            task_repository,
-            ResearchWorkflow(
-                task_repository,
-                WebsiteFetcher(),
-                deepseek_provider,
-                research_repository,
-            ),
-            research_run_repository,
-        )
-        if deepseek_provider is not None
-        else None
-    ),
+    research_execution=research_execution,
     research_runs=research_run_repository,
+    research_queue=research_queue,
 )
 
 

@@ -60,7 +60,8 @@ def _connect(database: str | Path) -> sqlite3.Connection:
             status TEXT NOT NULL,
             step TEXT NOT NULL DEFAULT 'queued',
             attempts INTEGER NOT NULL,
-            error TEXT NOT NULL
+            error TEXT NOT NULL,
+            request_key TEXT NOT NULL DEFAULT ''
         )
         """
     )
@@ -72,6 +73,14 @@ def _connect(database: str | Path) -> sqlite3.Connection:
         connection.execute(
             "ALTER TABLE research_runs ADD COLUMN step TEXT NOT NULL DEFAULT 'queued'"
         )
+    if "request_key" not in columns:
+        connection.execute(
+            "ALTER TABLE research_runs ADD COLUMN request_key TEXT NOT NULL DEFAULT ''"
+        )
+    connection.execute(
+        "CREATE UNIQUE INDEX IF NOT EXISTS research_runs_request_key "
+        "ON research_runs(task_id, request_key) WHERE request_key <> ''"
+    )
     connection.execute(
         """
         CREATE TABLE IF NOT EXISTS email_drafts (
@@ -307,15 +316,17 @@ class SQLiteResearchRunRepository:
         with _connect(self._database) as connection:
             connection.execute(
                 """
-                INSERT INTO research_runs (id, task_id, domain, status, step, attempts, error)
-                VALUES (?, ?, ?, ?, ?, ?, ?)
+                INSERT INTO research_runs (
+                    id, task_id, domain, status, step, attempts, error, request_key
+                ) VALUES (?, ?, ?, ?, ?, ?, ?, ?)
                 ON CONFLICT(id) DO UPDATE SET
                     task_id=excluded.task_id,
                     domain=excluded.domain,
                     status=excluded.status,
                     step=excluded.step,
                     attempts=excluded.attempts,
-                    error=excluded.error
+                    error=excluded.error,
+                    request_key=excluded.request_key
                 """,
                 (
                     run.id,
@@ -325,6 +336,7 @@ class SQLiteResearchRunRepository:
                     run.step.value,
                     run.attempts,
                     run.error,
+                    run.request_key,
                 ),
             )
 
@@ -332,7 +344,7 @@ class SQLiteResearchRunRepository:
         with _connect(self._database) as connection:
             row = connection.execute(
                 """
-                SELECT id, task_id, domain, status, step, attempts, error
+                SELECT id, task_id, domain, status, step, attempts, error, request_key
                 FROM research_runs
                 WHERE id = ?
                 """,
@@ -348,13 +360,14 @@ class SQLiteResearchRunRepository:
             step=ResearchRunStep(row["step"]),
             attempts=row["attempts"],
             error=row["error"],
+            request_key=row["request_key"],
         )
 
     def list_for_task(self, task_id: str) -> list[ResearchRun]:
         with _connect(self._database) as connection:
             rows = connection.execute(
                 """
-                SELECT id, task_id, domain, status, step, attempts, error
+                SELECT id, task_id, domain, status, step, attempts, error, request_key
                 FROM research_runs
                 WHERE task_id = ?
                 ORDER BY rowid
@@ -370,9 +383,20 @@ class SQLiteResearchRunRepository:
                 step=ResearchRunStep(row["step"]),
                 attempts=row["attempts"],
                 error=row["error"],
+                request_key=row["request_key"],
             )
             for row in rows
         ]
+
+    def find_by_request_key(self, task_id: str, request_key: str) -> ResearchRun | None:
+        if not request_key:
+            return None
+        with _connect(self._database) as connection:
+            row = connection.execute(
+                "SELECT id FROM research_runs WHERE task_id = ? AND request_key = ?",
+                (task_id, request_key),
+            ).fetchone()
+        return self.get(row["id"]) if row else None
 
 
 class SQLiteEmailDraftRepository:

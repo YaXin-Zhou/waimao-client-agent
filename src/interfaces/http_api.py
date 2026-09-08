@@ -27,6 +27,7 @@ class ApiApplication:
         audit=None,
         research_execution=None,
         research_runs=None,
+        research_queue=None,
     ):
         self._tasks = tasks
         self._leads = leads
@@ -38,6 +39,7 @@ class ApiApplication:
         self._audit = audit
         self._research_execution = research_execution
         self._research_runs_repository = research_runs
+        self._research_queue = research_queue
         self._reviews = EmailReviewService(drafts, audit)
 
     def handle(self, method: str, path: str, body=None) -> tuple[int, dict]:
@@ -248,12 +250,21 @@ class ApiApplication:
         weights = body.get("weights", {})
         if not isinstance(weights, dict):
             raise ValueError("weights must be an object")
+        normalized_weights = {str(key): int(value) for key, value in weights.items()}
+        max_attempts = int(body.get("max_attempts", 2))
+        request_key = str(body.get("idempotency_key", "")).strip()
+        if self._research_queue is not None:
+            run = self._research_queue.submit(
+                task_id,
+                assessed.lead,
+                source_url,
+                normalized_weights,
+                max_attempts=max_attempts,
+                request_key=request_key,
+            )
+            return 202, {"run": self._research_run(run)}
         result = self._research_execution.execute(
-            task_id,
-            assessed.lead,
-            source_url,
-            {str(key): int(value) for key, value in weights.items()},
-            max_attempts=int(body.get("max_attempts", 2)),
+            task_id, assessed.lead, source_url, normalized_weights, max_attempts=max_attempts
         )
         return 200, {
             "run": self._research_run(result.run),

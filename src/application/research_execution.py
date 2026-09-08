@@ -29,12 +29,13 @@ class ResearchExecutionService:
         source_url: str,
         weights: dict[str, int],
         max_attempts: int = 2,
+        run: ResearchRun | None = None,
     ) -> ResearchExecutionResult:
         if self._tasks.get(task_id) is None:
             raise KeyError(f"Task not found: {task_id}")
         if max_attempts <= 0:
             raise ValueError("max_attempts must be positive")
-        run = ResearchRun.start(task_id, lead.domain)
+        run = run or ResearchRun.start(task_id, lead.domain)
         self._runs.save(run)
         last_error: Exception | None = None
         for _ in range(max_attempts):
