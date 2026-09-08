@@ -175,9 +175,27 @@ def _connect(database: str | Path) -> sqlite3.Connection:
             status TEXT NOT NULL,
             provider_message_id TEXT NOT NULL,
             error TEXT NOT NULL,
-            created_at TEXT NOT NULL
+            created_at TEXT NOT NULL,
+            request_key TEXT NOT NULL DEFAULT '',
+            body_hash TEXT NOT NULL DEFAULT ''
         )
         """
+    )
+    send_columns = {
+        row["name"]
+        for row in connection.execute("PRAGMA table_info(email_send_attempts)").fetchall()
+    }
+    if "request_key" not in send_columns:
+        connection.execute(
+            "ALTER TABLE email_send_attempts ADD COLUMN request_key TEXT NOT NULL DEFAULT ''"
+        )
+    if "body_hash" not in send_columns:
+        connection.execute(
+            "ALTER TABLE email_send_attempts ADD COLUMN body_hash TEXT NOT NULL DEFAULT ''"
+        )
+    connection.execute(
+        "CREATE UNIQUE INDEX IF NOT EXISTS email_send_attempts_request_key "
+        "ON email_send_attempts(draft_id, request_key) WHERE request_key <> ''"
     )
     connection.commit()
     return connection
@@ -742,13 +760,14 @@ class SQLiteEmailSendAttemptRepository:
                 """
                 INSERT INTO email_send_attempts (
                     id, draft_id, recipient_email, subject, status,
-                    provider_message_id, error, created_at
-                ) VALUES (?, ?, ?, ?, ?, ?, ?, ?)
+                    provider_message_id, error, created_at, request_key, body_hash
+                ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
                 """,
                 (
                     attempt.id, attempt.draft_id, attempt.recipient_email,
                     attempt.subject, attempt.status.value,
                     attempt.provider_message_id, attempt.error, attempt.created_at,
+                    attempt.request_key, attempt.body_hash,
                 ),
             )
 
@@ -765,6 +784,26 @@ class SQLiteEmailSendAttemptRepository:
                 status=EmailSendStatus(row["status"]),
                 provider_message_id=row["provider_message_id"],
                 error=row["error"], created_at=row["created_at"],
+                request_key=row["request_key"], body_hash=row["body_hash"],
             )
             for row in rows
         ]
+
+    def find_by_request_key(self, draft_id: str, request_key: str) -> EmailSendAttempt | None:
+        if not request_key:
+            return None
+        with _connect(self._database) as connection:
+            row = connection.execute(
+                "SELECT * FROM email_send_attempts WHERE draft_id = ? AND request_key = ?",
+                (draft_id, request_key),
+            ).fetchone()
+        if row is None:
+            return None
+        return EmailSendAttempt(
+            id=row["id"], draft_id=row["draft_id"],
+            recipient_email=row["recipient_email"], subject=row["subject"],
+            status=EmailSendStatus(row["status"]),
+            provider_message_id=row["provider_message_id"], error=row["error"],
+            created_at=row["created_at"], request_key=row["request_key"],
+            body_hash=row["body_hash"],
+        )

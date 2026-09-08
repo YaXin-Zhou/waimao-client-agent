@@ -20,6 +20,15 @@ class Attempts:
     def save(self, attempt):
         self.items.append(attempt)
 
+    def find_by_request_key(self, draft_id, request_key):
+        return next(
+            (
+                item for item in self.items
+                if item.draft_id == draft_id and item.request_key == request_key
+            ),
+            None,
+        )
+
 
 class FakeSender:
     def __init__(self):
@@ -71,3 +80,26 @@ def test_send_never_calls_provider_for_unapproved_draft():
 
     assert item.status is EmailDraftStatus.PENDING_REVIEW
     assert sender.calls == 0
+
+
+def test_same_send_request_is_reused_but_content_change_is_rejected():
+    item = approved_draft()
+    sender = FakeSender()
+    attempts = Attempts()
+    service = EmailSendService(Drafts(item), sender, attempts)
+    first = service.send(
+        item.id, SendPolicy(), True, item.recipient_email, item.subject, item.body,
+        request_key="send-1",
+    )
+
+    second = service.send(
+        item.id, SendPolicy(), True, item.recipient_email, item.subject, item.body,
+        request_key="send-1",
+    )
+    assert second == first
+    assert sender.calls == 1
+    with pytest.raises(ValueError, match="different content"):
+        service.send(
+            item.id, SendPolicy(), True, item.recipient_email, item.subject, "Changed",
+            request_key="send-1",
+        )

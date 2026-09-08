@@ -2,6 +2,7 @@
 
 from __future__ import annotations
 
+import hashlib
 from typing import Protocol
 
 from src.domain.email_send import EmailSendAttempt
@@ -26,10 +27,20 @@ class EmailSendService:
         recipient_email: str,
         subject: str,
         body: str,
+        request_key: str = "",
     ) -> EmailSendAttempt:
         draft = self._drafts.get(draft_id)
         if draft is None:
             raise KeyError(f"Draft not found: {draft_id}")
+        body_hash = hashlib.sha256(
+            f"{recipient_email}\0{subject}\0{body}".encode("utf-8")
+        ).hexdigest()
+        if request_key and hasattr(self._attempts, "find_by_request_key"):
+            existing = self._attempts.find_by_request_key(draft.id, request_key)
+            if existing is not None:
+                if existing.body_hash != body_hash:
+                    raise ValueError("send idempotency key was reused with different content")
+                return existing
         safety = check_send_safety(draft, policy)
         if not safety.allowed:
             raise ValueError("send blocked: " + "; ".join(safety.reasons))
@@ -43,12 +54,13 @@ class EmailSendService:
             provider_message_id = self._sender.send(draft)
         except Exception as error:
             attempt = EmailSendAttempt.failed(
-                draft.id, draft.recipient_email, draft.subject, str(error)
+                draft.id, draft.recipient_email, draft.subject, str(error), request_key, body_hash
             )
             self._attempts.save(attempt)
             raise
         attempt = EmailSendAttempt.sent(
-            draft.id, draft.recipient_email, draft.subject, provider_message_id
+            draft.id, draft.recipient_email, draft.subject, provider_message_id,
+            request_key, body_hash,
         )
         self._attempts.save(attempt)
         return attempt

@@ -23,19 +23,26 @@ class EmailSendAttempt:
     provider_message_id: str = ""
     error: str = ""
     created_at: str = ""
+    request_key: str = ""
+    body_hash: str = ""
 
     @classmethod
-    def sent(cls, draft_id, recipient_email, subject, provider_message_id):
+    def sent(
+        cls, draft_id, recipient_email, subject, provider_message_id,
+        request_key="", body_hash="",
+    ):
         return cls(
             str(uuid4()), draft_id, recipient_email, subject,
             EmailSendStatus.SENT, provider_message_id=provider_message_id,
             created_at=datetime.now(timezone.utc).isoformat(),
+            request_key=request_key, body_hash=body_hash,
         )
 
     @classmethod
-    def failed(cls, draft_id, recipient_email, subject, error):
+    def failed(cls, draft_id, recipient_email, subject, error, request_key="", body_hash=""):
         return cls(
             str(uuid4()), draft_id, recipient_email, subject,
             EmailSendStatus.FAILED, error=error,
             created_at=datetime.now(timezone.utc).isoformat(),
+            request_key=request_key, body_hash=body_hash,
         )

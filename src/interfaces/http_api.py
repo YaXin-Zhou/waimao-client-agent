@@ -290,6 +290,7 @@ class ApiApplication:
             draft_id, policy, bool(body.get("confirmed", False)),
             str(body.get("recipient_email", "")), str(body.get("subject", "")),
             str(body.get("body", "")),
+            str(body.get("idempotency_key", "")).strip(),
         )
         return 200, {"attempt": self._send_attempt(attempt), "sending_performed": True}
 
@@ -693,6 +694,7 @@ class ApiApplication:
             "provider_message_id": attempt.provider_message_id,
             "error": attempt.error,
             "created_at": attempt.created_at,
+            "request_key": attempt.request_key,
         }
 
     @staticmethod
