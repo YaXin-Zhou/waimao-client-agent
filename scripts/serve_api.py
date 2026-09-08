@@ -89,7 +89,7 @@ research_execution = (
     else None
 )
 research_queue = (
-    ResearchJobQueue(research_execution, research_run_repository)
+    ResearchJobQueue(research_execution, research_run_repository, lead_repository)
     if research_execution is not None
     else None
 )
@@ -116,6 +116,8 @@ email_send_service = EmailSendService(
     smtp_mailer or AliSmtpMailer(smtp_config),
     email_send_attempt_repository,
 )
+if research_queue is not None:
+    research_queue.recover()
 application = ApiApplication(
     task_repository,
     lead_repository,

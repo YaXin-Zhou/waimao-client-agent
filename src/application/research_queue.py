@@ -10,11 +10,14 @@ from src.domain.research_run import ResearchRun
 
 
 class ResearchJobQueue:
-    def __init__(self, execution: ResearchExecutionService, runs, max_workers: int = 2):
+    def __init__(
+        self, execution: ResearchExecutionService, runs, leads=None, max_workers: int = 2
+    ):
         if max_workers <= 0:
             raise ValueError("max_workers must be positive")
         self._execution = execution
         self._runs = runs
+        self._leads = leads
         self._executor = ThreadPoolExecutor(max_workers=max_workers)
         self._jobs: dict[str, Future] = {}
 
@@ -34,7 +37,10 @@ class ResearchJobQueue:
             raise KeyError(f"Task not found: {task_id}")
         if max_attempts <= 0:
             raise ValueError("max_attempts must be positive")
-        run = ResearchRun.start(task_id, lead.domain, request_key=request_key)
+        run = ResearchRun.start(
+            task_id, lead.domain, request_key=request_key, source_url=source_url,
+            weights=weights, max_attempts=max_attempts,
+        )
         self._runs.save(run)
         self._jobs[run.id] = self._executor.submit(
             self._run,
@@ -46,6 +52,31 @@ class ResearchJobQueue:
             max_attempts,
         )
         return run
+
+    def recover(self) -> int:
+        """进程启动时恢复持久化的 running 任务；找不到客户的任务转为失败。"""
+        if self._leads is None:
+            return 0
+        recovered = 0
+        for run in self._runs.list_running():
+            if run.id in self._jobs:
+                continue
+            assessed = next(
+                (
+                    item for item in self._leads.list_assessments(run.task_id)
+                    if item.lead.domain == run.domain
+                ),
+                None,
+            )
+            if assessed is None:
+                self._runs.save(run.fail("lead is no longer available for recovery"))
+                continue
+            self._jobs[run.id] = self._executor.submit(
+                self._run, run, run.task_id, assessed.lead, run.source_url,
+                dict(run.weights), run.max_attempts,
+            )
+            recovered += 1
+        return recovered
 
     def _run(self, run, task_id, lead, source_url, weights, max_attempts):
         try:

@@ -31,10 +31,20 @@ class ResearchRun:
     attempts: int = 0
     error: str = ""
     request_key: str = ""
+    source_url: str = ""
+    weights: tuple[tuple[str, int], ...] = ()
+    max_attempts: int = 2
 
     @classmethod
-    def start(cls, task_id: str, domain: str, request_key: str = "") -> "ResearchRun":
-        return cls(id=str(uuid4()), task_id=task_id, domain=domain, request_key=request_key)
+    def start(
+        cls, task_id: str, domain: str, request_key: str = "", source_url: str = "",
+        weights: dict[str, int] | None = None, max_attempts: int = 2,
+    ) -> "ResearchRun":
+        return cls(
+            id=str(uuid4()), task_id=task_id, domain=domain, request_key=request_key,
+            source_url=source_url, weights=tuple(sorted((weights or {}).items())),
+            max_attempts=max_attempts,
+        )
 
     def attempted(self) -> "ResearchRun":
         return replace(self, attempts=self.attempts + 1, step=ResearchRunStep.EXECUTING)

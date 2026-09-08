@@ -64,7 +64,10 @@ def _connect(database: str | Path) -> sqlite3.Connection:
             step TEXT NOT NULL DEFAULT 'queued',
             attempts INTEGER NOT NULL,
             error TEXT NOT NULL,
-            request_key TEXT NOT NULL DEFAULT ''
+            request_key TEXT NOT NULL DEFAULT '',
+            source_url TEXT NOT NULL DEFAULT '',
+            weights_json TEXT NOT NULL DEFAULT '{}',
+            max_attempts INTEGER NOT NULL DEFAULT 2
         )
         """
     )
@@ -79,6 +82,18 @@ def _connect(database: str | Path) -> sqlite3.Connection:
     if "request_key" not in columns:
         connection.execute(
             "ALTER TABLE research_runs ADD COLUMN request_key TEXT NOT NULL DEFAULT ''"
+        )
+    if "source_url" not in columns:
+        connection.execute(
+            "ALTER TABLE research_runs ADD COLUMN source_url TEXT NOT NULL DEFAULT ''"
+        )
+    if "weights_json" not in columns:
+        connection.execute(
+            "ALTER TABLE research_runs ADD COLUMN weights_json TEXT NOT NULL DEFAULT '{}'"
+        )
+    if "max_attempts" not in columns:
+        connection.execute(
+            "ALTER TABLE research_runs ADD COLUMN max_attempts INTEGER NOT NULL DEFAULT 2"
         )
     connection.execute(
         "CREATE UNIQUE INDEX IF NOT EXISTS research_runs_request_key "
@@ -369,8 +384,9 @@ class SQLiteResearchRunRepository:
             connection.execute(
                 """
                 INSERT INTO research_runs (
-                    id, task_id, domain, status, step, attempts, error, request_key
-                ) VALUES (?, ?, ?, ?, ?, ?, ?, ?)
+                    id, task_id, domain, status, step, attempts, error, request_key,
+                    source_url, weights_json, max_attempts
+                ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
                 ON CONFLICT(id) DO UPDATE SET
                     task_id=excluded.task_id,
                     domain=excluded.domain,
@@ -378,7 +394,10 @@ class SQLiteResearchRunRepository:
                     step=excluded.step,
                     attempts=excluded.attempts,
                     error=excluded.error,
-                    request_key=excluded.request_key
+                    request_key=excluded.request_key,
+                    source_url=excluded.source_url,
+                    weights_json=excluded.weights_json,
+                    max_attempts=excluded.max_attempts
                 """,
                 (
                     run.id,
@@ -389,6 +408,9 @@ class SQLiteResearchRunRepository:
                     run.attempts,
                     run.error,
                     run.request_key,
+                    run.source_url,
+                    json.dumps(dict(run.weights)),
+                    run.max_attempts,
                 ),
             )
 
@@ -396,7 +418,8 @@ class SQLiteResearchRunRepository:
         with _connect(self._database) as connection:
             row = connection.execute(
                 """
-                SELECT id, task_id, domain, status, step, attempts, error, request_key
+                SELECT id, task_id, domain, status, step, attempts, error, request_key,
+                       source_url, weights_json, max_attempts
                 FROM research_runs
                 WHERE id = ?
                 """,
@@ -413,13 +436,17 @@ class SQLiteResearchRunRepository:
             attempts=row["attempts"],
             error=row["error"],
             request_key=row["request_key"],
+            source_url=row["source_url"],
+            weights=tuple(json.loads(row["weights_json"]).items()),
+            max_attempts=row["max_attempts"],
         )
 
     def list_for_task(self, task_id: str) -> list[ResearchRun]:
         with _connect(self._database) as connection:
             rows = connection.execute(
                 """
-                SELECT id, task_id, domain, status, step, attempts, error, request_key
+                SELECT id, task_id, domain, status, step, attempts, error, request_key,
+                       source_url, weights_json, max_attempts
                 FROM research_runs
                 WHERE task_id = ?
                 ORDER BY rowid
@@ -436,6 +463,9 @@ class SQLiteResearchRunRepository:
                 attempts=row["attempts"],
                 error=row["error"],
                 request_key=row["request_key"],
+                source_url=row["source_url"],
+                weights=tuple(json.loads(row["weights_json"]).items()),
+                max_attempts=row["max_attempts"],
             )
             for row in rows
         ]
@@ -449,6 +479,14 @@ class SQLiteResearchRunRepository:
                 (task_id, request_key),
             ).fetchone()
         return self.get(row["id"]) if row else None
+
+    def list_running(self) -> list[ResearchRun]:
+        with _connect(self._database) as connection:
+            rows = connection.execute(
+                "SELECT id FROM research_runs WHERE status = ? ORDER BY rowid",
+                (ResearchRunStatus.RUNNING.value,),
+            ).fetchall()
+        return [run for row in rows if (run := self.get(row["id"])) is not None]
 
 
 class SQLiteEmailDraftRepository:
