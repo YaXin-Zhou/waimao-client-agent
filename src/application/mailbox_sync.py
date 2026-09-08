@@ -6,6 +6,7 @@ from dataclasses import dataclass
 from typing import Protocol
 from urllib.parse import urlparse
 
+from src.domain.audit_event import AuditEvent
 from src.domain.inbound_email import InboundEmail
 
 
@@ -30,9 +31,10 @@ class MailboxSyncResult:
 
 
 class MailboxSyncService:
-    def __init__(self, leads, repository: InboundEmailRepository):
+    def __init__(self, leads, repository: InboundEmailRepository, audit=None):
         self._leads = leads
         self._repository = repository
+        self._audit = audit
 
     def sync(self, task_id: str, reader: InboxReader) -> MailboxSyncResult:
         assessments = self._leads.list_assessments(task_id)
@@ -52,7 +54,19 @@ class MailboxSyncService:
             self._repository.save(associated)
             inserted += 1
             bounces += int(associated.is_bounce)
-        return MailboxSyncResult(fetched, inserted, duplicates, bounces)
+        result = MailboxSyncResult(fetched, inserted, duplicates, bounces)
+        if self._audit:
+            self._audit.save(
+                AuditEvent.status_change(
+                    "mailbox_sync", task_id, "mailbox_sync", "system",
+                    "running", "completed",
+                    note=(
+                        f"fetched={result.fetched}; inserted={result.inserted}; "
+                        f"duplicates={result.skipped_duplicates}; bounces={result.bounce_count}"
+                    ),
+                )
+            )
+        return result
 
 
 def _email_domain(value: str) -> str:

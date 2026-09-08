@@ -107,7 +107,10 @@ imap_config = AliImapConfig(
     mailbox=config_values.get("ALI_IMAP_MAILBOX", "INBOX"),
 )
 mailbox = AliImapMailbox(imap_config) if imap_config.configured else None
-mailbox_sync = MailboxSyncService(lead_repository, inbound_email_repository)
+audit_repository = SQLiteAuditEventRepository(DATABASE)
+mailbox_sync = MailboxSyncService(
+    lead_repository, inbound_email_repository, audit=audit_repository
+)
 reply_analysis_service = ReplyAnalysisService(inbound_email_repository, reply_analysis_repository)
 send_safety_service = SendSafetyService(SQLiteEmailDraftRepository(DATABASE))
 smtp_config = AliSmtpConfig(
@@ -131,7 +134,7 @@ application = ApiApplication(
     email_draft_repository,
     email_drafts=email_draft_service,
     translation=TranslationService(GoogleMachineTranslationProvider()),
-    audit=SQLiteAuditEventRepository(DATABASE),
+    audit=audit_repository,
     research_execution=research_execution,
     research_runs=research_run_repository,
     research_queue=research_queue,

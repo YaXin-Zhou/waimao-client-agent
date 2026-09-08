@@ -326,12 +326,22 @@ class ApiApplication:
         self._require_task(task_id)
         if self._inbound_emails is None:
             raise RuntimeError("inbound email repository is not configured")
-        return 200, {
-            "items": [
-                self._inbound_email(item)
-                for item in self._inbound_emails.list_for_task(task_id)
-            ]
-        }
+        messages = self._inbound_emails.list_for_task(task_id)
+        items = [self._inbound_email(item) for item in messages]
+        grouped = {}
+        for item in items:
+            grouped.setdefault(item["thread_key"], []).append(item)
+        threads = [
+            {
+                "thread_key": key,
+                "message_count": len(thread_items),
+                "latest_received_at": thread_items[-1]["received_at"],
+                "lead_domain": thread_items[-1]["lead_domain"],
+                "items": thread_items,
+            }
+            for key, thread_items in grouped.items()
+        ]
+        return 200, {"items": items, "threads": threads}
 
     def _analyze_replies(self, task_id: str) -> tuple[int, dict]:
         if self._reply_analysis is None:
