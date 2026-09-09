@@ -3,6 +3,7 @@
 from __future__ import annotations
 
 from concurrent.futures import ThreadPoolExecutor
+from threading import Lock
 
 from src.domain.discovery_run import DiscoveryRun, DiscoveryRunStep
 
@@ -16,20 +17,22 @@ class DiscoveryJobQueue:
         self._executor = ThreadPoolExecutor(max_workers=max_workers)
         self._max_pending = max_pending
         self._jobs = {}
+        self._lock = Lock()
 
     def submit(
         self, task_id: str, weights: dict[str, int], signals: dict[str, dict[str, int]]
     ) -> DiscoveryRun:
-        self._prune_finished()
-        if len(self._jobs) >= self._max_pending:
-            raise RuntimeError("discovery queue is full; retry later")
-        if self._acquisition._tasks.get(task_id) is None:
-            raise KeyError(f"Task not found: {task_id}")
-        run = DiscoveryRun.start(task_id)
-        self._runs.save(run)
-        self._jobs[run.id] = self._executor.submit(
-            self._run, run, task_id, weights, signals
-        )
+        with self._lock:
+            self._prune_finished()
+            if len(self._jobs) >= self._max_pending:
+                raise RuntimeError("discovery queue is full; retry later")
+            if self._acquisition._tasks.get(task_id) is None:
+                raise KeyError(f"Task not found: {task_id}")
+            run = DiscoveryRun.start(task_id)
+            self._runs.save(run)
+            self._jobs[run.id] = self._executor.submit(
+                self._run, run, task_id, weights, signals
+            )
         return run
 
     def _run(self, run, task_id, weights, signals):
