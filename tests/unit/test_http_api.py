@@ -544,6 +544,8 @@ def test_api_discovers_and_assesses_using_configured_search_provider():
         "website_count": 1,
         "public_email_count": 1,
         "website_evidence_count": 1,
+        "evidence_source_count": 1,
+        "multi_source_evidence_count": 0,
         "product_evidence_count": 1,
     }
 

@@ -681,6 +681,14 @@ class ApiApplication:
                 any(not is_search_source(url) for url, _excerpt in item.lead.sources)
                 for item in results
             ),
+            "evidence_source_count": sum(
+                len({url for url, _excerpt in item.lead.sources if not is_search_source(url)})
+                for item in results
+            ),
+            "multi_source_evidence_count": sum(
+                len({url for url, _excerpt in item.lead.sources if not is_search_source(url)}) >= 2
+                for item in results
+            ),
             "product_evidence_count": sum(
                 self._acquisition.has_product_evidence(item.lead, task.criteria)
                 for item in results

@@ -578,6 +578,7 @@ function DiscoveryFunnel({ summary }) {
     ['官网', funnel.website_count || 0],
     ['公开邮箱', funnel.public_email_count || 0],
     ['产品证据', funnel.product_evidence_count || 0],
+    ['多来源核验', funnel.multi_source_evidence_count || 0],
     ['合格', summary.qualified_count || 0],
   ]
   const note = !summary.candidate_count
