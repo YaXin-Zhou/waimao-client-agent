@@ -1,6 +1,7 @@
 import { useEffect, useMemo, useState } from 'react'
 import TaskCriteriaBuilder from './components/TaskCriteriaBuilder'
 import RuleEditorModal from './components/RuleEditorModal'
+import BrowserImportModal from './components/BrowserImportModal'
 
 const navItems = [
   ['users', '客户池'],
@@ -65,6 +66,8 @@ function App() {
   const [draftStatus, setDraftStatus] = useState('pending')
   const [showTask, setShowTask] = useState(false)
   const [showRuleEditor, setShowRuleEditor] = useState(false)
+  const [showBrowserImport, setShowBrowserImport] = useState(false)
+  const [browserImportLoading, setBrowserImportLoading] = useState(false)
   const [toast, setToast] = useState('')
   useEffect(() => {
     let cancelled = false
@@ -335,6 +338,25 @@ function App() {
       notify(`搜索完成：${summary?.qualified_count || 0}/${summary?.target_qualified_count || 0} 家合格，候选 ${summary?.candidate_count || loaded.length} 家${summary?.shortfall ? `，还缺 ${summary.shortfall} 家` : ''}`)
     } catch (error) { notify(error.message || '搜索失败，请检查外网或搜索适配器') } finally { setDiscoverLoading(false) }
   }
+  const importBrowserResults = async (records) => {
+    if (!remoteTaskId || browserImportLoading) return
+    setBrowserImportLoading(true)
+    try {
+      const response = await fetch(`/api/tasks/${remoteTaskId}/discover/import`, {
+        method: 'POST', headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ source_mode: 'browser', records, weights: {}, signals_by_domain: {} }),
+      })
+      const payload = await response.json()
+      if (!response.ok) throw new Error(payload.error || 'browser result import failed')
+      const loaded = (payload.items || []).map(mapRemoteLead)
+      setRemoteLeads(loaded)
+      setSelected(loaded.find((lead) => lead.qualified) || null)
+      setApiState(loaded.length ? 'connected' : 'empty')
+      setShowBrowserImport(false)
+      const summary = payload.summary
+      notify(`浏览器结果已导入：${summary?.qualified_count || 0}/${summary?.target_qualified_count || 0} 家合格，候选 ${summary?.candidate_count || loaded.length} 家`)
+    } catch (error) { notify(error.message || '导入失败，请检查结果格式') } finally { setBrowserImportLoading(false) }
+  }
   const syncMailbox = async () => {
     if (!remoteTaskId) return
     setReplyLoading(true)
@@ -471,7 +493,7 @@ function App() {
       <div className="content">
         <div className="page-heading"><div><h1>客户智能工作台</h1><p>从公开证据到可审核的下一步</p></div><button className="primary-button" onClick={() => setShowTask(true)}><Icon name="plus" size={19}/>新建获客任务</button></div>
         <div className={`data-notice ${apiState}`}><span />{apiState === 'loading' ? '正在读取本地任务数据…' : apiState === 'connected' ? '已连接本地 API · 当前显示持久化客户档案' : apiState === 'empty' ? 'API 已连接 · 当前没有可显示的真实客户档案' : 'API 连接失败 · 为避免混淆，已隐藏演示数据'}</div>
-        <div className="task-context"><label>当前获客任务<select value={remoteTaskId} onChange={selectTask} disabled={!remoteTasks.length}><option value="">暂无可选任务</option>{remoteTasks.map((task) => <option key={task.id} value={task.id}>{task.name}</option>)}</select></label>{remoteTaskConfig && <><span>任务条件：{remoteTaskConfig.criteria?.product || '未配置产品'} · {remoteTaskConfig.criteria?.countries?.join('、') || '未配置市场'} · 目标 {remoteTaskConfig.criteria?.qualified_lead_limit || 10} 家合格客户 · 业务 {remoteTaskConfig.criteria?.business_offerings?.length || 0} 项 · 背调字段 {remoteTaskConfig.criteria?.research_fields?.length || 0} 项</span><button type="button" className="text-button task-edit-button" onClick={() => setShowRuleEditor(true)}>编辑研究规则</button><button type="button" className="outline-button task-discover-button" disabled={discoverLoading} onClick={discoverLeads}>{discoverLoading ? '搜索中…' : '开始搜索客户'}</button></>}</div>
+        <div className="task-context"><label>当前获客任务<select value={remoteTaskId} onChange={selectTask} disabled={!remoteTasks.length}><option value="">暂无可选任务</option>{remoteTasks.map((task) => <option key={task.id} value={task.id}>{task.name}</option>)}</select></label>{remoteTaskConfig && <><span>任务条件：{remoteTaskConfig.criteria?.product || '未配置产品'} · {remoteTaskConfig.criteria?.countries?.join('、') || '未配置市场'} · 目标 {remoteTaskConfig.criteria?.qualified_lead_limit || 10} 家合格客户 · 业务 {remoteTaskConfig.criteria?.business_offerings?.length || 0} 项 · 背调字段 {remoteTaskConfig.criteria?.research_fields?.length || 0} 项</span><button type="button" className="text-button task-edit-button" onClick={() => setShowRuleEditor(true)}>编辑研究规则</button><button type="button" className="outline-button task-discover-button" disabled={discoverLoading} onClick={discoverLeads}>{discoverLoading ? '搜索中…' : '开始搜索客户'}</button><button type="button" className="outline-button task-discover-button" onClick={() => setShowBrowserImport(true)}>导入浏览器结果</button></>}</div>
         <section className="metric-row"><Metric icon="clipboard" label="待审核" value="—" note="统计接口尚未接入"/><Metric icon="users" label="高匹配客户" value="—" note="统计接口尚未接入"/><Metric icon="researching" label="本周新增" value="—" note="统计接口尚未接入"/></section>
         <ReplyCenter mailboxStatus={mailboxStatus} threads={mailThreads} analyses={replyAnalyses} followUpTasks={followUpTasks} loading={replyLoading} onTest={testMailbox} onSync={syncMailbox} onAnalyze={analyzeReplies} onGenerateDraft={generateReplyDraft} onFollowUpStatus={updateFollowUpStatus}/>
         <section className="workspace-grid">
@@ -483,6 +505,7 @@ function App() {
     {toast && <div className="toast"><span>✓</span>{toast}</div>}
     {showTask && <div className="modal-backdrop" onClick={() => setShowTask(false)}><form className="task-modal" onSubmit={createTask} onClick={(event) => event.stopPropagation()}><button type="button" className="modal-close" onClick={() => setShowTask(false)}>×</button><span className="modal-icon"><Icon name="plus"/></span><h2>新建获客任务</h2><p>定义目标产品、国家、客户类型和发件人资料，系统将按规则运行搜索与背调。</p><label>任务名称<input name="name" defaultValue="便携式太阳能发电机 · 欧洲渠道" required/></label><label>目标产品<input name="product" defaultValue="portable solar generator" required/></label><div className="modal-grid"><label>目标市场<select name="country" defaultValue="Germany"><option>Germany</option><option>France</option><option>Netherlands</option></select></label><label>客户类型<select name="customerType" defaultValue="Distributor"><option value="distributor">Distributor</option><option value="retailer">Retailer</option><option value="wholesaler">Wholesaler</option></select></label></div><TaskCriteriaBuilder/><div className="sender-config"><strong>发件人资料（可选）</strong><p>填写后用于生成新开发信；留空则继续使用占位符。</p><label>公司名称<input name="senderCompany" placeholder="例如：ABC Trading Co., Ltd." /></label><label>联系人姓名<input name="senderName" placeholder="例如：Li Ming" /></label><label>职位<input name="senderPosition" placeholder="例如：Sales Manager" /></label></div><button type="submit" className="primary-button full">创建任务草稿 <Icon name="arrow" size={16}/></button></form></div>}
     {showRuleEditor && remoteTaskConfig && <RuleEditorModal task={remoteTaskConfig} onClose={() => setShowRuleEditor(false)} onSave={saveCriteria}/>}
+    {showBrowserImport && <BrowserImportModal onClose={() => setShowBrowserImport(false)} onImport={importBrowserResults} loading={browserImportLoading}/>} 
   </div>
 }
 
