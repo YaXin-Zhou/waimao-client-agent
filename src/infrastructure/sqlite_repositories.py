@@ -119,6 +119,9 @@ def _connect(database: str | Path) -> sqlite3.Connection:
             reviewed_by TEXT NOT NULL,
             review_note TEXT NOT NULL
             ,kind TEXT NOT NULL DEFAULT 'outreach'
+            ,language TEXT NOT NULL DEFAULT 'English'
+            ,language_source TEXT NOT NULL DEFAULT 'fallback'
+            ,language_requires_review INTEGER NOT NULL DEFAULT 1
         )
         """
     )
@@ -129,6 +132,18 @@ def _connect(database: str | Path) -> sqlite3.Connection:
     if "kind" not in draft_columns:
         connection.execute(
             "ALTER TABLE email_drafts ADD COLUMN kind TEXT NOT NULL DEFAULT 'outreach'"
+        )
+    if "language" not in draft_columns:
+        connection.execute(
+            "ALTER TABLE email_drafts ADD COLUMN language TEXT NOT NULL DEFAULT 'English'"
+        )
+    if "language_source" not in draft_columns:
+        connection.execute(
+            "ALTER TABLE email_drafts ADD COLUMN language_source TEXT NOT NULL DEFAULT 'fallback'"
+        )
+    if "language_requires_review" not in draft_columns:
+        connection.execute(
+            "ALTER TABLE email_drafts ADD COLUMN language_requires_review INTEGER NOT NULL DEFAULT 1"
         )
     connection.execute(
         """
@@ -416,6 +431,7 @@ class SQLiteResearchRepository:
             "confidence": report.confidence,
             "evidence_url": report.evidence_url,
             "evidence_status": report.evidence_status.value,
+            "website_language": report.website_language,
         }
         with _connect(self._database) as connection:
             connection.execute(
@@ -445,6 +461,7 @@ class SQLiteResearchRepository:
             confidence=data["confidence"],
             evidence_url=data["evidence_url"],
             evidence_status=EvidenceStatus(data["evidence_status"]),
+            website_language=data.get("website_language", "unknown"),
         )
 
 
@@ -582,8 +599,8 @@ class SQLiteEmailDraftRepository:
                 INSERT INTO email_drafts (
                     id, task_id, lead_domain, recipient_email, subject, body,
                     evidence_urls_json, status, reviewed_by, review_note
-                    ,kind
-                ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+                    ,kind, language, language_source, language_requires_review
+                ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
                 ON CONFLICT(id) DO UPDATE SET
                     task_id=excluded.task_id,
                     lead_domain=excluded.lead_domain,
@@ -594,7 +611,9 @@ class SQLiteEmailDraftRepository:
                     status=excluded.status,
                     reviewed_by=excluded.reviewed_by,
                     review_note=excluded.review_note
-                    ,kind=excluded.kind
+                    ,kind=excluded.kind, language=excluded.language,
+                    language_source=excluded.language_source,
+                    language_requires_review=excluded.language_requires_review
                 """,
                 (
                     draft.id,
@@ -608,6 +627,9 @@ class SQLiteEmailDraftRepository:
                     draft.reviewed_by,
                     draft.review_note,
                     draft.kind.value,
+                    draft.language,
+                    draft.language_source,
+                    int(draft.language_requires_review),
                 ),
             )
 
@@ -630,6 +652,9 @@ class SQLiteEmailDraftRepository:
             reviewed_by=row["reviewed_by"],
             review_note=row["review_note"],
             kind=EmailDraftKind(row["kind"]),
+            language=row["language"],
+            language_source=row["language_source"],
+            language_requires_review=bool(row["language_requires_review"]),
         )
 
     def latest_for_lead(self, task_id: str, lead_domain: str) -> EmailDraft | None:

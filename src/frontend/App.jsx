@@ -384,6 +384,7 @@ function App() {
         product: form.get('product'),
         countries: [form.get('country')],
         customer_types: [form.get('customerType')],
+        language: form.get('language'),
         daily_limit: 10,
       },
       sender_profile: {

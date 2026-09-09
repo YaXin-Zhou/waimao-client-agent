@@ -63,6 +63,8 @@ def _config_values(path: Path) -> dict[str, str]:
 
 
 config_values = _config_values(ROOT / "config" / ".env")
+language_policy_path = ROOT / "config" / "language_policy.json"
+language_policy = json.loads(language_policy_path.read_text(encoding="utf-8")) if language_policy_path.exists() else {}
 task_repository = SQLiteTaskRepository(DATABASE)
 lead_repository = SQLiteLeadRepository(DATABASE)
 research_repository = SQLiteResearchRepository(DATABASE)
@@ -79,7 +81,10 @@ try:
 except (FileNotFoundError, ValueError):
     deepseek_provider = None
 try:
-    email_draft_service = EmailDraftService(deepseek_provider) if deepseek_provider else None
+    email_draft_service = (
+        EmailDraftService(deepseek_provider, language_policy.get("country_languages", {}))
+        if deepseek_provider else None
+    )
 except (FileNotFoundError, ValueError):
     email_draft_service = None
 research_execution = (

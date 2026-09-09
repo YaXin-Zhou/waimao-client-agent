@@ -509,7 +509,7 @@ class ApiApplication:
             customer_types=tuple(
                 str(item) for item in criteria_data.get("customer_types", [])
             ),
-            language=str(criteria_data.get("language", "English")),
+            language=str(criteria_data.get("language", "auto")),
             daily_limit=int(criteria_data.get("daily_limit", 10)),
             keywords=tuple(str(item) for item in criteria_data.get("keywords", [])),
         )
@@ -632,6 +632,7 @@ class ApiApplication:
             template,
             product,
             self._tasks.get(task_id).sender_profile,
+            self._tasks.get(task_id).criteria.language,
         )
         self._drafts.save(draft)
         return 201, self._draft(draft)
@@ -894,6 +895,9 @@ class ApiApplication:
             "reviewed_by": draft.reviewed_by,
             "review_note": draft.review_note,
             "kind": draft.kind.value,
+            "language": draft.language,
+            "language_source": draft.language_source,
+            "language_requires_review": draft.language_requires_review,
         }
 
     @staticmethod

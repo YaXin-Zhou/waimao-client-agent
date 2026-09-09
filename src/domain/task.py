@@ -27,7 +27,7 @@ class AcquisitionCriteria:
     countries: tuple[str, ...] = ()
     industries: tuple[str, ...] = ()
     customer_types: tuple[str, ...] = ()
-    language: str = "English"
+    language: str = "auto"
     daily_limit: int = 10
     keywords: tuple[str, ...] = ()
 

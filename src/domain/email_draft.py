@@ -32,6 +32,9 @@ class EmailDraft:
     reviewed_by: str = ""
     review_note: str = ""
     kind: EmailDraftKind = EmailDraftKind.OUTREACH
+    language: str = "English"
+    language_source: str = "fallback"
+    language_requires_review: bool = True
 
     @classmethod
     def create(
@@ -43,6 +46,9 @@ class EmailDraft:
         body: str,
         evidence_urls: tuple[str, ...] = (),
         kind: EmailDraftKind = EmailDraftKind.OUTREACH,
+        language: str = "English",
+        language_source: str = "fallback",
+        language_requires_review: bool = True,
     ) -> "EmailDraft":
         return cls(
             id=str(uuid4()),
@@ -53,6 +59,9 @@ class EmailDraft:
             body=body,
             evidence_urls=evidence_urls,
             kind=kind,
+            language=language,
+            language_source=language_source,
+            language_requires_review=language_requires_review,
         )
 
     def approve(self, reviewer: str) -> "EmailDraft":

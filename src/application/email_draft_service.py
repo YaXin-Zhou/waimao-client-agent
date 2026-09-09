@@ -5,6 +5,7 @@ from __future__ import annotations
 from typing import Protocol
 
 from src.domain.email_draft import EmailDraft
+from src.domain.email_language import resolve_language
 from src.domain.lead import CleanLead
 from src.domain.research import ResearchResult
 from src.domain.sender_profile import SenderProfile
@@ -15,8 +16,9 @@ class StructuredProvider(Protocol):
 
 
 class EmailDraftService:
-    def __init__(self, provider: StructuredProvider):
+    def __init__(self, provider: StructuredProvider, country_languages: dict[str, str] | None = None):
         self._provider = provider
+        self._country_languages = country_languages or {}
 
     def generate(
         self,
@@ -26,6 +28,7 @@ class EmailDraftService:
         template: str,
         product: str,
         sender_profile: SenderProfile | None = None,
+        requested_language: str = "auto",
     ) -> EmailDraft:
         if not lead.emails:
             raise ValueError("recipient email is required")
@@ -40,8 +43,14 @@ class EmailDraftService:
         sender_company, sender_name, sender_position = (
             sender_profile or SenderProfile()
         ).prompt_values()
+        decision = resolve_language(
+            requested_language,
+            research.country,
+            research.website_language,
+            self._country_languages,
+        )
         prompt = (
-            "Write a concise first-contact B2B email to the recipient company. "
+            f"Write a concise first-contact B2B email in {decision.language} to the recipient company. "
             "The recipient company is not the sender. Use [Our Company], [Your Name], "
             "or [Your Position] when sender details are not supplied. Use only the supplied facts. "
             "Do not invent prices, delivery times, certifications, partnerships, or buyer needs. "
@@ -50,6 +59,8 @@ class EmailDraftService:
             f"Business summary: {research.business_summary}\n"
             f"Products: {', '.join(research.products)}\n"
             f"Country: {research.country}\n"
+            f"Website language: {research.website_language}\n"
+            f"Language decision: {decision.language} (source: {decision.source})\n"
             f"Evidence URL: {research.evidence_url}\n"
             f"Sender company: {sender_company}\n"
             f"Sender name: {sender_name}\n"
@@ -70,4 +81,7 @@ class EmailDraftService:
             subject=subject.strip(),
             body=body.strip(),
             evidence_urls=(research.evidence_url,),
+            language=decision.language,
+            language_source=decision.source,
+            language_requires_review=decision.requires_review,
         )

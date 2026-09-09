@@ -31,3 +31,4 @@ class ResearchResult:
     confidence: float
     evidence_url: str
     evidence_status: EvidenceStatus
+    website_language: str = "unknown"

@@ -37,7 +37,8 @@ def research_company(
         "Return JSON with exactly these fields: business_summary (string), customer_type "
         "(one of distributor, wholesaler, retailer, manufacturer, consumer, "
         "service_provider, unknown), products (array of strings), country (string or unknown), "
-        "confidence (number 0 to 1).\n"
+        "confidence (number 0 to 1), website_language (English, Spanish, Russian, "
+        "German, French, Italian, Portuguese, Chinese, or unknown).\n"
         f"Company name: {lead.company_name}\nSource URL: {source_url}\n"
         f"Source text:\n{website_text}"
     )
@@ -65,4 +66,5 @@ def research_company(
             if len(website_text.strip()) >= 40 and confidence >= 0.5
             else EvidenceStatus.INSUFFICIENT
         ),
+        website_language=str(data.get("website_language", "unknown")),
     )

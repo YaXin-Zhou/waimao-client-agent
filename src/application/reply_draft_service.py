@@ -3,6 +3,7 @@
 from __future__ import annotations
 
 from src.domain.email_draft import EmailDraft, EmailDraftKind
+from src.domain.email_language import detect_reply_language
 from src.domain.inbound_email import InboundEmail
 from src.domain.lead import CleanLead
 from src.domain.reply_analysis import ReplyAnalysis, ReplyCategory
@@ -31,14 +32,16 @@ class ReplyDraftService:
         sender_company, sender_name, sender_position = (
             sender_profile or SenderProfile()
         ).prompt_values()
+        language = detect_reply_language(message.body)
         prompt = (
-            "Write a concise English B2B follow-up email replying to the customer. "
+            f"Write a concise {language} B2B follow-up email replying to the customer. "
             "Use only the supplied facts. Do not invent prices, delivery times, certifications, "
             "partnerships, stock, or commitments. Do not mention internal classification. "
             "Return JSON with exactly two string fields: subject and body. "
             f"Customer email: {message.from_email}\n"
             f"Customer subject: {message.subject}\n"
             f"Customer message: {message.body}\n"
+            f"Detected customer language: {language}\n"
             f"Reply category: {analysis.category}\n"
             f"Suggested action: {analysis.suggested_action}\n"
             f"Company: {lead.company_name}\n"
@@ -64,4 +67,7 @@ class ReplyDraftService:
             body=body.strip(),
             evidence_urls=(research.evidence_url,),
             kind=EmailDraftKind.REPLY,
+            language=language,
+            language_source="customer reply",
+            language_requires_review=False,
         )

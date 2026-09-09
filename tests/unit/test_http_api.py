@@ -83,7 +83,7 @@ class AuditEvents:
 
 
 class DraftGenerator:
-    def generate(self, task_id, lead, research, template, product, sender_profile=None):
+    def generate(self, task_id, lead, research, template, product, sender_profile=None, requested_language="auto"):
         return EmailDraft.create(
             task_id,
             lead.domain,
