@@ -169,7 +169,19 @@ function App() {
         if (!cancelled) {
           const runs = data.items || []
           setResearchRuns(runs)
-          if (runs.some((run) => run.status === 'running')) timer = window.setTimeout(loadRuns, 1200)
+          if (runs.some((run) => run.status === 'running')) {
+            timer = window.setTimeout(loadRuns, 1200)
+          } else if (runs.some((run) => ['succeeded', 'review_required'].includes(run.status))) {
+            const leadResponse = await fetch(`/api/tasks/${remoteTaskId}/leads`)
+            if (!leadResponse.ok) throw new Error('leads refresh request failed')
+            const leads = await leadResponse.json()
+            const loaded = (leads.items || []).map(mapRemoteLead)
+            if (!cancelled) {
+              setRemoteLeads(loaded)
+              setDiscoverySummary(leads.summary || null)
+              setSelected((current) => current ? loaded.find((lead) => lead.domain === current.domain) || current : loaded.find((lead) => lead.qualified) || null)
+            }
+          }
         }
       } catch {
         if (!cancelled) setResearchRuns([])
