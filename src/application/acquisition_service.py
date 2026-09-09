@@ -19,6 +19,7 @@ from src.domain.lead import (
     LeadStatus,
     clean_leads,
     is_credible_source_excerpt,
+    is_search_source,
     score_lead,
 )
 from src.domain.sender_profile import SenderProfile
@@ -99,7 +100,7 @@ class AcquisitionService:
         website_sources = tuple(
             source
             for source in lead.sources
-            if not self._is_search_source(source[0])
+            if not is_search_source(source[0])
         )
         searchable = " ".join(
             (
@@ -125,12 +126,6 @@ class AcquisitionService:
             if not markets or lead.country.lower() in markets:
                 signals["market_match"] = weights["market_match"]
         return signals
-
-    @staticmethod
-    def _is_search_source(source_url: str) -> bool:
-        """Search result pages discover candidates but do not prove business fit."""
-        host = (urlparse(source_url).hostname or "").lower().removeprefix("www.")
-        return host == "google.com.hk" or host.endswith("google.com") or host.endswith("bing.com")
 
     @staticmethod
     def _qualify(

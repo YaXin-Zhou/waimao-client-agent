@@ -139,6 +139,12 @@ def is_credible_source_excerpt(excerpt: str) -> bool:
     return True
 
 
+def is_search_source(source_url: str) -> bool:
+    """Search result pages are discovery provenance, not company evidence."""
+    host = (urlparse(source_url).hostname or "").lower().removeprefix("www.")
+    return host == "google.com.hk" or host.endswith("google.com") or host.endswith("bing.com")
+
+
 def _normalize_country(country: str) -> str:
     value = _normalize_text(country)
     return _COUNTRY_NAMES.get(value.upper(), value)

@@ -7,7 +7,7 @@ from typing import Protocol
 
 from src.application.research_service import research_company
 from src.application.research_signals import build_research_signals
-from src.domain.lead import CleanLead, LeadScore, score_lead
+from src.domain.lead import CleanLead, LeadScore, is_search_source, score_lead
 from src.domain.research import ResearchResult
 from src.domain.research_run import ResearchRunStep
 
@@ -63,8 +63,14 @@ class ResearchWorkflow:
         if progress:
             progress(ResearchRunStep.FETCHING)
         source_urls = tuple(
-            dict.fromkeys([source_url] + [url for url, _excerpt in lead.sources if url])
+            dict.fromkeys(
+                url
+                for url in [source_url] + [url for url, _excerpt in lead.sources if url]
+                if url and not is_search_source(url)
+            )
         )
+        if not source_urls:
+            raise ValueError("research source must be a public website page")
         documents = []
         for url in source_urls:
             try:

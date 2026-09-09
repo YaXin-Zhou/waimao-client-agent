@@ -23,6 +23,9 @@ Google 返回 JavaScript 页面时的真实搜索流程。两者都保存查询�
 获得可见结果后，通过统一的 `POST /api/tasks/{task_id}/discover/import` 入口导入，仍然经过同一
 套清洗、去重、评分和来源保存流程。
 
+搜索结果页仅作为候选发现来源保留；产品匹配、证据质量和 AI 背调引用只使用官网或其他
+公开业务页面。研究工作流会主动排除 Google/Bing 结果页，避免把搜索引擎摘要当成企业事实。
+
 ## 责任分配
 
 | 层 | 负责内容 |
@@ -32,7 +35,7 @@ Google 返回 JavaScript 页面时的真实搜索流程。两者都保存查询�
 | Domain | 定义清洗规则、评分规则和状态约束 |
 | Repository | 保存任务和评估结果 |
 | AcquisitionExecutionService | 编排任务状态、搜索调用、评估结果和失败恢复 |
-| Future Web Adapter | 官网访问、原始文本和来源证据 |
+| WebsiteFetcher | 官网访问、原始文本、公开邮箱和来源证据 |
 | Future AI Adapter | 背调、评分信号、开发信和回复分类建议 |
 
 ## 外部适配器必须提供的行为

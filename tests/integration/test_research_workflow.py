@@ -106,3 +106,34 @@ def test_workflow_fetches_lead_sources_and_preserves_the_successful_source_set()
 
     assert fetcher.urls == ["https://alpine.example/about", "https://alpine.example/team"]
     assert assessment.research.evidence_urls == tuple(fetcher.urls)
+
+
+def test_workflow_excludes_search_result_pages_from_research_evidence():
+    task = AcquisitionTask.create(
+        "Germany power leads",
+        AcquisitionCriteria(product="portable power station", countries=("Germany",)),
+    )
+    repository = FakeResearchRepository()
+    fetcher = MultiSourceFetcher()
+    lead = CleanLead(
+        "Alpine",
+        "alpine.example",
+        ("sales@alpine.example",),
+        "Germany",
+        "complete",
+        sources=(
+            ("https://www.google.com.hk/search?q=portable+power+station", "search"),
+            ("https://alpine.example/about", "about"),
+        ),
+    )
+    workflow = ResearchWorkflow(FakeTaskRepository(task), fetcher, FakeProvider(), repository)
+
+    assessment = workflow.run(
+        task.id,
+        lead,
+        "https://alpine.example/about",
+        weights={"product_match": 30},
+    )
+
+    assert fetcher.urls == ["https://alpine.example/about"]
+    assert assessment.research.evidence_urls == ("https://alpine.example/about",)
