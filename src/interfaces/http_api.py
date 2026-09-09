@@ -3,6 +3,8 @@
 from __future__ import annotations
 
 import json
+from dataclasses import replace
+from datetime import datetime, timezone
 from urllib.parse import unquote, urlsplit
 
 from src.application.acquisition_service import AcquisitionService
@@ -12,6 +14,7 @@ from src.domain.custom_research import (
     BusinessOffering,
     ResearchFieldDefinition,
     ResearchFieldType,
+    ResearchFieldValue,
 )
 from src.domain.email_send import EmailSendAttempt
 from src.domain.follow_up_task import FollowUpTask
@@ -164,6 +167,16 @@ class ApiApplication:
                 and segments[3] == "criteria"
             ):
                 return self._update_criteria(segments[2], self._parse_body(body))
+            if (
+                method == "PATCH"
+                and len(segments) == 7
+                and segments[:2] == ["api", "tasks"]
+                and segments[3] == "leads"
+                and segments[5] == "research-fields"
+            ):
+                return self._review_research_field(
+                    segments[2], segments[4], segments[6], self._parse_body(body)
+                )
             if (
                 method == "POST"
                 and len(segments) == 4
@@ -746,6 +759,35 @@ class ApiApplication:
             ),
         )
         return 200, self._task(self._acquisition.update_criteria(task_id, criteria))
+
+    def _review_research_field(
+        self, task_id: str, domain: str, field_key: str, body: dict
+    ) -> tuple[int, dict]:
+        report = self._research.get(task_id, domain)
+        if report is None:
+            raise KeyError(f"Research report not found: {domain}")
+        current = report.custom_fields.get(field_key)
+        if current is None:
+            raise KeyError(f"Research field not found: {field_key}")
+        status = str(body.get("status", "")).strip()
+        if status not in {"verified", "reported", "unknown", "conflicting"}:
+            raise ValueError("invalid research field review status")
+        if status == "verified" and not current.sources:
+            raise ValueError("verified research fields require source evidence")
+        reviewed = ResearchFieldValue(
+            value=str(body.get("value", current.value)),
+            status=status,
+            confidence=1.0 if status == "verified" else current.confidence,
+            sources=current.sources,
+            checked_at=datetime.now(timezone.utc).isoformat(),
+        )
+        fields = dict(report.custom_fields)
+        fields[field_key] = reviewed
+        updated = replace(report, custom_fields=fields)
+        if not hasattr(self._research, "save"):
+            raise RuntimeError("research repository is read-only")
+        self._research.save(task_id, domain, updated)
+        return 200, self._research_result(updated)
 
     def _transition_lead(self, task_id: str, domain: str, body: dict) -> tuple[int, dict]:
         try:

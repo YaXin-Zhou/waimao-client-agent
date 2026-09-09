@@ -42,8 +42,11 @@ class Leads:
 
 
 class Research:
+    def __init__(self):
+        self.report = None
+
     def get(self, task_id, domain):
-        return ResearchResult(
+        self.report = self.report or ResearchResult(
             "Alpine Energy",
             "Online distributor",
             CustomerType.DISTRIBUTOR,
@@ -67,6 +70,10 @@ class Research:
                 "https://alpine.example/contact",
             ),
         )
+        return self.report
+
+    def save(self, task_id, domain, report):
+        self.report = report
 
 
 class Drafts:
@@ -215,6 +222,22 @@ def test_api_returns_leads_and_research_detail():
         "https://alpine.example/contact"
     ]
     assert payload["draft"]["recipient_email"] == "sales@alpine.example"
+
+
+def test_api_reviews_custom_research_field_and_persists_status():
+    app, task, _, _ = make_app()
+
+    status, payload = app.handle(
+        "PATCH",
+        f"/api/tasks/{task.id}/leads/alpine.example/research-fields/buyer_role",
+        {"status": "verified", "value": "Strategic Sourcing Manager"},
+    )
+
+    assert status == 200
+    assert payload["custom_fields"]["buyer_role"]["status"] == "verified"
+    assert payload["custom_fields"]["buyer_role"]["value"] == "Strategic Sourcing Manager"
+    assert payload["custom_fields"]["buyer_role"]["confidence"] == 1.0
+    assert app._research.report.custom_fields["buyer_role"].status == "verified"
 
 
 def test_api_updates_existing_task_criteria():

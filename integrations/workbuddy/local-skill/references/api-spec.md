@@ -11,6 +11,7 @@ GET  /api/ready
 GET  /api/tasks
 GET  /api/tasks/{task_id}/leads
 GET  /api/tasks/{task_id}/leads/{domain}
+GET  /api/tasks/{task_id}/leads/{domain}/audit-events
 GET  /api/tasks/{task_id}/mail-threads
 GET  /api/tasks/{task_id}/reply-analyses
 ```
@@ -21,8 +22,16 @@ GET  /api/tasks/{task_id}/reply-analyses
 POST /api/tasks
 POST /api/tasks/{task_id}/leads/{domain}/research
 POST /api/tasks/{task_id}/leads/{domain}/draft
+PATCH /api/tasks/{task_id}/leads/{domain}/research-fields/{field_key}
+PATCH /api/tasks/{task_id}/criteria
 POST /api/tasks/{task_id}/mailbox/sync
 POST /api/tasks/{task_id}/reply-analyses/run
+```
+
+字段复核只允许人工确认后写回；确认状态必须有已保存的来源证据。对应 CLI 命令：
+
+```text
+python scripts/workbuddy_cli.py review-field <task_id> <domain> <field_key> --value "..."
 ```
 
 ## 邮件发送

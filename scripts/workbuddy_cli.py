@@ -35,6 +35,11 @@ def main() -> int:
     lead = sub.add_parser("lead")
     lead.add_argument("task_id")
     lead.add_argument("domain")
+    review_field = sub.add_parser("review-field")
+    review_field.add_argument("task_id")
+    review_field.add_argument("domain")
+    review_field.add_argument("field_key")
+    review_field.add_argument("--value", required=True)
     sync = sub.add_parser("sync-mailbox")
     sync.add_argument("task_id")
     analyze = sub.add_parser("analyze-replies")
@@ -49,6 +54,12 @@ def main() -> int:
         routes[args.command] = ("GET", f"/api/tasks/{args.task_id}/leads", None)
     elif args.command == "lead":
         routes[args.command] = ("GET", f"/api/tasks/{args.task_id}/leads/{args.domain}", None)
+    elif args.command == "review-field":
+        routes[args.command] = (
+            "PATCH",
+            f"/api/tasks/{args.task_id}/leads/{args.domain}/research-fields/{args.field_key}",
+            {"status": "verified", "value": args.value},
+        )
     elif args.command == "sync-mailbox":
         routes[args.command] = ("POST", f"/api/tasks/{args.task_id}/mailbox/sync", {})
     elif args.command == "analyze-replies":
