@@ -32,8 +32,9 @@ class BrowserSearchProvider:
     def search(self, criteria: AcquisitionCriteria) -> list[LeadRecord]:
         records: list[LeadRecord] = []
         seen: set[str] = set()
+        candidate_limit = criteria.candidate_limit or criteria.daily_limit
         for query in build_search_queries(criteria):
-            for result in self._search_page(query, criteria.daily_limit):
+            for result in self._search_page(query, candidate_limit):
                 website = result.website.strip()
                 if not website or website in seen:
                     continue
@@ -46,6 +47,6 @@ class BrowserSearchProvider:
                         source_excerpt=result.excerpt.strip(),
                     )
                 )
-                if len(records) >= criteria.daily_limit:
+                if len(records) >= candidate_limit:
                     return records
         return records

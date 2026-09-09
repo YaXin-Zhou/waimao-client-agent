@@ -559,6 +559,16 @@ class ApiApplication:
             customer_types=tuple(str(item) for item in criteria_data.get("customer_types", [])),
             language=str(criteria_data.get("language", "auto")),
             daily_limit=int(criteria_data.get("daily_limit", 10)),
+            qualified_lead_limit=int(
+                criteria_data.get("qualified_lead_limit", criteria_data.get("daily_limit", 10))
+            ),
+            minimum_qualification_score=int(criteria_data.get("minimum_qualification_score", 40)),
+            require_public_email=bool(criteria_data.get("require_public_email", True)),
+            candidate_limit=int(
+                criteria_data.get(
+                    "candidate_limit", max(50, int(criteria_data.get("daily_limit", 10)))
+                )
+            ),
             keywords=tuple(str(item) for item in criteria_data.get("keywords", [])),
             business_offerings=tuple(
                 BusinessOffering(
@@ -779,6 +789,14 @@ class ApiApplication:
             customer_types=tuple(str(item) for item in merged.get("customer_types", [])),
             language=str(merged.get("language", "auto")),
             daily_limit=int(merged.get("daily_limit", 10)),
+            qualified_lead_limit=int(
+                merged.get("qualified_lead_limit", merged.get("daily_limit", 10))
+            ),
+            minimum_qualification_score=int(merged.get("minimum_qualification_score", 40)),
+            require_public_email=bool(merged.get("require_public_email", True)),
+            candidate_limit=int(
+                merged.get("candidate_limit", max(50, int(merged.get("daily_limit", 10))))
+            ),
             keywords=tuple(str(item) for item in merged.get("keywords", [])),
             business_offerings=tuple(
                 BusinessOffering(
@@ -956,6 +974,11 @@ class ApiApplication:
             "criteria": {
                 "product": task.criteria.product,
                 "language": task.criteria.language,
+                "daily_limit": task.criteria.daily_limit,
+                "qualified_lead_limit": task.criteria.qualified_lead_limit,
+                "minimum_qualification_score": task.criteria.minimum_qualification_score,
+                "require_public_email": task.criteria.require_public_email,
+                "candidate_limit": task.criteria.candidate_limit,
                 "business_offerings": [item.to_dict() for item in task.criteria.business_offerings],
                 "research_fields": [item.to_dict() for item in task.criteria.research_fields],
             },
@@ -986,7 +1009,12 @@ class ApiApplication:
 
     @staticmethod
     def _assessed(item) -> dict:
-        return {"lead": ApiApplication._lead(item.lead), "score": ApiApplication._score(item.score)}
+        return {
+            "lead": ApiApplication._lead(item.lead),
+            "score": ApiApplication._score(item.score),
+            "qualified": item.qualified,
+            "rejection_reasons": list(item.rejection_reasons),
+        }
 
     @staticmethod
     def _research_result(report) -> dict:

@@ -96,6 +96,31 @@ def test_service_discovers_candidates_through_replaceable_provider():
     assert results[0].score.total == 30
 
 
+def test_service_enriches_automatic_search_with_real_public_website_emails():
+    class Search:
+        def search(self, criteria):
+            return [LeadRecord("Alpine", "https://alpine.example", "", "Germany")]
+
+    tasks = InMemoryTaskRepository()
+    leads = InMemoryLeadRepository()
+    service = AcquisitionService(
+        tasks,
+        leads,
+        search_provider=Search(),
+        website_reader=ContactFetcher(),
+    )
+    task = service.create_task(
+        "Website enrichment",
+        AcquisitionCriteria(product="portable power station", minimum_qualification_score=0),
+    )
+
+    results = service.discover_and_assess(task.id, {}, {})
+
+    assert results[0].lead.emails == ("sales@alpine.example",)
+    assert results[0].qualified
+    assert results[0].lead.sources[-1][0] == "https://alpine.example"
+
+
 def test_service_updates_configurable_criteria_without_recreating_task():
     service = AcquisitionService(InMemoryTaskRepository(), InMemoryLeadRepository())
     task = service.create_task("EU outdoor leads", AcquisitionCriteria(product="old service"))
@@ -141,3 +166,38 @@ def test_service_discovers_public_contacts_and_preserves_source_evidence():
         "https://alpine.example",
         "Contact sales@alpine.example",
     )
+
+
+def test_service_keeps_only_qualified_leads_marked_and_records_rejection_reasons():
+    service = AcquisitionService(InMemoryTaskRepository(), InMemoryLeadRepository())
+    task = service.create_task(
+        "Qualified leads",
+        AcquisitionCriteria(
+            product="portable power station",
+            qualified_lead_limit=1,
+            minimum_qualification_score=40,
+            require_public_email=True,
+            candidate_limit=5,
+        ),
+    )
+
+    results = service.assess_leads(
+        task.id,
+        [
+            LeadRecord("Strong Supply", "https://strong.example", "sales@strong.example"),
+            LeadRecord("No Email", "https://no-email.example", ""),
+            LeadRecord("Low Score", "https://low-score.example", "info@low-score.example"),
+        ],
+        weights={"fit": 60},
+        signals_by_domain={
+            "strong.example": {"fit": 55},
+            "no-email.example": {"fit": 60},
+            "low-score.example": {"fit": 20},
+        },
+    )
+
+    assert [item.lead.domain for item in results if item.qualified] == ["strong.example"]
+    no_email = next(item for item in results if item.lead.domain == "no-email.example")
+    low_score = next(item for item in results if item.lead.domain == "low-score.example")
+    assert "missing_public_email" in no_email.rejection_reasons
+    assert "score_below_threshold" in low_score.rejection_reasons

@@ -160,6 +160,9 @@ acquisition_service = AcquisitionService(
     lead_repository,
     search_provider=search_provider,
     audit_repository=audit_repository,
+    website_reader=WebsiteFetcher(
+        timeout=int(config_values.get("WEBSITE_FETCH_TIMEOUT_SECONDS", "15"))
+    ),
 )
 application = ApiApplication(
     task_repository,
@@ -170,6 +173,9 @@ application = ApiApplication(
     translation=TranslationService(GoogleMachineTranslationProvider()),
     audit=audit_repository,
     acquisition=acquisition_service,
+    website_reader=WebsiteFetcher(
+        timeout=int(config_values.get("WEBSITE_FETCH_TIMEOUT_SECONDS", "15"))
+    ),
     research_execution=research_execution,
     research_runs=research_run_repository,
     research_queue=research_queue,

@@ -263,6 +263,10 @@ class SQLiteTaskRepository:
             "customer_types": task.criteria.customer_types,
             "language": task.criteria.language,
             "daily_limit": task.criteria.daily_limit,
+            "qualified_lead_limit": task.criteria.qualified_lead_limit,
+            "minimum_qualification_score": task.criteria.minimum_qualification_score,
+            "require_public_email": task.criteria.require_public_email,
+            "candidate_limit": task.criteria.candidate_limit,
             "keywords": task.criteria.keywords,
             "business_offerings": [item.to_dict() for item in task.criteria.business_offerings],
             "research_fields": [item.to_dict() for item in task.criteria.research_fields],
@@ -301,6 +305,12 @@ class SQLiteTaskRepository:
             customer_types=tuple(criteria_data["customer_types"]),
             language=criteria_data["language"],
             daily_limit=criteria_data["daily_limit"],
+            qualified_lead_limit=criteria_data.get(
+                "qualified_lead_limit", criteria_data["daily_limit"]
+            ),
+            minimum_qualification_score=criteria_data.get("minimum_qualification_score", 0),
+            require_public_email=bool(criteria_data.get("require_public_email", False)),
+            candidate_limit=criteria_data.get("candidate_limit", criteria_data["daily_limit"]),
             keywords=tuple(criteria_data.get("keywords", [])),
             business_offerings=tuple(
                 BusinessOffering(
@@ -373,6 +383,8 @@ class SQLiteLeadRepository:
                                 "flags": result.lead.flags,
                                 "sources": result.lead.sources,
                                 "status": result.lead.status.value,
+                                "qualified": result.qualified,
+                                "rejection_reasons": result.rejection_reasons,
                             }
                         ),
                         json.dumps(
@@ -419,6 +431,8 @@ class SQLiteLeadRepository:
                         priority=score_data["priority"],
                         breakdown=score_data["breakdown"],
                     ),
+                    qualified=bool(lead_data.get("qualified", False)),
+                    rejection_reasons=tuple(lead_data.get("rejection_reasons", [])),
                 )
             )
         return results

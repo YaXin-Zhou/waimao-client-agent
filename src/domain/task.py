@@ -34,6 +34,11 @@ class AcquisitionCriteria:
     customer_types: tuple[str, ...] = ()
     language: str = "auto"
     daily_limit: int = 10
+    qualified_lead_limit: int = 10
+    minimum_qualification_score: int = 40
+    require_public_email: bool = True
+    # 搜索候选上限；未配置时沿用 daily_limit，接口层可显式扩大候选池。
+    candidate_limit: int | None = None
     keywords: tuple[str, ...] = ()
     business_offerings: tuple[BusinessOffering, ...] = ()
     research_fields: tuple[ResearchFieldDefinition, ...] = ()
@@ -43,6 +48,12 @@ class AcquisitionCriteria:
             raise ValueError("product is required")
         if self.daily_limit <= 0:
             raise ValueError("daily_limit must be positive")
+        if self.qualified_lead_limit <= 0:
+            raise ValueError("qualified_lead_limit must be positive")
+        if self.minimum_qualification_score < 0:
+            raise ValueError("minimum_qualification_score must not be negative")
+        if self.candidate_limit is not None and self.candidate_limit < self.qualified_lead_limit:
+            raise ValueError("candidate_limit must cover qualified_lead_limit")
         validate_unique_keys(self.business_offerings)
         validate_unique_keys(self.research_fields)
 

@@ -3,6 +3,7 @@
 from __future__ import annotations
 
 from dataclasses import dataclass, replace
+from urllib.parse import urlparse
 
 from src.application.ports import (
     AuditEventRepository,
@@ -20,6 +21,8 @@ from src.domain.task import AcquisitionCriteria, AcquisitionTask, TaskStatus
 class AssessedLead:
     lead: CleanLead
     score: LeadScore
+    qualified: bool = False
+    rejection_reasons: tuple[str, ...] = ()
 
 
 class AcquisitionService:
@@ -29,11 +32,13 @@ class AcquisitionService:
         lead_repository: LeadRepository,
         search_provider: SearchProvider | None = None,
         audit_repository: AuditEventRepository | None = None,
+        website_reader=None,
     ):
         self._tasks = task_repository
         self._leads = lead_repository
         self._search = search_provider
         self._audit = audit_repository
+        self._website_reader = website_reader
 
     def create_task(
         self,
@@ -62,8 +67,58 @@ class AcquisitionService:
             )
             for lead in cleaned
         ]
-        self._leads.save_assessments(task_id, results)
-        return results
+        task = self._tasks.get(task_id)
+        assert task is not None
+        qualified = self._qualify(results, task.criteria)
+        self._leads.save_assessments(task_id, qualified)
+        return qualified
+
+    @staticmethod
+    def _qualify(
+        results: list[AssessedLead], criteria: AcquisitionCriteria
+    ) -> list[AssessedLead]:
+        """按任务配置筛选可交付客户，同时保留所有候选及淘汰原因。"""
+        evaluated: list[AssessedLead] = []
+        for item in results:
+            reasons: list[str] = []
+            if not item.lead.domain:
+                reasons.append("missing_website")
+            if criteria.require_public_email and not item.lead.emails:
+                reasons.append("missing_public_email")
+            if item.score.total < criteria.minimum_qualification_score:
+                reasons.append("score_below_threshold")
+            if "conflicting_country" in item.lead.flags:
+                reasons.append("conflicting_country")
+            evaluated.append(
+                replace(
+                    item,
+                    qualified=not reasons,
+                    rejection_reasons=tuple(dict.fromkeys(reasons)),
+                )
+            )
+
+        ranked = sorted(
+            (item for item in evaluated if item.qualified),
+            key=lambda item: item.score.total,
+            reverse=True,
+        )
+        selected_domains = {item.lead.domain for item in ranked[: criteria.qualified_lead_limit]}
+        return [
+            replace(
+                item,
+                qualified=item.lead.domain in selected_domains,
+                rejection_reasons=(
+                    item.rejection_reasons
+                    if item.lead.domain in selected_domains
+                    else tuple(
+                        dict.fromkeys(
+                            item.rejection_reasons + ("qualified_quota_exceeded",)
+                        )
+                    )
+                ),
+            )
+            for item in evaluated
+        ]
 
     def list_leads(self, task_id: str) -> list[AssessedLead]:
         if self._tasks.get(task_id) is None:
@@ -107,7 +162,10 @@ class AcquisitionService:
                 record,
             ]
         )[0]
-        result = AssessedLead(replace(updated, status=assessed.lead.status), assessed.score)
+        result = self._qualify(
+            [AssessedLead(replace(updated, status=assessed.lead.status), assessed.score)],
+            self._tasks.get(task_id).criteria,  # type: ignore[union-attr]
+        )[0]
         self._leads.save_assessments(
             task_id,
             [item if item.lead.domain != domain else result for item in self.list_leads(task_id)],
@@ -154,7 +212,10 @@ class AcquisitionService:
             for item in public_emails
         )
         updated_lead = replace(clean_leads(records)[0], status=assessed.lead.status)
-        result = AssessedLead(updated_lead, assessed.score)
+        result = self._qualify(
+            [AssessedLead(updated_lead, assessed.score)],
+            self._tasks.get(task_id).criteria,  # type: ignore[union-attr]
+        )[0]
         self._leads.save_assessments(
             task_id,
             [item if item.lead.domain != domain else result for item in self.list_leads(task_id)],
@@ -239,4 +300,35 @@ class AcquisitionService:
         if self._search is None:
             raise RuntimeError("Search provider is not configured")
         records = self._search.search(task.criteria)
+        records = self._enrich_search_records(records)
         return self.assess_leads(task_id, records, weights, signals_by_domain)
+
+    def _enrich_search_records(self, records: list[LeadRecord]) -> list[LeadRecord]:
+        """从候选官网提取公开邮箱；失败时保留原始候选，不猜测联系方式。"""
+        if self._website_reader is None:
+            return records
+        enriched: list[LeadRecord] = []
+        fetched: set[str] = set()
+        for record in records:
+            enriched.append(record)
+            parsed = urlparse(record.website.strip())
+            domain = (parsed.hostname or "").lower().removeprefix("www.")
+            if not domain or domain in fetched:
+                continue
+            fetched.add(domain)
+            try:
+                document = self._website_reader.fetch(record.website.strip())
+            except Exception:
+                continue
+            for public_email in getattr(document, "public_emails", ()):
+                enriched.append(
+                    LeadRecord(
+                        company_name=record.company_name,
+                        website=record.website,
+                        email=public_email.address,
+                        country=record.country,
+                        source_url=public_email.source_url,
+                        source_excerpt=public_email.excerpt,
+                    )
+                )
+        return enriched

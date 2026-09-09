@@ -98,7 +98,7 @@ function App() {
         const loaded = (data.items || []).map(mapRemoteLead)
         if (!cancelled) {
           setRemoteLeads(loaded)
-          setSelected(loaded[0] || null)
+          setSelected(loaded.find((lead) => lead.qualified) || null)
           setApiState(loaded.length ? 'connected' : 'empty')
         }
       } catch {
@@ -174,7 +174,8 @@ function App() {
       .catch(() => {})
     return () => { cancelled = true }
   }, [researchRuns, remoteTaskId, selected?.domain])
-  const displayLeads = remoteLeads
+  // 候选池仍完整保留在本地数据库；工作台只展示达到交付门槛的客户。
+  const displayLeads = remoteLeads.filter((lead) => lead.qualified)
   const filteredLeads = useMemo(() => displayLeads.filter((lead) => `${lead.name} ${lead.country} ${lead.type}`.toLowerCase().includes(query.toLowerCase())), [displayLeads, query])
   const activeLead = selected ? { ...selected, type: selectedResearch ? customerTypeLabel(selectedResearch.customer_type) : selected.type, detail: selectedResearch?.business_summary || selected.detail, research: selectedResearch, draft: selectedDraft, auditEvents: selectedLeadAudit, researchRun: researchRuns.find((run) => run.domain === selected.domain), isRemote: true } : null
 
@@ -326,7 +327,7 @@ function App() {
       if (!response.ok) throw new Error(payload.error || 'lead discovery failed')
       const loaded = (payload.items || []).map(mapRemoteLead)
       setRemoteLeads(loaded)
-      setSelected(loaded[0] || null)
+      setSelected(loaded.find((lead) => lead.qualified) || null)
       setApiState(loaded.length ? 'connected' : 'empty')
       notify(`搜索完成：发现 ${loaded.length} 条候选客户，已进入客户池`)
     } catch (error) { notify(error.message || '搜索失败，请检查外网或搜索适配器') } finally { setDiscoverLoading(false) }
@@ -414,6 +415,10 @@ function App() {
         customer_types: [form.get('customerType')],
         language: form.get('language') || 'English',
         daily_limit: 10,
+        qualified_lead_limit: 10,
+        candidate_limit: 50,
+        minimum_qualification_score: 40,
+        require_public_email: true,
         business_offerings: JSON.parse(form.get('business_offerings') || '[]'),
         research_fields: JSON.parse(form.get('research_fields') || '[]'),
       },
@@ -463,7 +468,7 @@ function App() {
       <div className="content">
         <div className="page-heading"><div><h1>客户智能工作台</h1><p>从公开证据到可审核的下一步</p></div><button className="primary-button" onClick={() => setShowTask(true)}><Icon name="plus" size={19}/>新建获客任务</button></div>
         <div className={`data-notice ${apiState}`}><span />{apiState === 'loading' ? '正在读取本地任务数据…' : apiState === 'connected' ? '已连接本地 API · 当前显示持久化客户档案' : apiState === 'empty' ? 'API 已连接 · 当前没有可显示的真实客户档案' : 'API 连接失败 · 为避免混淆，已隐藏演示数据'}</div>
-        <div className="task-context"><label>当前获客任务<select value={remoteTaskId} onChange={selectTask} disabled={!remoteTasks.length}><option value="">暂无可选任务</option>{remoteTasks.map((task) => <option key={task.id} value={task.id}>{task.name}</option>)}</select></label>{remoteTaskConfig && <><span>任务条件：{remoteTaskConfig.criteria?.product || '未配置产品'} · {remoteTaskConfig.criteria?.countries?.join('、') || '未配置市场'} · 业务 {remoteTaskConfig.criteria?.business_offerings?.length || 0} 项 · 背调字段 {remoteTaskConfig.criteria?.research_fields?.length || 0} 项</span><button type="button" className="text-button task-edit-button" onClick={() => setShowRuleEditor(true)}>编辑研究规则</button><button type="button" className="outline-button task-discover-button" disabled={discoverLoading} onClick={discoverLeads}>{discoverLoading ? '搜索中…' : '开始搜索客户'}</button></>}</div>
+        <div className="task-context"><label>当前获客任务<select value={remoteTaskId} onChange={selectTask} disabled={!remoteTasks.length}><option value="">暂无可选任务</option>{remoteTasks.map((task) => <option key={task.id} value={task.id}>{task.name}</option>)}</select></label>{remoteTaskConfig && <><span>任务条件：{remoteTaskConfig.criteria?.product || '未配置产品'} · {remoteTaskConfig.criteria?.countries?.join('、') || '未配置市场'} · 目标 {remoteTaskConfig.criteria?.qualified_lead_limit || 10} 家合格客户 · 业务 {remoteTaskConfig.criteria?.business_offerings?.length || 0} 项 · 背调字段 {remoteTaskConfig.criteria?.research_fields?.length || 0} 项</span><button type="button" className="text-button task-edit-button" onClick={() => setShowRuleEditor(true)}>编辑研究规则</button><button type="button" className="outline-button task-discover-button" disabled={discoverLoading} onClick={discoverLeads}>{discoverLoading ? '搜索中…' : '开始搜索客户'}</button></>}</div>
         <section className="metric-row"><Metric icon="clipboard" label="待审核" value="—" note="统计接口尚未接入"/><Metric icon="users" label="高匹配客户" value="—" note="统计接口尚未接入"/><Metric icon="researching" label="本周新增" value="—" note="统计接口尚未接入"/></section>
         <ReplyCenter mailboxStatus={mailboxStatus} threads={mailThreads} analyses={replyAnalyses} followUpTasks={followUpTasks} loading={replyLoading} onTest={testMailbox} onSync={syncMailbox} onAnalyze={analyzeReplies} onGenerateDraft={generateReplyDraft} onFollowUpStatus={updateFollowUpStatus}/>
         <section className="workspace-grid">
@@ -486,13 +491,15 @@ function mapRemoteLead(item) {
     flag: '·',
     type: 'Unknown',
     score: item.score?.total || 0,
-    status: lead.quality === 'complete' ? 'evidence' : 'review',
+    status: item.qualified ? (lead.quality === 'complete' ? 'evidence' : 'review') : 'review',
     workflowStatus: lead.status || 'new',
     detail: '已从本地持久化客户档案读取，等待更多背调字段接入。',
     email: lead.emails?.[0] || '未发现公开邮箱',
     website: lead.website || `https://${lead.domain}`,
     domain: lead.domain,
     isRemote: true,
+    qualified: Boolean(item.qualified),
+    rejectionReasons: item.rejection_reasons || [],
   }
 }
 

@@ -73,6 +73,7 @@ class GoogleSearchProvider:
     def search(self, criteria: AcquisitionCriteria) -> list[LeadRecord]:
         results: list[LeadRecord] = []
         seen_urls: set[str] = set()
+        candidate_limit = criteria.candidate_limit or criteria.daily_limit
         for query in build_search_queries(criteria):
             request = Request(
                 f"https://{self._host}/search?q={quote_plus(query)}&num={self._max_results}",
@@ -104,7 +105,7 @@ class GoogleSearchProvider:
                         source_excerpt=f"Google result for: {query}",
                     )
                 )
-                if len(results) >= criteria.daily_limit:
+                if len(results) >= candidate_limit:
                     return results
         return results
 
