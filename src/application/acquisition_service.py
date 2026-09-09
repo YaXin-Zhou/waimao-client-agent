@@ -96,11 +96,16 @@ class AcquisitionService:
         if task is None:
             return {}
         criteria = task.criteria
+        website_sources = tuple(
+            source
+            for source in lead.sources
+            if not self._is_search_source(source[0])
+        )
         searchable = " ".join(
             (
                 lead.company_name,
                 lead.domain,
-                *(source[1] for source in lead.sources),
+                *(source[1] for source in website_sources),
             )
         ).lower()
         configured_terms = tuple(
@@ -113,13 +118,19 @@ class AcquisitionService:
             signals["product_match"] = weights["product_match"]
         if "email_quality" in weights and lead.emails:
             signals["email_quality"] = weights["email_quality"]
-        if "evidence_quality" in weights and lead.sources:
+        if "evidence_quality" in weights and website_sources:
             signals["evidence_quality"] = weights["evidence_quality"]
         if "market_match" in weights and lead.country:
             markets = {value.strip().lower() for value in criteria.countries if value.strip()}
             if not markets or lead.country.lower() in markets:
                 signals["market_match"] = weights["market_match"]
         return signals
+
+    @staticmethod
+    def _is_search_source(source_url: str) -> bool:
+        """Search result pages discover candidates but do not prove business fit."""
+        host = (urlparse(source_url).hostname or "").lower().removeprefix("www.")
+        return host == "google.com.hk" or host.endswith("google.com") or host.endswith("bing.com")
 
     @staticmethod
     def _qualify(

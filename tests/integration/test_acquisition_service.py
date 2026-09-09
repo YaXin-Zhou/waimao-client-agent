@@ -121,6 +121,31 @@ def test_derived_product_signal_requires_candidate_source_text():
     assert result.score.total == 0
 
 
+def test_derived_signals_ignore_search_result_page_as_business_evidence():
+    service = AcquisitionService(InMemoryTaskRepository(), InMemoryLeadRepository())
+    task = service.create_task(
+        "Search source boundary",
+        AcquisitionCriteria(product="portable solar generator"),
+    )
+
+    result = service.assess_leads(
+        task.id,
+        [
+            LeadRecord(
+                "Portable Apps",
+                "https://portableapps.example",
+                "sales@portableapps.example",
+                source_url="https://www.google.com.hk/search?q=portable+solar+generator",
+                source_excerpt="Portable solar generator results",
+            )
+        ],
+        weights={"product_match": 30, "evidence_quality": 5},
+        signals_by_domain={},
+    )[0]
+
+    assert result.score.breakdown == {"product_match": 0, "evidence_quality": 0}
+
+
 def test_service_enriches_automatic_search_with_real_public_website_emails():
     class Search:
         def search(self, criteria):
