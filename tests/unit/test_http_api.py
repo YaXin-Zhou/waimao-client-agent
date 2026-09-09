@@ -1,9 +1,13 @@
 import json
 
 from src.application.acquisition_service import AssessedLead
+from src.application.reply_analysis import classify_inbound
+from src.application.reply_analysis_service import ReplyAnalysisService
+from src.application.reply_draft_service import ReplyDraftService
 from src.domain.audit_event import AuditEvent
 from src.domain.email_draft import EmailDraft
 from src.domain.lead import CleanLead, LeadScore
+from src.domain.inbound_email import InboundEmail
 from src.domain.research import CustomerType, EvidenceStatus, ResearchResult
 from src.domain.research_run import ResearchRun
 from src.domain.task import AcquisitionCriteria, AcquisitionTask, TaskStatus
@@ -88,6 +92,33 @@ class DraftGenerator:
             "Generated body",
             (research.evidence_url,),
         )
+
+
+class InboundMessages:
+    def __init__(self, message):
+        self.message = message
+
+    def get_by_message_id(self, message_id):
+        return self.message if message_id == self.message.message_id else None
+
+    def list_for_task(self, task_id):
+        return [self.message]
+
+
+class ReplyAnalyses:
+    def __init__(self, analysis):
+        self.analysis = analysis
+
+    def get_by_message_id(self, message_id):
+        return self.analysis if message_id == self.analysis.message_id else None
+
+    def list_for_task(self, task_id):
+        return [self.analysis]
+
+
+class ReplyDraftProvider:
+    def generate_json(self, prompt):
+        return {"subject": "Re: Your price request", "body": "Thank you. We will prepare the requested information."}
 
 
 class Translation:
@@ -406,6 +437,31 @@ def test_api_generates_and_persists_reviewable_draft():
     assert payload["status"] == "pending_review"
     assert payload["recipient_email"] == "sales@alpine.example"
     assert app._drafts.draft.id == payload["id"]
+
+
+def test_api_generates_reply_draft_from_analyzed_customer_message():
+    app, task, _, _ = make_app()
+    message = InboundEmail.create(
+        "9", "<customer-reply@example>", "", (), "buyer@alpine.example",
+        ("sales@alpine.example",), "Re: quote", "Please send your price.",
+        "2026-09-09T10:00:00+00:00", task.id, "alpine.example",
+    )
+    analysis = classify_inbound(message)
+    app = ApiApplication(
+        app._tasks, app._leads, app._research, app._drafts,
+        acquisition=app._acquisition, audit=app._audit,
+        inbound_emails=InboundMessages(message),
+        reply_analysis=ReplyAnalysisService(InboundMessages(message), ReplyAnalyses(analysis)),
+        reply_drafts=ReplyDraftService(ReplyDraftProvider()),
+    )
+
+    status, payload = app.handle(
+        "POST", f"/api/tasks/{task.id}/reply-drafts", {"message_id": message.message_id}
+    )
+
+    assert status == 201
+    assert payload["recipient_email"] == "buyer@alpine.example"
+    assert payload["status"] == "pending_review"
 
 
 def test_api_draft_requires_research_before_generation():
