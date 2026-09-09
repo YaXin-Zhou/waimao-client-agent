@@ -114,6 +114,53 @@ class AcquisitionService:
         )
         return result
 
+    def discover_public_contacts(self, task_id: str, domain: str, website_reader) -> AssessedLead:
+        """Extract only emails published by the lead's website and keep evidence."""
+        assessed = next(
+            (item for item in self.list_leads(task_id) if item.lead.domain == domain), None
+        )
+        if assessed is None:
+            raise KeyError(f"Lead not found: {domain}")
+        website = f"https://{domain}"
+        document = website_reader.fetch(website)
+        public_emails = getattr(document, "public_emails", ())
+        if not public_emails:
+            return assessed
+        first_source = assessed.lead.sources[0] if assessed.lead.sources else ("", "")
+        records = [
+            LeadRecord(
+                assessed.lead.company_name,
+                website,
+                email,
+                assessed.lead.country,
+                first_source[0],
+                first_source[1],
+            )
+            for email in assessed.lead.emails or ("",)
+        ]
+        records.extend(
+            LeadRecord(assessed.lead.company_name, website, "", assessed.lead.country, url, excerpt)
+            for url, excerpt in assessed.lead.sources[1:]
+        )
+        records.extend(
+            LeadRecord(
+                assessed.lead.company_name,
+                website,
+                item.address,
+                assessed.lead.country,
+                item.source_url,
+                item.excerpt,
+            )
+            for item in public_emails
+        )
+        updated_lead = replace(clean_leads(records)[0], status=assessed.lead.status)
+        result = AssessedLead(updated_lead, assessed.score)
+        self._leads.save_assessments(
+            task_id,
+            [item if item.lead.domain != domain else result for item in self.list_leads(task_id)],
+        )
+        return result
+
     def transition_lead(
         self, task_id: str, domain: str, target: LeadStatus, actor: str, note: str = ""
     ) -> AssessedLead:

@@ -49,6 +49,7 @@ class ApiApplication:
         email_send=None,
         follow_up_tasks=None,
         reply_drafts=None,
+        website_reader=None,
         sending_enabled=False,
     ):
         self._tasks = tasks
@@ -70,6 +71,7 @@ class ApiApplication:
         self._email_send = email_send
         self._follow_up_tasks = follow_up_tasks
         self._reply_drafts = reply_drafts
+        self._website_reader = website_reader
         self._sending_enabled = sending_enabled
         self._reviews = EmailReviewService(drafts, audit)
 
@@ -191,6 +193,14 @@ class ApiApplication:
                 return self._review_research_field(
                     segments[2], segments[4], segments[6], self._parse_body(body)
                 )
+            if (
+                method == "POST"
+                and len(segments) == 7
+                and segments[:2] == ["api", "tasks"]
+                and segments[3] == "leads"
+                and segments[5:7] == ["contacts", "discover"]
+            ):
+                return self._discover_public_contacts(segments[2], segments[4])
             if (
                 method == "POST"
                 and len(segments) == 4
@@ -827,6 +837,12 @@ class ApiApplication:
         self._research.save(task_id, domain, updated)
         return 200, self._research_result(updated)
 
+    def _discover_public_contacts(self, task_id: str, domain: str) -> tuple[int, dict]:
+        if self._website_reader is None:
+            raise RuntimeError("website contact discovery is not configured")
+        result = self._acquisition.discover_public_contacts(task_id, domain, self._website_reader)
+        return 200, self._assessed(result)
+
     def _transition_lead(self, task_id: str, domain: str, body: dict) -> tuple[int, dict]:
         try:
             target = LeadStatus(str(body.get("status", "")))
@@ -956,11 +972,11 @@ class ApiApplication:
             "company_name": lead.company_name,
             "domain": lead.domain,
             "website": f"https://{lead.domain}" if lead.domain else "",
-            "emails": lead.emails,
+            "emails": list(lead.emails),
             "country": lead.country,
             "quality": lead.quality,
             "status": lead.status.value,
-            "flags": lead.flags,
+            "flags": list(lead.flags),
             "sources": [list(source) for source in lead.sources],
         }
 

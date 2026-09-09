@@ -12,6 +12,7 @@ from src.domain.lead import CleanLead, LeadRecord, LeadScore
 from src.domain.research import CustomerType, EvidenceStatus, ResearchResult
 from src.domain.research_run import ResearchRun
 from src.domain.task import AcquisitionCriteria, AcquisitionTask, TaskStatus
+from src.infrastructure.website_fetcher import PublicEmail, SourceDocument
 from src.interfaces.http_api import ApiApplication
 
 
@@ -53,6 +54,16 @@ class SearchProvider:
                 "Google result",
             )
         ]
+
+
+class ContactReader:
+    def fetch(self, url):
+        return SourceDocument(
+            url,
+            "Contact",
+            "Contact Alpine",
+            (PublicEmail("info@alpine.example", url, "Contact info@alpine.example"),),
+        )
 
 
 class Research:
@@ -404,7 +415,7 @@ def test_api_updates_contact_only_with_source_evidence_and_keeps_score():
     )
 
     assert status == 200
-    assert payload["lead"]["emails"] == ("sales@alpine.example", "contact@alpine.example")
+    assert payload["lead"]["emails"] == ["sales@alpine.example", "contact@alpine.example"]
     assert payload["score"]["total"] == 72
 
 
@@ -541,6 +552,24 @@ def test_api_rejects_non_browser_discovery_imports():
 
     assert status == 400
     assert payload["error"] == "browser discovery import requires source_mode=browser"
+
+
+def test_api_discovers_public_contacts_without_model_and_keeps_evidence():
+    app, task, _, _ = make_app()
+    app._website_reader = ContactReader()
+
+    status, payload = app.handle(
+        "POST",
+        f"/api/tasks/{task.id}/leads/alpine.example/contacts/discover",
+        {},
+    )
+
+    assert status == 200
+    assert payload["lead"]["emails"] == ["sales@alpine.example", "info@alpine.example"]
+    assert payload["lead"]["sources"][-1] == [
+        "https://alpine.example",
+        "Contact info@alpine.example",
+    ]
 
 
 def test_api_rejects_non_object_scoring_configuration():

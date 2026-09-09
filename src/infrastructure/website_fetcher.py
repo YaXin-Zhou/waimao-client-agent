@@ -11,10 +11,18 @@ from urllib.request import Request, urlopen
 
 
 @dataclass(frozen=True)
+class PublicEmail:
+    address: str
+    source_url: str
+    excerpt: str
+
+
+@dataclass(frozen=True)
 class SourceDocument:
     url: str
     title: str
     text: str
+    public_emails: tuple[PublicEmail, ...] = ()
 
 
 class WebsiteFetcher:
@@ -34,7 +42,12 @@ class WebsiteFetcher:
         html = raw_html.decode("utf-8", errors="replace")
         title = self._extract_tag(html, "title")
         text = self._to_text(html)
-        return SourceDocument(url=url, title=title, text=text)
+        return SourceDocument(
+            url=url,
+            title=title,
+            text=text,
+            public_emails=self._extract_public_emails(html, url),
+        )
 
     @staticmethod
     def _open(url: str, timeout: int) -> bytes:
@@ -57,3 +70,27 @@ class WebsiteFetcher:
         )
         without_tags = re.sub(r"<[^>]+>", " ", without_noise)
         return " ".join(unescape(without_tags).split())
+
+    @staticmethod
+    def _extract_public_emails(html: str, source_url: str) -> tuple[PublicEmail, ...]:
+        candidates = re.findall(
+            r"(?:mailto:)?([A-Z0-9._%+-]+@[A-Z0-9.-]+\.[A-Z]{2,})",
+            unescape(html),
+            flags=re.IGNORECASE,
+        )
+        visible = WebsiteFetcher._to_text(html)
+        result: list[PublicEmail] = []
+        seen: set[str] = set()
+        for address in candidates:
+            normalized = address.strip().lower()
+            if normalized in seen or normalized.startswith(("example@", "noreply@", "no-reply@")):
+                continue
+            position = visible.lower().find(normalized)
+            excerpt = (
+                visible[max(0, position - 80) : position + len(normalized) + 80]
+                if position >= 0
+                else normalized
+            )
+            result.append(PublicEmail(normalized, source_url, excerpt))
+            seen.add(normalized)
+        return tuple(result)

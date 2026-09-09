@@ -5,6 +5,7 @@ from src.domain.custom_research import BusinessOffering, ResearchFieldDefinition
 from src.domain.lead import LeadRecord
 from src.domain.task import AcquisitionCriteria
 from src.infrastructure.memory_repositories import InMemoryLeadRepository, InMemoryTaskRepository
+from src.infrastructure.website_fetcher import PublicEmail, SourceDocument
 
 
 class FakeSearchProvider:
@@ -18,6 +19,16 @@ class FakeSearchProvider:
                 "DE",
             )
         ]
+
+
+class ContactFetcher:
+    def fetch(self, url):
+        return SourceDocument(
+            url,
+            "Contact",
+            "Contact Alpine",
+            (PublicEmail("sales@alpine.example", url, "Contact sales@alpine.example"),),
+        )
 
 
 def test_service_creates_task_and_assesses_imported_leads():
@@ -98,3 +109,35 @@ def test_service_updates_configurable_criteria_without_recreating_task():
 
     assert updated.id == task.id
     assert service._tasks.get(task.id).criteria.business_offerings[0].key == "cnc_service"
+
+
+def test_service_discovers_public_contacts_and_preserves_source_evidence():
+    tasks = InMemoryTaskRepository()
+    leads = InMemoryLeadRepository()
+    service = AcquisitionService(tasks, leads)
+    task = service.create_task(
+        "EU outdoor leads", AcquisitionCriteria(product="portable power station")
+    )
+    service.assess_leads(
+        task.id,
+        [
+            LeadRecord(
+                "Alpine",
+                "https://alpine.example",
+                "",
+                "Germany",
+                "https://google.example",
+                "result",
+            )
+        ],
+        weights={},
+        signals_by_domain={},
+    )
+
+    result = service.discover_public_contacts(task.id, "alpine.example", ContactFetcher())
+
+    assert result.lead.emails == ("sales@alpine.example",)
+    assert result.lead.sources[-1] == (
+        "https://alpine.example",
+        "Contact sales@alpine.example",
+    )

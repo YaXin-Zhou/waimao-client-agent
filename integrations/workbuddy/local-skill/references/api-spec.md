@@ -23,6 +23,7 @@ POST /api/tasks
 POST /api/tasks/{task_id}/discover
 POST /api/tasks/{task_id}/discover/import
 POST /api/tasks/{task_id}/leads/{domain}/research
+POST /api/tasks/{task_id}/leads/{domain}/contacts/discover
 POST /api/tasks/{task_id}/leads/{domain}/draft
 PATCH /api/tasks/{task_id}/leads/{domain}/research-fields/{field_key}
 PATCH /api/tasks/{task_id}/criteria
@@ -34,6 +35,12 @@ POST /api/tasks/{task_id}/reply-analyses/run
 
 ```text
 python scripts/workbuddy_cli.py review-field <task_id> <domain> <field_key> --value "..."
+```
+
+公开邮箱采集只解析官网页面中出现的 `mailto` 或可见邮箱，并保存页面 URL 和上下文摘录：
+
+```text
+python scripts/workbuddy_cli.py discover-contacts <task_id> <domain>
 ```
 
 浏览器搜索结果导入必须声明 `source_mode=browser`，并提交每条结果的 `website`、

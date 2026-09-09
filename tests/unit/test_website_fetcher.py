@@ -29,3 +29,25 @@ def test_fetcher_rejects_non_http_urls():
         assert str(error) == "Only HTTP(S) URLs are supported"
     else:
         raise AssertionError("expected invalid URL to be rejected")
+
+
+def test_fetcher_extracts_public_mailto_and_visible_emails_with_context():
+    fetcher = WebsiteFetcher(
+        opener=lambda url, timeout: (
+            b"<main>Contact us at sales@alpine.example. "
+            b"<a href='mailto:info@alpine.example'>Email sales</a> "
+            b"<a href='mailto:info@alpine.example'>Duplicate</a> "
+            b"<span>noreply@example.com</span></main>"
+        )
+    )
+
+    document = fetcher.fetch("https://alpine.example/contact")
+
+    assert [item.address for item in document.public_emails] == [
+        "sales@alpine.example",
+        "info@alpine.example",
+    ]
+    assert all(
+        item.source_url == "https://alpine.example/contact" for item in document.public_emails
+    )
+    assert all("@alpine.example" in item.excerpt for item in document.public_emails)
