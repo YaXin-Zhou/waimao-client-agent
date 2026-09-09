@@ -67,6 +67,16 @@ def test_fetcher_extracts_public_mailto_and_visible_emails_with_context():
     assert all("@alpine.example" in item.excerpt for item in document.public_emails)
 
 
+def test_fetcher_removes_trailing_markup_punctuation_from_mailto_values():
+    html = '<a href="mailto:support@alpine.example\\">support@alpine.example</a>'
+
+    document = WebsiteFetcher(opener=lambda _url, _timeout: html.encode()).fetch(
+        "https://alpine.example/contact"
+    )
+
+    assert [item.address for item in document.public_emails] == ["support@alpine.example"]
+
+
 def test_fetcher_normalizes_obfuscated_public_emails_and_keeps_context():
     fetcher = WebsiteFetcher(
         opener=lambda url, timeout: (

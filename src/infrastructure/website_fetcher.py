@@ -395,7 +395,7 @@ class WebsiteFetcher:
         result: list[PublicEmail] = []
         seen: set[str] = set()
         for address in candidates:
-            raw_address = address.strip()
+            raw_address = address.strip().rstrip(".,;:!?)]}>/\\")
             normalized = re.sub(
                 r"\s*(?:\[at\]|\(at\)|\s+at\s+)\s*",
                 "@",
