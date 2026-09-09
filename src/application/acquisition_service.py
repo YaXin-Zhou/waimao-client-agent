@@ -2,6 +2,7 @@
 
 from __future__ import annotations
 
+import re
 from dataclasses import dataclass, replace
 from urllib.parse import urlparse
 
@@ -126,7 +127,29 @@ class AcquisitionService:
         searchable = " ".join(
             source[1] for source in cls._website_sources(lead)
         ).lower()
-        return bool(terms) and any(term in searchable for term in terms)
+        return bool(terms) and any(
+            cls._term_in_evidence(term, searchable) for term in terms
+        )
+
+    @staticmethod
+    def _term_in_evidence(term: str, text: str) -> bool:
+        """Match configurable terms without accepting English substring false positives."""
+        normalized_term = " ".join(term.lower().split())
+        normalized_text = " ".join(text.lower().split())
+        if not normalized_term or not normalized_text:
+            return False
+        if re.search(r"[a-z0-9]", normalized_term):
+            variants = {normalized_term}
+            if normalized_term.endswith("s"):
+                variants.add(normalized_term[:-1])
+            for variant in variants:
+                tokens = variant.split()
+                pattern_body = r"\s+".join(re.escape(token) for token in tokens)
+                pattern = rf"(?<![a-z0-9]){pattern_body}s?(?![a-z0-9])"
+                if re.search(pattern, normalized_text) is not None:
+                    return True
+            return False
+        return normalized_term in normalized_text
 
     @staticmethod
     def _qualify(

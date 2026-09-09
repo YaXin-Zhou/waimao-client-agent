@@ -121,6 +121,29 @@ def test_derived_product_signal_requires_candidate_source_text():
     assert result.score.total == 0
 
 
+def test_product_evidence_does_not_match_inside_unrelated_english_word():
+    service = AcquisitionService(InMemoryTaskRepository(), InMemoryLeadRepository())
+    task = service.create_task(
+        "Product boundary", AcquisitionCriteria(product="art", minimum_qualification_score=0)
+    )
+
+    result = service.assess_leads(
+        task.id,
+        [
+            LeadRecord(
+                "Cartography Co",
+                "https://cartography.example",
+                source_url="https://cartography.example/products",
+                source_excerpt="Cartography software and mapping tools.",
+            )
+        ],
+        weights={"product_match": 30},
+        signals_by_domain={},
+    )[0]
+
+    assert result.score.breakdown["product_match"] == 0
+
+
 def test_derived_signals_ignore_search_result_page_as_business_evidence():
     service = AcquisitionService(InMemoryTaskRepository(), InMemoryLeadRepository())
     task = service.create_task(
