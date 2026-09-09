@@ -77,6 +77,24 @@ def test_fetcher_removes_trailing_markup_punctuation_from_mailto_values():
     assert [item.address for item in document.public_emails] == ["support@alpine.example"]
 
 
+def test_fetcher_keeps_public_json_ld_descriptive_fields_as_evidence():
+    html = (
+        '<script type="application/ld+json">'
+        '{"@type":"WebSite","name":"Alpine Energy",'
+        '"description":"Portable power station supplier",'
+        '"keywords":["solar generator"]}'
+        '</script>'
+    )
+
+    document = WebsiteFetcher(opener=lambda _url, _timeout: html.encode()).fetch(
+        "https://alpine.example"
+    )
+
+    assert "Alpine Energy" in document.text
+    assert "Portable power station supplier" in document.text
+    assert "solar generator" in document.text
+
+
 def test_fetcher_normalizes_obfuscated_public_emails_and_keeps_context():
     fetcher = WebsiteFetcher(
         opener=lambda url, timeout: (

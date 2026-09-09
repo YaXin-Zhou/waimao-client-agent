@@ -2,6 +2,7 @@
 
 from __future__ import annotations
 
+import json
 import re
 from dataclasses import dataclass
 from html import unescape
@@ -48,6 +49,9 @@ class WebsiteFetcher:
         if site_name and site_name.casefold() not in title.casefold():
             title = " - ".join(value for value in (title, site_name) if value)
         text = self._to_text(html)
+        structured_text = self._extract_structured_text(html)
+        if structured_text:
+            text = " ".join(value for value in (text, structured_text) if value)
         return SourceDocument(
             url=url,
             title=title,
@@ -367,6 +371,32 @@ class WebsiteFetcher:
         )
         without_tags = re.sub(r"<[^>]+>", " ", without_noise)
         return " ".join(unescape(without_tags).split())
+
+    @staticmethod
+    def _extract_structured_text(html: str) -> str:
+        """Keep public descriptive fields from JSON-LD while excluding app scripts."""
+        fields = {"name", "description", "brand", "category", "keywords", "alternateName"}
+        values: list[str] = []
+        pattern = r'<script\b[^>]*type=["\']application/ld\+json["\'][^>]*>(.*?)</script>'
+        for payload in re.findall(pattern, html, flags=re.IGNORECASE | re.DOTALL):
+            try:
+                data = json.loads(unescape(payload).strip())
+            except (TypeError, ValueError, json.JSONDecodeError):
+                continue
+
+            def collect(value: object, key: str = "") -> None:
+                if isinstance(value, dict):
+                    for child_key, child_value in value.items():
+                        if child_key in fields:
+                            collect(child_value, child_key)
+                elif isinstance(value, list):
+                    for item in value:
+                        collect(item, key)
+                elif key in fields and isinstance(value, (str, int, float)):
+                    values.append(str(value))
+
+            collect(data)
+        return " ".join(dict.fromkeys(" ".join(values).split()))
 
     @staticmethod
     def _extract_public_emails(html: str, source_url: str) -> tuple[PublicEmail, ...]:
