@@ -6,6 +6,7 @@ import pytest
 from src.domain.lead import (
     LeadRecord,
     LeadStatus,
+    canonical_source_url,
     clean_leads,
     evidence_level,
     identity_consistency,
@@ -100,6 +101,15 @@ def test_evidence_level_distinguishes_search_and_website_provenance():
     assert evidence_level(search_only) == "search_only"
     assert evidence_level(single) == "single_source"
     assert evidence_level(multiple) == "multi_source"
+
+
+def test_canonical_source_url_deduplicates_trailing_slash_and_fragment_for_counts():
+    assert canonical_source_url("HTTPS://Example.com/about/#team") == (
+        "https://example.com/about"
+    )
+    assert canonical_source_url("https://example.com/about") == (
+        "https://example.com/about"
+    )
 
 
 def test_identity_consistency_uses_same_domain_company_and_domain_signals():

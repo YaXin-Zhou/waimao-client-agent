@@ -6,7 +6,7 @@ import re
 from dataclasses import dataclass, replace
 from email.utils import parseaddr
 from enum import StrEnum
-from urllib.parse import urlparse
+from urllib.parse import urlparse, urlsplit, urlunsplit
 
 
 @dataclass(frozen=True)
@@ -107,6 +107,20 @@ def canonical_website_domain(website: str) -> str:
     return _normalize_domain(website)
 
 
+def canonical_source_url(source_url: str) -> str:
+    """Return a comparison key without changing the persisted source URL."""
+    value = source_url.strip()
+    if not value:
+        return ""
+    parsed = urlsplit(value)
+    if not parsed.scheme or not parsed.netloc:
+        return value
+    path = parsed.path.rstrip("/") or "/"
+    return urlunsplit(
+        (parsed.scheme.lower(), parsed.netloc.lower(), path, parsed.query, "")
+    )
+
+
 def _normalize_email(email: str) -> str:
     raw = email.strip().lower()
     for token in ("(at)", "[at]", " at "):
@@ -153,7 +167,9 @@ def is_search_source(source_url: str) -> bool:
 def evidence_level(lead: CleanLead) -> str:
     """Classify persisted provenance without claiming that a model conclusion is fact."""
     website_sources = {
-        url.strip() for url, _excerpt in lead.sources if url.strip() and not is_search_source(url)
+        canonical_source_url(url)
+        for url, _excerpt in lead.sources
+        if url.strip() and not is_search_source(url)
     }
     if len(website_sources) >= 2:
         return "multi_source"

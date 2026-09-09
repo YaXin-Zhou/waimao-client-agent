@@ -27,6 +27,7 @@ from src.domain.inbound_email import InboundEmail
 from src.domain.lead import (
     LeadRecord,
     LeadStatus,
+    canonical_source_url,
     canonical_website_domain,
     evidence_level,
     identity_consistency,
@@ -724,14 +725,27 @@ class ApiApplication:
                 for item in results
             ),
             "evidence_source_count": sum(
-                len({url for url, _excerpt in item.lead.sources if not is_search_source(url)})
+                len(
+                    {
+                        canonical_source_url(url)
+                        for url, _excerpt in item.lead.sources
+                        if not is_search_source(url)
+                    }
+                )
                 for item in results
             ),
             "external_source_count": sum(
                 self._source_summary(item.lead)["external_count"] for item in results
             ),
             "multi_source_evidence_count": sum(
-                len({url for url, _excerpt in item.lead.sources if not is_search_source(url)}) >= 2
+                len(
+                    {
+                        canonical_source_url(url)
+                        for url, _excerpt in item.lead.sources
+                        if not is_search_source(url)
+                    }
+                )
+                >= 2
                 for item in results
             ),
             "product_evidence_count": sum(
@@ -1182,7 +1196,7 @@ class ApiApplication:
     @staticmethod
     def _source_summary(lead) -> dict:
         website_urls = {
-            url.strip()
+            canonical_source_url(url)
             for url, _excerpt in lead.sources
             if url.strip() and not is_search_source(url)
         }
