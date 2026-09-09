@@ -85,3 +85,22 @@ def test_bing_provider_deduplicates_company_pages_by_normalized_domain():
         "https://supplier.example/",
         "https://another.example/",
     ]
+
+
+def test_bing_provider_excludes_dictionary_information_pages():
+    html = """
+    <ol>
+      <li class="b_algo"><h2><a href="https://dictionary.cambridge.org/dictionary/english/contract">
+        CONTRACT | English meaning</a></h2></li>
+      <li class="b_algo"><h2><a href="https://real-company.example/">Real company</a></h2></li>
+    </ol>
+    """
+
+    provider = BingSearchProvider(opener=lambda request, timeout: Response(html))
+    results = provider.search(
+        AcquisitionCriteria(
+            product="contract manufacturing", candidate_limit=1, qualified_lead_limit=1
+        )
+    )
+
+    assert [result.website for result in results] == ["https://real-company.example/"]

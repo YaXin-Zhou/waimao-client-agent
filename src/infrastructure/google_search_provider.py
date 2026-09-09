@@ -69,6 +69,7 @@ class GoogleSearchProvider:
             "wikipedia.org",
             "britannica.com",
             "merriam-webster.com",
+            "dictionary.cambridge.org",
             "npr.org",
             "reddit.com",
             "quora.com",
