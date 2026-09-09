@@ -334,7 +334,8 @@ class ApiApplication:
         # Route reads through the application service so legacy records receive
         # the same evidence sanitization and qualification refresh as other reads.
         assessed = self._acquisition.list_leads(task_id)
-        items = [self._assessed(item) for item in assessed]
+        task = self._tasks.get(task_id)
+        items = [self._assessed(item, task.criteria) for item in assessed]
         return 200, {"items": items, "summary": self._discovery_summary(task_id, assessed)}
 
     def _mailbox_status(self) -> tuple[int, dict]:
@@ -666,7 +667,7 @@ class ApiApplication:
 
     def _discovery_payload(self, task_id: str, results) -> dict:
         return {
-            "items": [self._assessed(item) for item in results],
+            "items": [self._assessed(item, self._tasks.get(task_id).criteria) for item in results],
             "summary": self._discovery_summary(task_id, results),
         }
 
@@ -817,7 +818,7 @@ class ApiApplication:
             str(body.get("source_url", "")),
             str(body.get("source_excerpt", "")),
         )
-        return 200, self._assessed(result)
+        return 200, self._assessed(result, self._tasks.get(task_id).criteria)
 
     def _update_sender_profile(self, task_id: str, body: dict) -> tuple[int, dict]:
         profile = SenderProfile(
@@ -924,7 +925,7 @@ class ApiApplication:
         if self._website_reader is None:
             raise RuntimeError("website contact discovery is not configured")
         result = self._acquisition.discover_public_contacts(task_id, domain, self._website_reader)
-        return 200, self._assessed(result)
+        return 200, self._assessed(result, self._tasks.get(task_id).criteria)
 
     def _transition_lead(self, task_id: str, domain: str, body: dict) -> tuple[int, dict]:
         try:
@@ -934,7 +935,8 @@ class ApiApplication:
         return 200, self._assessed(
             self._acquisition.transition_lead(
                 task_id, domain, target, str(body.get("actor", "")), str(body.get("note", ""))
-            )
+            ),
+            self._tasks.get(task_id).criteria,
         )
 
     def _lead_audit_events(self, task_id: str, domain: str) -> tuple[int, dict]:
@@ -978,7 +980,7 @@ class ApiApplication:
             else None
         )
         return 200, {
-            "lead": self._lead(assessed.lead),
+            "lead": self._lead(assessed.lead, self._tasks.get(task_id).criteria),
             "score": self._score(assessed.score),
             "research": self._research_result(report) if report else None,
             "draft": self._draft(draft) if draft else None,
@@ -1055,7 +1057,7 @@ class ApiApplication:
         }
 
     @staticmethod
-    def _lead(lead) -> dict:
+    def _lead(lead, criteria=None) -> dict:
         return {
             "company_name": lead.company_name,
             "domain": lead.domain,
@@ -1068,7 +1070,38 @@ class ApiApplication:
             "sources": [list(source) for source in lead.sources],
             "evidence_level": evidence_level(lead),
             "source_summary": ApiApplication._source_summary(lead),
+            "evidence_checks": ApiApplication._evidence_checks(lead, criteria),
         }
+
+    @staticmethod
+    def _evidence_checks(lead, criteria=None) -> dict:
+        text = " ".join(
+            excerpt.lower()
+            for url, excerpt in lead.sources
+            if excerpt.strip() and not is_search_source(url)
+        )
+
+        def check(value: str) -> str:
+            normalized = " ".join(value.lower().split())
+            return "supported" if normalized and normalized in text else "not_found"
+
+        checks = {
+            "company_name": check(lead.company_name),
+            "country": check(lead.country) if lead.country else "not_configured",
+            "email": (
+                "supported"
+                if lead.emails and any(email.lower() in text for email in lead.emails)
+                else "not_found"
+            ),
+            "product": "not_checked",
+        }
+        if criteria is not None:
+            checks["product"] = (
+                "supported"
+                if AcquisitionService.has_product_evidence(lead, criteria)
+                else "not_found"
+            )
+        return checks
 
     @staticmethod
     def _source_summary(lead) -> dict:
@@ -1095,9 +1128,9 @@ class ApiApplication:
         return {"total": score.total, "priority": score.priority, "breakdown": score.breakdown}
 
     @staticmethod
-    def _assessed(item) -> dict:
+    def _assessed(item, criteria=None) -> dict:
         return {
-            "lead": ApiApplication._lead(item.lead),
+            "lead": ApiApplication._lead(item.lead, criteria),
             "score": ApiApplication._score(item.score),
             "qualified": item.qualified,
             "rejection_reasons": list(item.rejection_reasons),

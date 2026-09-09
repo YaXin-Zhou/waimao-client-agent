@@ -431,6 +431,31 @@ def test_api_marks_external_sources_as_linked_but_requiring_review():
     }
 
 
+def test_api_returns_field_level_evidence_checks_from_public_excerpts():
+    lead = clean_leads(
+        [
+            LeadRecord(
+                "Alpine Outdoor",
+                "https://alpine.example",
+                "sales@alpine.example",
+                "Germany",
+                "https://alpine.example/contact",
+                "Alpine Outdoor Germany sales@alpine.example portable power station",
+            )
+        ]
+    )[0]
+    checks = ApiApplication._evidence_checks(
+        lead, AcquisitionCriteria(product="portable power station")
+    )
+
+    assert checks == {
+        "company_name": "supported",
+        "country": "supported",
+        "email": "supported",
+        "product": "supported",
+    }
+
+
 def test_api_lead_list_sanitizes_legacy_source_evidence():
     app, task, _, _ = make_app()
     result = app._leads.results[0]
