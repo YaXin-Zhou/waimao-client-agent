@@ -70,3 +70,13 @@ def test_audit_events_survive_repository_recreation(tmp_path):
 
     assert events[0].actor == "reviewer-1"
     assert events[0].note == "Please add product evidence"
+
+
+def test_task_list_returns_newest_created_task_first(tmp_path):
+    database = tmp_path / "acquisition.db"
+    repository = SQLiteTaskRepository(database)
+    service = AcquisitionService(repository, SQLiteLeadRepository(database))
+    older = service.create_task("Older task", AcquisitionCriteria(product="older product"))
+    newest = service.create_task("Newest task", AcquisitionCriteria(product="newer product"))
+
+    assert [task.id for task in repository.list()] == [newest.id, older.id]
