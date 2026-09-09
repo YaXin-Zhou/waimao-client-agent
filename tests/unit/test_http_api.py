@@ -13,6 +13,7 @@ from src.domain.lead import CleanLead, LeadRecord, LeadScore
 from src.domain.research import CustomerType, EvidenceStatus, ResearchResult
 from src.domain.research_run import ResearchRun
 from src.domain.task import AcquisitionCriteria, AcquisitionTask, TaskStatus
+from src.infrastructure.google_search_provider import SearchProviderError
 from src.infrastructure.website_fetcher import PublicEmail, SourceDocument
 from src.interfaces.http_api import ApiApplication
 
@@ -544,6 +545,31 @@ def test_api_discovers_and_assesses_using_configured_search_provider():
         "public_email_count": 1,
         "website_evidence_count": 1,
         "product_evidence_count": 1,
+    }
+
+
+def test_api_returns_retryable_search_error_without_creating_results():
+    app, task, _, _ = make_app()
+
+    class BlockedSearchProvider:
+        def search(self, criteria):
+            raise SearchProviderError("Google consent or unusual-traffic page")
+
+    app._acquisition = AcquisitionService(
+        app._tasks, app._leads, search_provider=BlockedSearchProvider()
+    )
+
+    status, payload = app.handle(
+        "POST",
+        f"/api/tasks/{task.id}/discover",
+        {"weights": {}, "signals_by_domain": {}},
+    )
+
+    assert status == 503
+    assert payload == {
+        "error": "Google consent or unusual-traffic page",
+        "code": "search_provider_unavailable",
+        "retryable": True,
     }
 
 

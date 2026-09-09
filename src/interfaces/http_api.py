@@ -25,6 +25,7 @@ from src.domain.research_run import ResearchRun
 from src.domain.send_safety import SendPolicy
 from src.domain.sender_profile import SenderProfile
 from src.domain.task import AcquisitionCriteria, TaskStatus
+from src.infrastructure.google_search_provider import SearchProviderError
 
 
 class ApiApplication:
@@ -311,6 +312,12 @@ class ApiApplication:
             return 404, {"error": "Route not found"}
         except KeyError as error:
             return 404, {"error": str(error).strip("'")}
+        except SearchProviderError as error:
+            return 503, {
+                "error": str(error),
+                "code": "search_provider_unavailable",
+                "retryable": True,
+            }
         except RuntimeError as error:
             return 503, {"error": str(error)}
         except (TypeError, ValueError, json.JSONDecodeError) as error:
