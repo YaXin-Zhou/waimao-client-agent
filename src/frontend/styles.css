@@ -60,6 +60,10 @@ h1 { color: #132238; font-size: 29px; font-weight: 700; letter-spacing: -.8px; }
 .panel-heading h2 { color: #17283c; font-size: 18px; }
 .panel-heading h2 span { margin-left: 5px; color: #9aa8b7; font-size: 12px; font-weight: 400; }
 .panel-heading p { margin-top: 5px; color: #99a7b7; font-size: 11px; }
+.lead-panel-actions { display: flex; align-items: center; gap: 8px; }
+.lead-view-tabs { display: inline-flex; padding: 3px; border: 1px solid #e0e8f0; border-radius: 7px; background: #f7fafc; }
+.lead-view-tabs button { border: 0; border-radius: 5px; padding: 6px 8px; color: #7d8da1; background: transparent; font-size: 10px; font-weight: 700; cursor: pointer; transition: .2s ease; }
+.lead-view-tabs button.active { color: #0878d8; background: #fff; box-shadow: 0 2px 7px rgba(41, 102, 151, .1); }
 .filter-button, .outline-button, .text-button, .more-button { border: 1px solid #d7e1eb; border-radius: 6px; padding: 8px 12px; display: inline-flex; align-items: center; gap: 7px; color: #203249; background: #fff; font-size: 12px; font-weight: 600; transition: .2s ease; }
 .filter-button:hover, .outline-button:hover, .text-button:hover { border-color: #80b9e9; color: #0574d8; background: #f5faff; }
 .table-head, .lead-row { display: grid; grid-template-columns: 28px minmax(145px, 1.65fr) minmax(112px, 1.12fr) minmax(83px, .88fr) 83px 82px 20px; align-items: center; gap: 7px; }

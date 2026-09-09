@@ -1,8 +1,8 @@
 import pytest
 
-from src.application.acquisition_service import AcquisitionService
+from src.application.acquisition_service import AcquisitionService, AssessedLead
 from src.domain.custom_research import BusinessOffering, ResearchFieldDefinition
-from src.domain.lead import LeadRecord
+from src.domain.lead import LeadRecord, LeadScore, clean_leads
 from src.domain.task import AcquisitionCriteria
 from src.infrastructure.memory_repositories import InMemoryLeadRepository, InMemoryTaskRepository
 from src.infrastructure.website_fetcher import PublicEmail, SourceDocument
@@ -201,3 +201,28 @@ def test_service_keeps_only_qualified_leads_marked_and_records_rejection_reasons
     low_score = next(item for item in results if item.lead.domain == "low-score.example")
     assert "missing_public_email" in no_email.rejection_reasons
     assert "score_below_threshold" in low_score.rejection_reasons
+
+
+def test_service_requalifies_legacy_assessments_when_reading_task_leads():
+    tasks = InMemoryTaskRepository()
+    leads = InMemoryLeadRepository()
+    service = AcquisitionService(tasks, leads)
+    task = service.create_task(
+        "Legacy records",
+        AcquisitionCriteria(product="portable power station", minimum_qualification_score=0),
+    )
+    leads.save_assessments(
+        task.id,
+        [
+            AssessedLead(
+                clean_leads(
+                    [LeadRecord("Legacy Supply", "https://legacy.example", "sales@legacy.example")]
+                )[0],
+                LeadScore(50, "B", {}),
+            )
+        ],
+    )
+
+    result = service.list_leads(task.id)[0]
+
+    assert result.qualified

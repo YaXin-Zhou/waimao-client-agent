@@ -161,9 +161,15 @@ class AcquisitionService:
         ]
 
     def list_leads(self, task_id: str) -> list[AssessedLead]:
-        if self._tasks.get(task_id) is None:
+        task = self._tasks.get(task_id)
+        if task is None:
             raise KeyError(f"Task not found: {task_id}")
-        return self._leads.list_assessments(task_id)
+        current = self._leads.list_assessments(task_id)
+        # 兼容升级前写入的记录：旧记录没有资格判断字段，需要按当前任务规则重评估。
+        refreshed = self._qualify(current, task.criteria)
+        if refreshed != current:
+            self._leads.save_assessments(task_id, refreshed)
+        return refreshed
 
     def update_contact(
         self,

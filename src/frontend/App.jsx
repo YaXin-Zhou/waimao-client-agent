@@ -58,6 +58,7 @@ function App() {
   const [sendLoading, setSendLoading] = useState(false)
   const [apiState, setApiState] = useState('loading')
   const [query, setQuery] = useState('')
+  const [leadView, setLeadView] = useState('qualified')
   const [activeNav, setActiveNav] = useState('客户池')
   const [detailTab, setDetailTab] = useState('概览')
   const [language, setLanguage] = useState('中文')
@@ -175,7 +176,8 @@ function App() {
     return () => { cancelled = true }
   }, [researchRuns, remoteTaskId, selected?.domain])
   // 候选池仍完整保留在本地数据库；工作台只展示达到交付门槛的客户。
-  const displayLeads = remoteLeads.filter((lead) => lead.qualified)
+  const qualifiedLeads = remoteLeads.filter((lead) => lead.qualified)
+  const displayLeads = leadView === 'qualified' ? qualifiedLeads : remoteLeads
   const filteredLeads = useMemo(() => displayLeads.filter((lead) => `${lead.name} ${lead.country} ${lead.type}`.toLowerCase().includes(query.toLowerCase())), [displayLeads, query])
   const activeLead = selected ? { ...selected, type: selectedResearch ? customerTypeLabel(selectedResearch.customer_type) : selected.type, detail: selectedResearch?.business_summary || selected.detail, research: selectedResearch, draft: selectedDraft, auditEvents: selectedLeadAudit, researchRun: researchRuns.find((run) => run.domain === selected.domain), isRemote: true } : null
 
@@ -472,7 +474,7 @@ function App() {
         <section className="metric-row"><Metric icon="clipboard" label="待审核" value="—" note="统计接口尚未接入"/><Metric icon="users" label="高匹配客户" value="—" note="统计接口尚未接入"/><Metric icon="researching" label="本周新增" value="—" note="统计接口尚未接入"/></section>
         <ReplyCenter mailboxStatus={mailboxStatus} threads={mailThreads} analyses={replyAnalyses} followUpTasks={followUpTasks} loading={replyLoading} onTest={testMailbox} onSync={syncMailbox} onAnalyze={analyzeReplies} onGenerateDraft={generateReplyDraft} onFollowUpStatus={updateFollowUpStatus}/>
         <section className="workspace-grid">
-          <div className="lead-panel panel"><div className="panel-heading"><div><h2>客户列表 <span>共 {filteredLeads.length} 个</span></h2><p>已按当前任务条件筛选</p></div><button className="filter-button" onClick={() => notify('筛选条件：国家、类型、评分、状态')}><Icon name="filter" size={16}/>筛选</button></div><div className="table-head"><span className="checkbox"/><span>公司名称</span><span>国家 / 地区</span><span>客户类型</span><span>匹配分数</span><span>状态</span><span/></div><div className="lead-list">{filteredLeads.length ? filteredLeads.map((lead) => <button className={`lead-row ${selected?.name === lead.name ? 'selected' : ''}`} key={lead.name} onClick={() => selectLead(lead)}><span className={`checkbox ${selected?.name === lead.name ? 'checked' : ''}`}>{selected?.name === lead.name && <Icon name="check" size={13}/>}</span><strong>{lead.name}</strong><span className="country"><span>{lead.flag}</span>{lead.country}</span><span>{lead.type}</span><span className="score"><b>{lead.score}</b> / 100</span><Status status={lead.status}/><span className="more">···</span></button>) : <div className="empty-results">没有匹配的客户，请调整搜索词</div>}</div><div className="table-footer"><span>当前筛选 {filteredLeads.length} 条</span><div className="pagination"><button>‹</button><button className="page-active">1</button><button>2</button><button>3</button><button>4</button><span>…</span><button>13</button><button>›</button></div></div></div>
+          <div className="lead-panel panel"><div className="panel-heading"><div><h2>{leadView === 'qualified' ? '合格客户' : '候选池'} <span>共 {filteredLeads.length} 个</span></h2><p>{leadView === 'qualified' ? '只显示达到交付门槛的客户' : '保留所有候选，并显示未入选原因'}</p></div><div className="lead-panel-actions"><div className="lead-view-tabs"><button className={leadView === 'qualified' ? 'active' : ''} onClick={() => setLeadView('qualified')}>合格客户 {qualifiedLeads.length}</button><button className={leadView === 'candidates' ? 'active' : ''} onClick={() => setLeadView('candidates')}>候选池 {remoteLeads.length}</button></div><button className="filter-button" onClick={() => notify('筛选条件：国家、类型、评分、状态')}><Icon name="filter" size={16}/>筛选</button></div></div><div className="table-head"><span className="checkbox"/><span>公司名称</span><span>国家 / 地区</span><span>客户类型</span><span>匹配分数</span><span>状态</span><span/></div><div className="lead-list">{filteredLeads.length ? filteredLeads.map((lead) => <button className={`lead-row ${selected?.name === lead.name ? 'selected' : ''}`} key={lead.name} onClick={() => selectLead(lead)}><span className={`checkbox ${selected?.name === lead.name ? 'checked' : ''}`}>{selected?.name === lead.name && <Icon name="check" size={13}/>}</span><strong>{lead.name}</strong><span className="country"><span>{lead.flag}</span>{lead.country}</span><span>{lead.type}</span><span className="score"><b>{lead.score}</b> / 100</span><Status status={lead.status}/><span className="more" title={lead.rejectionReasons.join('、') || '已达到交付门槛'}>{leadView === 'candidates' && lead.rejectionReasons.length ? '原因' : '···'}</span></button>) : <div className="empty-results">{leadView === 'qualified' && remoteLeads.length ? '当前没有达到交付门槛的客户，请切换到候选池查看过滤原因' : '没有匹配的客户，请调整搜索词'}</div>}</div><div className="table-footer"><span>当前筛选 {filteredLeads.length} 条 · 候选总数 {remoteLeads.length}</span><div className="pagination"><button>‹</button><button className="page-active">1</button><button>2</button><button>3</button><button>4</button><span>…</span><button>13</button><button>›</button></div></div></div>
           <aside className={`detail-panel panel ${filteredLeads.length && activeLead ? '' : 'detail-empty'}`}>{filteredLeads.length && activeLead ? <><div className="detail-top"><div className="company-symbol">◎</div><div className="company-title"><div><h2>{activeLead.name} <a href={activeLead.website} target="_blank" rel="noreferrer"><Icon name="external" size={14}/></a></h2><p>{activeLead.country} <i/> {activeLead.type} <i/> {activeLead.research ? '已完成官网背调' : '待背调'}</p></div><div className="score-block"><Status status={activeLead.status}/><strong>{activeLead.score}<small> / 100</small></strong><span>匹配分数</span></div></div></div><div className="detail-tabs">{['概览', '来源证据', '开发信草稿'].map((tab) => <button className={detailTab === tab ? 'active' : ''} key={tab} onClick={() => setDetailTab(tab)}>{tab}</button>)}</div>{detailTab === '概览' && <><Overview lead={activeLead} onEvidence={() => setDetailTab('来源证据')} onDraft={() => setDetailTab('开发信草稿')}/><ResearchPanel lead={activeLead} loading={researchLoading} onStart={startResearch} onReview={reviewResearchField}/><LeadTimeline lead={activeLead} events={activeLead.auditEvents} onTransition={transitionLead} loading={leadTransitionLoading}/></>} {detailTab === '来源证据' && <Evidence lead={activeLead}/>} {detailTab === '开发信草稿' && <><Draft lead={activeLead} language={language} setLanguage={setLanguage} translatedDraft={translatedDraft} translationLoading={translationLoading} onTranslate={translateDraft} onReview={reviewDraft} reviewLoading={reviewLoading} status={draftStatus} setStatus={setDraftStatus} notify={notify}/><ContactForm lead={activeLead} onUpdate={updateContact}/><SenderProfileEditor taskConfig={remoteTaskConfig} onSave={saveSenderProfile}/><DraftGenerator lead={activeLead} taskConfig={remoteTaskConfig} loading={reviewLoading} onGenerate={generateDraft}/><ReviewControls lead={activeLead} sendingEnabled={mailboxStatus?.sending_enabled} onReview={reviewDraft} onSafetyCheck={runSendSafetyCheck} safetyLoading={safetyLoading} safetyResult={sendSafety} onSend={sendDraft} sendLoading={sendLoading} loading={reviewLoading}/></>}</> : <div className="detail-empty-state"><strong>没有选中的客户</strong><span>调整搜索词后选择一条客户记录</span></div>}</aside>
         </section>
       </div>
@@ -499,8 +501,19 @@ function mapRemoteLead(item) {
     domain: lead.domain,
     isRemote: true,
     qualified: Boolean(item.qualified),
-    rejectionReasons: item.rejection_reasons || [],
+    rejectionReasons: item.rejection_reasons?.length ? item.rejection_reasons : fallbackRejectionReasons(lead),
   }
+}
+
+function fallbackRejectionReasons(lead) {
+  const reasons = []
+  if (!lead.website && !lead.domain) reasons.push('missing_website')
+  if (!lead.emails?.length) reasons.push('missing_public_email')
+  return reasons
+}
+
+function rejectionReasonLabel(reason) {
+  return { missing_website: '缺少官网', missing_public_email: '没有官网公开邮箱', score_below_threshold: '评分低于门槛', conflicting_country: '国家来源冲突', qualified_quota_exceeded: '超过合格客户配额', email_domain_mismatch: '邮箱域名与官网不同' }[reason] || reason
 }
 
 function customerTypeLabel(value) {
