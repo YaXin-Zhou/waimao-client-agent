@@ -889,6 +889,7 @@ class ApiApplication:
             "status": draft.status.value,
             "reviewed_by": draft.reviewed_by,
             "review_note": draft.review_note,
+            "kind": draft.kind.value,
         }
 
     @staticmethod

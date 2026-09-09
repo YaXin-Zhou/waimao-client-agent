@@ -8,7 +8,7 @@ from pathlib import Path
 
 from src.application.acquisition_service import AssessedLead
 from src.domain.audit_event import AuditEvent
-from src.domain.email_draft import EmailDraft, EmailDraftStatus
+from src.domain.email_draft import EmailDraft, EmailDraftKind, EmailDraftStatus
 from src.domain.email_send import EmailSendAttempt, EmailSendStatus
 from src.domain.follow_up_task import FollowUpStatus, FollowUpTask
 from src.domain.inbound_email import InboundEmail
@@ -118,9 +118,18 @@ def _connect(database: str | Path) -> sqlite3.Connection:
             status TEXT NOT NULL,
             reviewed_by TEXT NOT NULL,
             review_note TEXT NOT NULL
+            ,kind TEXT NOT NULL DEFAULT 'outreach'
         )
         """
     )
+    draft_columns = {
+        row["name"]
+        for row in connection.execute("PRAGMA table_info(email_drafts)").fetchall()
+    }
+    if "kind" not in draft_columns:
+        connection.execute(
+            "ALTER TABLE email_drafts ADD COLUMN kind TEXT NOT NULL DEFAULT 'outreach'"
+        )
     connection.execute(
         """
         CREATE TABLE IF NOT EXISTS audit_events (
@@ -573,7 +582,8 @@ class SQLiteEmailDraftRepository:
                 INSERT INTO email_drafts (
                     id, task_id, lead_domain, recipient_email, subject, body,
                     evidence_urls_json, status, reviewed_by, review_note
-                ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+                    ,kind
+                ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
                 ON CONFLICT(id) DO UPDATE SET
                     task_id=excluded.task_id,
                     lead_domain=excluded.lead_domain,
@@ -584,6 +594,7 @@ class SQLiteEmailDraftRepository:
                     status=excluded.status,
                     reviewed_by=excluded.reviewed_by,
                     review_note=excluded.review_note
+                    ,kind=excluded.kind
                 """,
                 (
                     draft.id,
@@ -596,6 +607,7 @@ class SQLiteEmailDraftRepository:
                     draft.status.value,
                     draft.reviewed_by,
                     draft.review_note,
+                    draft.kind.value,
                 ),
             )
 
@@ -617,6 +629,7 @@ class SQLiteEmailDraftRepository:
             status=EmailDraftStatus(row["status"]),
             reviewed_by=row["reviewed_by"],
             review_note=row["review_note"],
+            kind=EmailDraftKind(row["kind"]),
         )
 
     def latest_for_lead(self, task_id: str, lead_domain: str) -> EmailDraft | None:

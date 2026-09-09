@@ -2,7 +2,7 @@
 
 from __future__ import annotations
 
-from src.domain.email_draft import EmailDraft
+from src.domain.email_draft import EmailDraft, EmailDraftKind
 from src.domain.inbound_email import InboundEmail
 from src.domain.lead import CleanLead
 from src.domain.reply_analysis import ReplyAnalysis, ReplyCategory
@@ -63,4 +63,5 @@ class ReplyDraftService:
             subject=subject.strip(),
             body=body.strip(),
             evidence_urls=(research.evidence_url,),
+            kind=EmailDraftKind.REPLY,
         )

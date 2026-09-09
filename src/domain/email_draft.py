@@ -14,6 +14,11 @@ class EmailDraftStatus(StrEnum):
     REJECTED = "rejected"
 
 
+class EmailDraftKind(StrEnum):
+    OUTREACH = "outreach"
+    REPLY = "reply"
+
+
 @dataclass(frozen=True)
 class EmailDraft:
     id: str
@@ -26,6 +31,7 @@ class EmailDraft:
     status: EmailDraftStatus = EmailDraftStatus.PENDING_REVIEW
     reviewed_by: str = ""
     review_note: str = ""
+    kind: EmailDraftKind = EmailDraftKind.OUTREACH
 
     @classmethod
     def create(
@@ -36,6 +42,7 @@ class EmailDraft:
         subject: str,
         body: str,
         evidence_urls: tuple[str, ...] = (),
+        kind: EmailDraftKind = EmailDraftKind.OUTREACH,
     ) -> "EmailDraft":
         return cls(
             id=str(uuid4()),
@@ -45,6 +52,7 @@ class EmailDraft:
             subject=subject,
             body=body,
             evidence_urls=evidence_urls,
+            kind=kind,
         )
 
     def approve(self, reviewer: str) -> "EmailDraft":
