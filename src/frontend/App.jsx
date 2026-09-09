@@ -1,4 +1,5 @@
 import { useEffect, useMemo, useState } from 'react'
+import TaskCriteriaBuilder from './components/TaskCriteriaBuilder'
 
 const navItems = [
   ['users', '客户池'],
@@ -384,8 +385,10 @@ function App() {
         product: form.get('product'),
         countries: [form.get('country')],
         customer_types: [form.get('customerType')],
-        language: form.get('language'),
+        language: form.get('language') || 'English',
         daily_limit: 10,
+        business_offerings: JSON.parse(form.get('business_offerings') || '[]'),
+        research_fields: JSON.parse(form.get('research_fields') || '[]'),
       },
       sender_profile: {
         company_name: form.get('senderCompany'),
@@ -421,7 +424,7 @@ function App() {
       <div className="content">
         <div className="page-heading"><div><h1>客户智能工作台</h1><p>从公开证据到可审核的下一步</p></div><button className="primary-button" onClick={() => setShowTask(true)}><Icon name="plus" size={19}/>新建获客任务</button></div>
         <div className={`data-notice ${apiState}`}><span />{apiState === 'loading' ? '正在读取本地任务数据…' : apiState === 'connected' ? '已连接本地 API · 当前显示持久化客户档案' : apiState === 'empty' ? 'API 已连接 · 当前没有可显示的真实客户档案' : 'API 连接失败 · 为避免混淆，已隐藏演示数据'}</div>
-        <div className="task-context"><label>当前获客任务<select value={remoteTaskId} onChange={selectTask} disabled={!remoteTasks.length}><option value="">暂无可选任务</option>{remoteTasks.map((task) => <option key={task.id} value={task.id}>{task.name}</option>)}</select></label>{remoteTaskConfig && <span>任务条件：{remoteTaskConfig.criteria?.product || '未配置产品'} · {remoteTaskConfig.criteria?.countries?.join('、') || '未配置市场'}</span>}</div>
+        <div className="task-context"><label>当前获客任务<select value={remoteTaskId} onChange={selectTask} disabled={!remoteTasks.length}><option value="">暂无可选任务</option>{remoteTasks.map((task) => <option key={task.id} value={task.id}>{task.name}</option>)}</select></label>{remoteTaskConfig && <span>任务条件：{remoteTaskConfig.criteria?.product || '未配置产品'} · {remoteTaskConfig.criteria?.countries?.join('、') || '未配置市场'} · 业务 {remoteTaskConfig.criteria?.business_offerings?.length || 0} 项 · 背调字段 {remoteTaskConfig.criteria?.research_fields?.length || 0} 项</span>}</div>
         <section className="metric-row"><Metric icon="clipboard" label="待审核" value="—" note="统计接口尚未接入"/><Metric icon="users" label="高匹配客户" value="—" note="统计接口尚未接入"/><Metric icon="researching" label="本周新增" value="—" note="统计接口尚未接入"/></section>
         <ReplyCenter mailboxStatus={mailboxStatus} threads={mailThreads} analyses={replyAnalyses} followUpTasks={followUpTasks} loading={replyLoading} onTest={testMailbox} onSync={syncMailbox} onAnalyze={analyzeReplies} onGenerateDraft={generateReplyDraft} onFollowUpStatus={updateFollowUpStatus}/>
         <section className="workspace-grid">
@@ -431,7 +434,7 @@ function App() {
       </div>
     </main>
     {toast && <div className="toast"><span>✓</span>{toast}</div>}
-    {showTask && <div className="modal-backdrop" onClick={() => setShowTask(false)}><form className="task-modal" onSubmit={createTask} onClick={(event) => event.stopPropagation()}><button type="button" className="modal-close" onClick={() => setShowTask(false)}>×</button><span className="modal-icon"><Icon name="plus"/></span><h2>新建获客任务</h2><p>定义目标产品、国家、客户类型和发件人资料，系统将按规则运行搜索与背调。</p><label>任务名称<input name="name" defaultValue="便携式太阳能发电机 · 欧洲渠道" required/></label><label>目标产品<input name="product" defaultValue="portable solar generator" required/></label><div className="modal-grid"><label>目标市场<select name="country" defaultValue="Germany"><option>Germany</option><option>France</option><option>Netherlands</option></select></label><label>客户类型<select name="customerType" defaultValue="Distributor"><option value="distributor">Distributor</option><option value="retailer">Retailer</option><option value="wholesaler">Wholesaler</option></select></label></div><div className="sender-config"><strong>发件人资料（可选）</strong><p>填写后用于生成新开发信；留空则继续使用占位符。</p><label>公司名称<input name="senderCompany" placeholder="例如：ABC Trading Co., Ltd." /></label><label>联系人姓名<input name="senderName" placeholder="例如：Li Ming" /></label><label>职位<input name="senderPosition" placeholder="例如：Sales Manager" /></label></div><button type="submit" className="primary-button full">创建任务草稿 <Icon name="arrow" size={16}/></button></form></div>}
+    {showTask && <div className="modal-backdrop" onClick={() => setShowTask(false)}><form className="task-modal" onSubmit={createTask} onClick={(event) => event.stopPropagation()}><button type="button" className="modal-close" onClick={() => setShowTask(false)}>×</button><span className="modal-icon"><Icon name="plus"/></span><h2>新建获客任务</h2><p>定义目标产品、国家、客户类型和发件人资料，系统将按规则运行搜索与背调。</p><label>任务名称<input name="name" defaultValue="便携式太阳能发电机 · 欧洲渠道" required/></label><label>目标产品<input name="product" defaultValue="portable solar generator" required/></label><div className="modal-grid"><label>目标市场<select name="country" defaultValue="Germany"><option>Germany</option><option>France</option><option>Netherlands</option></select></label><label>客户类型<select name="customerType" defaultValue="Distributor"><option value="distributor">Distributor</option><option value="retailer">Retailer</option><option value="wholesaler">Wholesaler</option></select></label></div><TaskCriteriaBuilder/><div className="sender-config"><strong>发件人资料（可选）</strong><p>填写后用于生成新开发信；留空则继续使用占位符。</p><label>公司名称<input name="senderCompany" placeholder="例如：ABC Trading Co., Ltd." /></label><label>联系人姓名<input name="senderName" placeholder="例如：Li Ming" /></label><label>职位<input name="senderPosition" placeholder="例如：Sales Manager" /></label></div><button type="submit" className="primary-button full">创建任务草稿 <Icon name="arrow" size={16}/></button></form></div>}
   </div>
 }
 
