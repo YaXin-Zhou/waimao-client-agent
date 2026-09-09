@@ -141,7 +141,10 @@ class PlaywrightSearchProvider:
     def _resolve_result_url(page, href: str) -> str:
         """Resolve Google redirect links with a request, never by clicking them."""
         parsed = urlsplit(href)
-        if parsed.hostname and parsed.hostname.endswith("google.com"):
+        if parsed.hostname and (
+            parsed.hostname.endswith("google.com")
+            or parsed.hostname.endswith("google.com.hk")
+        ):
             try:
                 response = page.request.get(href, timeout=10_000, max_redirects=5)
                 return response.url
