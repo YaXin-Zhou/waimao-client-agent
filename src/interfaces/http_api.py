@@ -24,6 +24,7 @@ from src.domain.lead import (
     LeadStatus,
     canonical_website_domain,
     evidence_level,
+    identity_consistency,
     is_search_source,
 )
 from src.domain.reply_analysis import ReplyAnalysis
@@ -1069,6 +1070,7 @@ class ApiApplication:
             "flags": list(lead.flags),
             "sources": [list(source) for source in lead.sources],
             "evidence_level": evidence_level(lead),
+            "identity_consistency": identity_consistency(lead),
             "source_summary": ApiApplication._source_summary(lead),
             "evidence_checks": ApiApplication._evidence_checks(lead, criteria),
         }

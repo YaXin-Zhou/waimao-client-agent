@@ -164,6 +164,55 @@ def evidence_level(lead: CleanLead) -> str:
     return "none"
 
 
+def identity_consistency(lead: CleanLead) -> dict[str, object]:
+    """Return an explainable company-name/domain/site consistency signal.
+
+    This is a deterministic triage signal, not proof of legal identity. Search
+    result pages and unrelated external sources are deliberately excluded.
+    """
+    website_excerpts = tuple(
+        excerpt.lower()
+        for url, excerpt in lead.sources
+        if excerpt.strip() and not is_search_source(url)
+    )
+    if not lead.domain or not website_excerpts:
+        return {
+            "score": 0,
+            "status": "unknown",
+            "matched_tokens": [],
+            "reason": "no_same_domain_evidence",
+        }
+
+    company_tokens = _identity_tokens(lead.company_name)
+    domain_tokens = _identity_tokens(lead.domain)
+    searchable_text = " ".join(website_excerpts)
+    matched_tokens = sorted(
+        token
+        for token in company_tokens
+        if re.search(rf"(?<![a-z0-9]){re.escape(token)}(?![a-z0-9])", searchable_text)
+    )
+    score = 0
+    if company_tokens and _normalize_text(lead.company_name).lower() in searchable_text:
+        score += 40
+    score += min(len(matched_tokens), 2) * 20
+    score += min(len(company_tokens & domain_tokens), 1) * 20
+    if "company_identity_unconfirmed" in lead.flags:
+        score = min(score, 20)
+    score = min(score, 100)
+    status = "strong" if score >= 70 else "partial" if score >= 40 else "weak"
+    reason = {
+        "strong": "company_name_domain_and_site_align",
+        "partial": "some_identity_signals_match",
+        "weak": "identity_signals_are_weak",
+    }[status]
+    return {
+        "score": score,
+        "status": status,
+        "matched_tokens": matched_tokens,
+        "reason": reason,
+    }
+
+
 def _normalize_country(country: str) -> str:
     value = _normalize_text(country)
     return _COUNTRY_NAMES.get(value.upper(), value)

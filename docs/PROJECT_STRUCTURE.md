@@ -32,8 +32,6 @@ waimaogongzuoliu/
 │   ├── adr/                   # 需要记录取舍的架构决策
 │   └── runbooks/              # 部署、备份、故障恢复和操作手册
 ├── scripts/                   # 可重复执行的开发、测试、迁移和运维脚本
-├── integrations/              # WorkBuddy 等外部平台的适配和分发材料
-│   └── workbuddy/              # 内部使用的本地 Skill 与参考文档
 ├── data/                      # 本地运行数据；真实数据默认不入库
 │   ├── fixtures/              # 脱敏测试样例，可提交
 │   ├── runtime/               # 数据库、队列等运行产物，不提交

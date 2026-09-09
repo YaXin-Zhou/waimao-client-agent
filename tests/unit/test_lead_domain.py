@@ -3,7 +3,14 @@ from pathlib import Path
 
 import pytest
 
-from src.domain.lead import LeadRecord, LeadStatus, clean_leads, evidence_level, score_lead
+from src.domain.lead import (
+    LeadRecord,
+    LeadStatus,
+    clean_leads,
+    evidence_level,
+    identity_consistency,
+    score_lead,
+)
 
 
 def test_sample_dataset_produces_clean_records_for_sales_review():
@@ -93,6 +100,40 @@ def test_evidence_level_distinguishes_search_and_website_provenance():
     assert evidence_level(search_only) == "search_only"
     assert evidence_level(single) == "single_source"
     assert evidence_level(multiple) == "multi_source"
+
+
+def test_identity_consistency_uses_same_domain_company_and_domain_signals():
+    lead = clean_leads(
+        [
+            LeadRecord(
+                "Elmag GmbH",
+                "https://elmag.eu",
+                source_url="https://elmag.eu/en/home/company",
+                source_excerpt="ELMAG GmbH develops power stations and electricity storage.",
+            )
+        ]
+    )[0]
+
+    result = identity_consistency(lead)
+
+    assert result["status"] == "strong"
+    assert result["score"] >= 70
+    assert "elmag" in result["matched_tokens"]
+
+
+def test_identity_consistency_does_not_treat_search_only_as_company_evidence():
+    lead = clean_leads(
+        [
+            LeadRecord(
+                "Example Buyer",
+                "https://example-buyer.test",
+                source_url="https://www.google.com/search?q=example+buyer",
+                source_excerpt="Example Buyer - official company result",
+            )
+        ]
+    )[0]
+
+    assert identity_consistency(lead)["status"] == "unknown"
 
 
 def test_clean_leads_normalizes_and_merges_same_company_by_domain():
