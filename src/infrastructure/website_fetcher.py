@@ -44,6 +44,9 @@ class WebsiteFetcher:
         raw_html = self._opener(url, self._timeout)
         html = raw_html.decode("utf-8", errors="replace")
         title = self._extract_tag(html, "title")
+        site_name = self._extract_meta_site_name(html)
+        if site_name and site_name.casefold() not in title.casefold():
+            title = " - ".join(value for value in (title, site_name) if value)
         text = self._to_text(html)
         return SourceDocument(
             url=url,
@@ -337,6 +340,22 @@ class WebsiteFetcher:
     def _extract_tag(html: str, tag: str) -> str:
         match = re.search(rf"<{tag}[^>]*>(.*?)</{tag}>", html, flags=re.IGNORECASE | re.DOTALL)
         return " ".join(unescape(match.group(1)).split()) if match else ""
+
+    @staticmethod
+    def _extract_meta_site_name(html: str) -> str:
+        """Read the standard public site-name metadata for identity evidence."""
+        for tag in re.findall(r"<meta\b[^>]*>", html, flags=re.IGNORECASE):
+            attributes = {
+                key.lower(): unescape(value).strip()
+                for key, value in re.findall(
+                    r"([:\w-]+)\s*=\s*[\"'](.*?)[\"']", tag, flags=re.IGNORECASE
+                )
+            }
+            property_name = attributes.get("property", "").casefold()
+            name = attributes.get("name", "").casefold()
+            if property_name == "og:site_name" or name == "application-name":
+                return " ".join(attributes.get("content", "").split())
+        return ""
 
     @staticmethod
     def _to_text(html: str) -> str:

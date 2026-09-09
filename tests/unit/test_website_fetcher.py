@@ -20,6 +20,20 @@ def test_fetcher_extracts_readable_text_and_keeps_source_metadata():
     assert "ignore" not in document.text
 
 
+def test_fetcher_includes_public_site_name_metadata_in_identity_title():
+    fetcher = WebsiteFetcher(
+        opener=lambda url, timeout: (
+            b"<html><head><title>Home</title>"
+            b"<meta property='og:site_name' content='Alpine Outdoor'></head>"
+            b"<body>Company profile</body></html>"
+        )
+    )
+
+    document = fetcher.fetch("https://alpine.example/")
+
+    assert document.title == "Home - Alpine Outdoor"
+
+
 def test_fetcher_rejects_non_http_urls():
     fetcher = WebsiteFetcher(opener=lambda url, timeout: b"")
 
