@@ -1,4 +1,5 @@
 import json
+from dataclasses import replace
 
 from src.application.acquisition_service import AcquisitionService, AssessedLead
 from src.application.reply_analysis import classify_inbound
@@ -399,6 +400,29 @@ def test_api_returns_lead_list():
 
     assert status == 200
     assert payload["items"][0]["lead"]["domain"] == "alpine.example"
+
+
+def test_api_lead_list_sanitizes_legacy_source_evidence():
+    app, task, _, _ = make_app()
+    result = app._leads.results[0]
+    app._leads.results[0] = replace(
+        result,
+        lead=replace(
+            result.lead,
+            sources=(
+                ("https://alpine.example", "Public sales contact"),
+                ("https://alpine.example", "hero-banner.png"),
+                ("https://alpine.example", "contoso@example.com"),
+            ),
+        ),
+    )
+
+    status, payload = app.handle("GET", f"/api/tasks/{task.id}/leads")
+
+    assert status == 200
+    assert payload["items"][0]["lead"]["sources"] == [
+        ["https://alpine.example", "Public sales contact"]
+    ]
 
 
 def test_api_updates_contact_only_with_source_evidence_and_keeps_score():

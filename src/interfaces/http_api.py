@@ -318,7 +318,9 @@ class ApiApplication:
 
     def _lead_list(self, task_id: str) -> tuple[int, dict]:
         self._require_task(task_id)
-        items = [self._assessed(item) for item in self._leads.list_assessments(task_id)]
+        # Route reads through the application service so legacy records receive
+        # the same evidence sanitization and qualification refresh as other reads.
+        items = [self._assessed(item) for item in self._acquisition.list_leads(task_id)]
         return 200, {"items": items}
 
     def _mailbox_status(self) -> tuple[int, dict]:
