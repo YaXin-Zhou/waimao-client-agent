@@ -47,3 +47,6 @@ class ReplyAnalysisService:
 
     def list_for_task(self, task_id: str):
         return self._analyses.list_for_task(task_id)
+
+    def get_by_message_id(self, message_id: str):
+        return self._analyses.get_by_message_id(message_id)

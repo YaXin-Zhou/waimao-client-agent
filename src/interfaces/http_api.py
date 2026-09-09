@@ -40,6 +40,7 @@ class ApiApplication:
         send_safety=None,
         email_send=None,
         follow_up_tasks=None,
+        reply_drafts=None,
     ):
         self._tasks = tasks
         self._leads = leads
@@ -59,6 +60,7 @@ class ApiApplication:
         self._send_safety = send_safety
         self._email_send = email_send
         self._follow_up_tasks = follow_up_tasks
+        self._reply_drafts = reply_drafts
         self._reviews = EmailReviewService(drafts, audit)
 
     def handle(self, method: str, path: str, body=None) -> tuple[int, dict]:
@@ -116,6 +118,13 @@ class ApiApplication:
                 and segments[4] == "run"
             ):
                 return self._analyze_replies(segments[2])
+            if (
+                method == "POST"
+                and len(segments) == 4
+                and segments[:2] == ["api", "tasks"]
+                and segments[3] == "reply-drafts"
+            ):
+                return self._create_reply_draft(segments[2], self._parse_body(body))
             if (
                 method == "GET"
                 and len(segments) == 4
@@ -421,6 +430,36 @@ class ApiApplication:
             "skipped_system_notifications": result.skipped_system_notifications,
             "items": [self._reply_analysis_item(item) for item in result.items],
         }
+
+    def _create_reply_draft(self, task_id: str, body: dict) -> tuple[int, dict]:
+        if self._reply_drafts is None:
+            raise RuntimeError("reply draft provider is not configured")
+        self._require_task(task_id)
+        message_id = str(body.get("message_id", "")).strip()
+        if not message_id or self._inbound_emails is None or self._reply_analysis is None:
+            raise ValueError("message_id and reply analysis are required")
+        message = self._inbound_emails.get_by_message_id(message_id)
+        analysis = self._reply_analysis.get_by_message_id(message_id)
+        if message is None or message.task_id != task_id:
+            raise KeyError("inbound message not found")
+        if analysis is None:
+            raise ValueError("reply analysis is required before drafting")
+        assessed = next(
+            (item for item in self._leads.list_assessments(task_id)
+             if item.lead.domain == message.lead_domain),
+            None,
+        )
+        if assessed is None:
+            raise ValueError("lead is required before drafting")
+        research = self._research.get(task_id, message.lead_domain)
+        if research is None:
+            raise ValueError("research report is required before drafting")
+        task = self._tasks.get(task_id)
+        draft = self._reply_drafts.generate(
+            message, analysis, assessed.lead, research, task.sender_profile
+        )
+        self._drafts.save(draft)
+        return 201, self._draft(draft)
 
     def _reply_analyses(self, task_id: str) -> tuple[int, dict]:
         self._require_task(task_id)

@@ -18,6 +18,7 @@ from src.application.email_send_service import EmailSendService  # noqa: E402
 from src.application.follow_up_task_service import FollowUpTaskService  # noqa: E402
 from src.application.mailbox_sync import MailboxSyncService  # noqa: E402
 from src.application.reply_analysis_service import ReplyAnalysisService  # noqa: E402
+from src.application.reply_draft_service import ReplyDraftService  # noqa: E402
 from src.application.research_execution import ResearchExecutionService  # noqa: E402
 from src.application.research_queue import ResearchJobQueue  # noqa: E402
 from src.application.research_workflow import ResearchWorkflow  # noqa: E402
@@ -158,6 +159,7 @@ application = ApiApplication(
     mailbox_sync=mailbox_sync,
     inbound_emails=inbound_email_repository,
     reply_analysis=reply_analysis_service,
+    reply_drafts=ReplyDraftService(deepseek_provider) if deepseek_provider else None,
     follow_up_tasks=follow_up_task_service,
     send_safety=send_safety_service,
     email_send=email_send_service,
