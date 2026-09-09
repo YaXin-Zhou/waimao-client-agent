@@ -200,6 +200,17 @@ def clean_leads(records: list[LeadRecord]) -> list[CleanLead]:
                 if item.source_url.strip() and is_credible_source_excerpt(item.source_excerpt)
             )
         )
+        if domain:
+            emails = tuple(
+                value
+                for _index, value in sorted(
+                    enumerate(emails),
+                    key=lambda item: (
+                        item[1].rsplit("@", 1)[-1] != domain,
+                        item[0],
+                    ),
+                )
+            )
         flags: list[str] = []
         if not domain:
             flags.append("missing_website")
@@ -212,7 +223,11 @@ def clean_leads(records: list[LeadRecord]) -> list[CleanLead]:
         if len(countries) > 1:
             flags.append("conflicting_country")
         country = countries[0] if countries else ""
-        quality = "complete" if domain and emails and len(countries) <= 1 else "needs_review"
+        quality = (
+            "complete"
+            if domain and emails and len(countries) <= 1 and not flags
+            else "needs_review"
+        )
         result.append(
             CleanLead(company_name, domain, emails, country, quality, tuple(flags), sources)
         )

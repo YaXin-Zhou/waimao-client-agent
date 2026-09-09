@@ -135,6 +135,19 @@ def test_clean_leads_marks_public_email_on_a_different_domain():
     )
 
     assert "email_domain_mismatch" in cleaned[0].flags
+    assert cleaned[0].quality == "needs_review"
+
+
+def test_clean_leads_prefers_same_domain_email_for_primary_contact():
+    cleaned = clean_leads(
+        [
+            LeadRecord("ELMAG", "https://elmag.eu", "office@elmag.at", "Austria"),
+            LeadRecord("ELMAG", "https://elmag.eu", "sales@elmag.eu", "Austria"),
+        ]
+    )
+
+    assert cleaned[0].emails == ("sales@elmag.eu", "office@elmag.at")
+    assert "email_domain_mismatch" in cleaned[0].flags
 
 
 def test_clean_leads_drops_asset_and_placeholder_only_source_excerpts():
@@ -177,7 +190,7 @@ def test_clean_leads_normalizes_explicitly_obfuscated_public_email():
     )
 
     assert cleaned[0].emails == ("info@gbt-international.com",)
-    assert cleaned[0].quality == "complete"
+    assert cleaned[0].quality == "needs_review"
 
 
 def test_score_lead_uses_configured_weights_and_returns_priority():
