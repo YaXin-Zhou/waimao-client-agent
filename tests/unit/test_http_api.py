@@ -510,6 +510,9 @@ def test_api_discovers_and_assesses_using_configured_search_provider():
     assert status == 200
     assert payload["items"][0]["lead"]["domain"] == "discovered.example"
     assert payload["items"][0]["lead"]["sources"][0][0] == "https://discovered.example"
+    assert payload["summary"]["candidate_count"] == 1
+    assert payload["summary"]["qualified_count"] == 1
+    assert payload["summary"]["shortfall"] == task.criteria.qualified_lead_limit - 1
 
 
 def test_api_imports_browser_discovery_results_through_same_assessment_pipeline():
