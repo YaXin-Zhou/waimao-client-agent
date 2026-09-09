@@ -166,6 +166,32 @@ def test_fetch_contact_pages_prioritizes_product_evidence_links():
     ]
 
 
+def test_fetch_contact_pages_keeps_contact_pages_in_a_product_heavy_site():
+    pages = {
+        "https://alpine.example/": (
+            b"<a href='/products/one'>Product one</a>"
+            b"<a href='/products/two'>Product two</a>"
+            b"<a href='/products/three'>Product three</a>"
+            b"<a href='/contact'>Contact</a>"
+        ),
+        "https://alpine.example/products/one": b"Portable power station one",
+        "https://alpine.example/products/two": b"Portable power station two",
+        "https://alpine.example/products/three": b"Portable power station three",
+        "https://alpine.example/contact": b"sales@alpine.example",
+    }
+
+    documents = WebsiteFetcher(opener=lambda url, timeout: pages[url]).fetch_contact_pages(
+        "https://alpine.example/", max_pages=3, priority_terms=("portable power station",)
+    )
+
+    assert [document.url for document in documents] == [
+        "https://alpine.example/",
+        "https://alpine.example/contact",
+        "https://alpine.example/products/one",
+    ]
+    assert documents[1].public_emails[0].address == "sales@alpine.example"
+
+
 def test_fetch_contact_pages_uses_same_domain_sitemap_when_navigation_is_empty():
     pages = {
         "https://alpine.example/": b"<html><body>JavaScript navigation</body></html>",

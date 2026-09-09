@@ -153,12 +153,15 @@ class WebsiteFetcher:
             }
             if term_tokens and term_tokens <= path_tokens:
                 return 60
-        if any(term in path for term in ("product", "power-station", "generator", "solution")):
-            return 30
+        # Keep contact/company pages competitive with product pages.  A bounded
+        # crawl that only follows product URLs can otherwise miss the public
+        # mailbox needed by the next stage of the workflow.
         if any(term in path for term in ("contact", "imprint", "impressum", "legal")):
-            return 20
+            return 50
         if any(term in path for term in ("company", "about", "history")):
-            return 10
+            return 20
+        if any(term in path for term in ("product", "power-station", "generator", "solution")):
+            return 40
         return 0
 
     @staticmethod
