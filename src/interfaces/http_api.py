@@ -980,6 +980,7 @@ class ApiApplication:
             "customer_type": report.customer_type.value,
             "products": report.products,
             "country": report.country,
+            "country_conflict": report.country_conflict,
             "confidence": report.confidence,
             "evidence_url": report.evidence_url,
             "evidence_status": report.evidence_status.value,

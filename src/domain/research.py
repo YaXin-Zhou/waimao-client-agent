@@ -36,6 +36,7 @@ class ResearchResult:
     website_language: str = "unknown"
     custom_fields: dict[str, ResearchFieldValue] | None = None
     evidence_urls: tuple[str, ...] = ()
+    country_conflict: bool = False
 
     def __post_init__(self) -> None:
         if self.custom_fields is None:

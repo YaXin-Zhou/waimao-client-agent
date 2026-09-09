@@ -179,3 +179,26 @@ def test_research_company_marks_conflicting_source_candidates_for_review():
         "https://alpine.example/team",
         "https://alpine.example/contact",
     )
+
+
+def test_research_company_marks_country_conflict_between_lead_and_website():
+    provider = FakeStructuredProvider(
+        {
+            "business_summary": "Retailer of portable power equipment.",
+            "customer_type": "retailer",
+            "products": ["portable power stations"],
+            "country": "Austria",
+            "confidence": 0.9,
+        }
+    )
+
+    result = research_company(
+        provider,
+        CleanLead("ELMAG", "elmag.eu", (), "Germany", "needs_review"),
+        "https://www.elmag.eu/products",
+        "ELMAG is based in Austria and sells portable power stations internationally.",
+    )
+
+    assert result.country == "Austria"
+    assert result.country_conflict is True
+    assert result.evidence_status is EvidenceStatus.INSUFFICIENT

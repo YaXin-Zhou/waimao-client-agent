@@ -468,6 +468,7 @@ class SQLiteResearchRepository:
             "website_language": report.website_language,
             "evidence_urls": report.evidence_urls or (report.evidence_url,),
             "custom_fields": {key: value.to_dict() for key, value in report.custom_fields.items()},
+            "country_conflict": report.country_conflict,
         }
         with _connect(self._database) as connection:
             connection.execute(
@@ -509,6 +510,7 @@ class SQLiteResearchRepository:
                 )
                 for key, value in data.get("custom_fields", {}).items()
             },
+            country_conflict=bool(data.get("country_conflict", False)),
         )
 
 

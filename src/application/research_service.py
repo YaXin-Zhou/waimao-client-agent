@@ -120,20 +120,28 @@ def research_company(
         if not isinstance(raw, dict):
             raise ValueError(f"research custom field must be an object: {field.key}")
         custom_fields[field.key] = _custom_field_value(raw, normalized_sources)
+    reported_country = str(data["country"]).strip()
+    country_conflict = bool(
+        lead.country.strip()
+        and reported_country
+        and reported_country.lower() not in {"unknown", "n/a", "not found"}
+        and reported_country.casefold() != lead.country.strip().casefold()
+    )
     return ResearchResult(
         company_name=lead.company_name,
         business_summary=str(data["business_summary"]),
         customer_type=_customer_type(data["customer_type"]),
         products=tuple(products),
-        country=str(data["country"]),
+        country=reported_country,
         confidence=confidence,
         evidence_url=source_url,
         evidence_status=(
             EvidenceStatus.SUFFICIENT
-            if len(website_text.strip()) >= 40 and confidence >= 0.5
+            if len(website_text.strip()) >= 40 and confidence >= 0.5 and not country_conflict
             else EvidenceStatus.INSUFFICIENT
         ),
         website_language=str(data.get("website_language", "unknown")),
         custom_fields=custom_fields,
         evidence_urls=normalized_sources,
+        country_conflict=country_conflict,
     )
