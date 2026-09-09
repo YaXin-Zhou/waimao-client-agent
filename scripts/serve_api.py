@@ -97,7 +97,9 @@ if config_values.get("SEARCH_BROWSER_ENABLED", "true").lower() == "true":
         host=config_values.get("SEARCH_GOOGLE_HOST", "www.google.com.hk"),
         executable_path=config_values.get("SEARCH_BROWSER_EXECUTABLE", ""),
         headless=config_values.get("SEARCH_BROWSER_HEADLESS", "true").lower() == "true",
-        proxy=config_values.get("SEARCH_BROWSER_PROXY", ""),
+        proxy=config_values.get(
+            "SEARCH_BROWSER_PROXY", config_values.get("HTTPS_PROXY", "")
+        ),
     )
 bing_search_provider = (
     BingSearchProvider(

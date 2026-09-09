@@ -40,6 +40,8 @@ Invoke-RestMethod http://127.0.0.1:8001/api/ready
 
 返回 `status=ready` 后，才开始搜索或背调。真实客户资料、来源证据、筛选结果和邮件草稿保存在 `data/runtime/acquisition.db`。
 
+浏览器搜索默认复用 `HTTPS_PROXY`；如需为浏览器指定不同代理，可在 `config/.env` 增加 `SEARCH_BROWSER_PROXY` 覆盖默认值。修改后需要重启本地 API 进程才能生效。
+
 默认搜索源为 Google 静态请求和无界面 Chrome fallback。Bing 适配器目前属于实验性可选来源，
 默认关闭；只有经过一轮真实相关性抽检后，才建议在 `config/.env` 中设置
 `SEARCH_BING_ENABLED=true`。
