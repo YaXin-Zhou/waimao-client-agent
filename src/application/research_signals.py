@@ -2,21 +2,31 @@
 
 from __future__ import annotations
 
+import re
+
 from src.domain.lead import CleanLead
 from src.domain.research import EvidenceStatus, ResearchResult
 from src.domain.task import AcquisitionCriteria
 
 
 def _matches(left: str, right: str) -> bool:
-    left, right = left.lower().strip(), right.lower().strip()
-    return bool(left and right and (left in right or right in left))
+    left_tokens = {token.rstrip("s") for token in re.findall(r"[a-z0-9]+", left.lower())}
+    right_tokens = {token.rstrip("s") for token in re.findall(r"[a-z0-9]+", right.lower())}
+    return bool(
+        left_tokens
+        and right_tokens
+        and (left_tokens <= right_tokens or right_tokens <= left_tokens)
+    )
 
 
 def build_research_signals(
     lead: CleanLead, research: ResearchResult, criteria: AcquisitionCriteria
 ) -> dict[str, int]:
+    product_terms = (criteria.product, *criteria.keywords)
     product_match = (
-        30 if any(_matches(criteria.product, product) for product in research.products) else 0
+        30
+        if any(_matches(term, product) for term in product_terms for product in research.products)
+        else 0
     )
     market_match = (
         20 if any(_matches(country, research.country) for country in criteria.countries) else 0

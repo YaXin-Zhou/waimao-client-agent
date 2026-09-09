@@ -51,3 +51,20 @@ def test_configured_business_offerings_create_a_relevance_signal_from_research_t
     signals = build_research_signals(lead, research, criteria)
 
     assert signals["configured_service_match"] == 30
+
+
+def test_research_product_signal_uses_configured_keywords_and_normalizes_plural_terms():
+    lead = CleanLead("ELMAG", "elmag.example", (), "Austria", "needs_review")
+    research = ResearchResult(
+        "ELMAG", "Power equipment retailer", CustomerType.RETAILER,
+        ("Power stations",), "Austria", 0.9, "https://elmag.example/about",
+        EvidenceStatus.SUFFICIENT,
+    )
+    criteria = AcquisitionCriteria(
+        "portable solar generator",
+        keywords=("portable power station",),
+    )
+
+    signals = build_research_signals(lead, research, criteria)
+
+    assert signals["product_match"] == 30
