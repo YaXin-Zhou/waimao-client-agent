@@ -165,6 +165,12 @@ class WebsiteFetcher:
             "support",
             "purchase",
             "sourcing",
+            "product",
+            "solution",
+            "catalog",
+            "generator",
+            "power",
+            "equipment",
         )
         links: list[str] = []
         for href, anchor in matches:

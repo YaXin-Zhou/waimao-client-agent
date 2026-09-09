@@ -72,9 +72,24 @@ class ResearchWorkflow:
         if not source_urls:
             raise ValueError("research source must be a public website page")
         documents = []
-        for url in source_urls:
+        fetched_urls: set[str] = set()
+        fetch_contact_pages = getattr(self._websites, "fetch_contact_pages", None)
+        if callable(fetch_contact_pages):
             try:
-                documents.append(self._websites.fetch(url))
+                crawled = fetch_contact_pages(source_url, max_pages=5)
+            except (ConnectionError, OSError, TimeoutError):
+                crawled = ()
+            for document in crawled:
+                if document.url not in fetched_urls:
+                    documents.append(document)
+                    fetched_urls.add(document.url)
+        for url in source_urls:
+            if url in fetched_urls:
+                continue
+            try:
+                document = self._websites.fetch(url)
+                documents.append(document)
+                fetched_urls.add(document.url)
             except (ConnectionError, OSError, TimeoutError):
                 if url == source_url:
                     raise

@@ -31,6 +31,26 @@ class MultiSourceFetcher(FakeFetcher):
         )
 
 
+class CrawlingFetcher(FakeFetcher):
+    def __init__(self):
+        self.urls = []
+
+    def fetch_contact_pages(self, url, max_pages=5):
+        self.urls.extend([url, "https://alpine.example/products", "https://alpine.example/contact"])
+        return tuple(
+            SourceDocument(
+                page,
+                "Source",
+                f"Alpine source confirms portable power stations: {page}",
+            )
+            for page in self.urls
+        )
+
+    def fetch(self, url):
+        self.urls.append(url)
+        return super().fetch(url)
+
+
 class FakeProvider:
     def generate_json(self, prompt):
         return {
@@ -137,3 +157,26 @@ def test_workflow_excludes_search_result_pages_from_research_evidence():
 
     assert fetcher.urls == ["https://alpine.example/about"]
     assert assessment.research.evidence_urls == ("https://alpine.example/about",)
+
+
+def test_workflow_crawls_relevant_same_domain_pages_for_cross_source_research():
+    task = AcquisitionTask.create(
+        "Germany power leads",
+        AcquisitionCriteria(product="portable power station", countries=("Germany",)),
+    )
+    repository = FakeResearchRepository()
+    fetcher = CrawlingFetcher()
+    workflow = ResearchWorkflow(FakeTaskRepository(task), fetcher, FakeProvider(), repository)
+
+    assessment = workflow.run(
+        task.id,
+        CleanLead("Alpine", "alpine.example", ("sales@alpine.example",), "Germany", "complete"),
+        "https://alpine.example/about",
+        weights={"product_match": 30},
+    )
+
+    assert assessment.research.evidence_urls == (
+        "https://alpine.example/about",
+        "https://alpine.example/products",
+        "https://alpine.example/contact",
+    )
