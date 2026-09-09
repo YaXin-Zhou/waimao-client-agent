@@ -1,4 +1,5 @@
 from src.application.reply_analysis import classify_inbound
+from src.application.reply_analysis_service import ReplyAnalysisService
 from src.domain.inbound_email import InboundEmail
 from src.domain.reply_analysis import ReplyCategory
 
@@ -47,3 +48,24 @@ def test_system_notification_is_not_classified_as_customer_reply():
     )
 
     assert message.is_system_notification
+
+
+def test_analysis_service_skips_system_notifications():
+    system_message = make_message("Welcome to your mailbox", "Welcome")
+    system_message = InboundEmail(
+        **{**system_message.__dict__, "from_email": "no-reply@mailsupport.aliyun.com"}
+    )
+
+    class Messages:
+        def list_for_task(self, task_id):
+            return [system_message]
+
+    class Analyses:
+        def get_by_message_id(self, message_id):
+            raise AssertionError("system notification must not be classified")
+
+    result = ReplyAnalysisService(Messages(), Analyses()).analyze_task("task-1")
+
+    assert result.analyzed == 0
+    assert result.reused == 0
+    assert result.items == ()
