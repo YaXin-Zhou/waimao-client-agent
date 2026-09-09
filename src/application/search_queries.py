@@ -4,11 +4,11 @@ from __future__ import annotations
 
 from itertools import product
 
-from src.domain.task import AcquisitionCriteria
+from src.domain.task import AcquisitionCriteria, configured_research_terms
 
 
 def build_search_queries(criteria: AcquisitionCriteria) -> tuple[str, ...]:
-    terms = criteria.keywords or (criteria.product,)
+    terms = configured_research_terms(criteria)
     industries = criteria.industries or ("",)
     customer_types = criteria.customer_types or ("",)
     countries = criteria.countries or ("",)

@@ -10,6 +10,7 @@ from src.application.research_signals import build_research_signals
 from src.domain.lead import CleanLead, LeadScore, is_search_source, score_lead
 from src.domain.research import ResearchResult
 from src.domain.research_run import ResearchRunStep
+from src.domain.task import configured_research_terms
 
 
 class TaskReader(Protocol):
@@ -80,7 +81,7 @@ class ResearchWorkflow:
                     crawled = fetch_contact_pages(
                         source_url,
                         max_pages=5,
-                        priority_terms=(task.criteria.product, *task.criteria.keywords),
+                        priority_terms=configured_research_terms(task.criteria),
                     )
                 except TypeError:
                     # Keep the port compatible with simple test or custom readers.

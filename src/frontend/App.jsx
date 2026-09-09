@@ -471,8 +471,8 @@ function App() {
       name: form.get('name'),
       criteria: {
         product: form.get('product'),
-        countries: [form.get('country')],
-        customer_types: [form.get('customerType')],
+        countries: form.get('countries').split(',').map((item) => item.trim()).filter(Boolean),
+        customer_types: form.get('customer_types').split(',').map((item) => item.trim()).filter(Boolean),
         language: form.get('language') || 'English',
         daily_limit: 10,
         qualified_lead_limit: 10,
@@ -541,7 +541,7 @@ function App() {
       </div>
     </main>
     {toast && <div className="toast"><span>✓</span>{toast}</div>}
-    {showTask && <div className="modal-backdrop" onClick={() => setShowTask(false)}><form className="task-modal" onSubmit={createTask} onClick={(event) => event.stopPropagation()}><button type="button" className="modal-close" onClick={() => setShowTask(false)}>×</button><span className="modal-icon"><Icon name="plus"/></span><h2>新建获客任务</h2><p>定义目标产品、国家、客户类型和发件人资料，系统将按规则运行搜索与背调。</p><label>任务名称<input name="name" defaultValue="便携式太阳能发电机 · 欧洲渠道" required/></label><label>目标产品<input name="product" defaultValue="portable solar generator" required/></label><label>补充关键词（逗号分隔）<input name="keywords" defaultValue="portable power station, solar generator, energy storage" placeholder="可填写其他语言或行业表达" /></label><div className="modal-grid"><label>目标市场<select name="country" defaultValue="Germany"><option>Germany</option><option>France</option><option>Netherlands</option></select></label><label>客户类型<select name="customerType" defaultValue="Distributor"><option value="distributor">Distributor</option><option value="retailer">Retailer</option><option value="wholesaler">Wholesaler</option></select></label></div><TaskCriteriaBuilder/><div className="sender-config"><strong>发件人资料（可选）</strong><p>填写后用于生成新开发信；留空则继续使用占位符。</p><label>公司名称<input name="senderCompany" placeholder="例如：ABC Trading Co., Ltd." /></label><label>联系人姓名<input name="senderName" placeholder="例如：Li Ming" /></label><label>职位<input name="senderPosition" placeholder="例如：Sales Manager" /></label></div><button type="submit" className="primary-button full">创建任务草稿 <Icon name="arrow" size={16}/></button></form></div>}
+    {showTask && <div className="modal-backdrop" onClick={() => setShowTask(false)}><form className="task-modal" onSubmit={createTask} onClick={(event) => event.stopPropagation()}><button type="button" className="modal-close" onClick={() => setShowTask(false)}>×</button><span className="modal-icon"><Icon name="plus"/></span><h2>新建获客任务</h2><p>填写你要推广的业务、关键词和目标市场，系统将按配置运行搜索与背调。</p><label>任务名称<input name="name" placeholder="例如：拉美 CNC 客户开发" required/></label><label>业务或产品主词（可选）<input name="product" placeholder="没有主词时可只填写业务目录或关键词" /></label><label>搜索关键词（逗号分隔）<input name="keywords" placeholder="例如：CNC machining, precision parts，可填写其他语言表达" /></label><div className="modal-grid"><label>目标市场（逗号分隔，可选）<input name="countries" placeholder="例如：Germany, Mexico" /></label><label>客户类型（逗号分隔，可选）<input name="customer_types" placeholder="例如：distributor, manufacturer" /></label></div><TaskCriteriaBuilder/><div className="sender-config"><strong>发件人资料（可选）</strong><p>填写后用于生成新开发信；留空则继续使用占位符。</p><label>公司名称<input name="senderCompany" placeholder="例如：ABC Trading Co., Ltd." /></label><label>联系人姓名<input name="senderName" placeholder="例如：Li Ming" /></label><label>职位<input name="senderPosition" placeholder="例如：Sales Manager" /></label></div><button type="submit" className="primary-button full">创建任务草稿 <Icon name="arrow" size={16}/></button></form></div>}
     {showRuleEditor && remoteTaskConfig && <RuleEditorModal task={remoteTaskConfig} onClose={() => setShowRuleEditor(false)} onSave={saveCriteria}/>}
     {showBrowserImport && (
       <BrowserImportModal onClose={() => setShowBrowserImport(false)} onImport={importBrowserResults} loading={browserImportLoading}/>

@@ -25,7 +25,12 @@ from src.domain.lead import (
     score_lead,
 )
 from src.domain.sender_profile import SenderProfile
-from src.domain.task import AcquisitionCriteria, AcquisitionTask, TaskStatus
+from src.domain.task import (
+    AcquisitionCriteria,
+    AcquisitionTask,
+    TaskStatus,
+    configured_research_terms,
+)
 
 
 @dataclass(frozen=True)
@@ -131,7 +136,7 @@ class AcquisitionService:
         """Check configured product terms against non-search-page source text."""
         terms = tuple(
             term.strip().lower()
-            for term in (criteria.product, *criteria.keywords)
+            for term in configured_research_terms(criteria)
             if term.strip()
         )
         searchable = " ".join(
@@ -179,7 +184,7 @@ class AcquisitionService:
                 and not AcquisitionService._same_domain_sources(item.lead)
             ):
                 reasons.append("missing_website_evidence")
-            if criteria.product.strip() and not AcquisitionService.has_product_evidence(
+            if configured_research_terms(criteria) and not AcquisitionService.has_product_evidence(
                 item.lead, criteria
             ):
                 reasons.append("missing_product_evidence")
@@ -519,7 +524,7 @@ class AcquisitionService:
             "max_pages": self._website_page_limit,
             "allow_external_sources": allow_external_sources,
             "max_external_pages": self._external_source_limit,
-            "priority_terms": (criteria.product, *criteria.keywords),
+            "priority_terms": configured_research_terms(criteria),
         }
         try:
             return fetch_pages(website, **kwargs)

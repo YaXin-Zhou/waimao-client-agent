@@ -6,7 +6,7 @@ import re
 
 from src.domain.lead import CleanLead
 from src.domain.research import EvidenceStatus, ResearchResult
-from src.domain.task import AcquisitionCriteria
+from src.domain.task import AcquisitionCriteria, configured_research_terms
 
 
 def _matches(left: str, right: str) -> bool:
@@ -22,7 +22,7 @@ def _matches(left: str, right: str) -> bool:
 def build_research_signals(
     lead: CleanLead, research: ResearchResult, criteria: AcquisitionCriteria
 ) -> dict[str, int]:
-    product_terms = (criteria.product, *criteria.keywords)
+    product_terms = configured_research_terms(criteria)
     product_match = (
         30
         if any(_matches(term, product) for term in product_terms for product in research.products)

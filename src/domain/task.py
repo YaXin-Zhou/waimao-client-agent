@@ -28,7 +28,7 @@ class TaskStatus(StrEnum):
 class AcquisitionCriteria:
     """由用户填写或选择的获客条件，不包含行业固定规则。"""
 
-    product: str
+    product: str = ""
     countries: tuple[str, ...] = ()
     industries: tuple[str, ...] = ()
     customer_types: tuple[str, ...] = ()
@@ -44,8 +44,8 @@ class AcquisitionCriteria:
     research_fields: tuple[ResearchFieldDefinition, ...] = ()
 
     def __post_init__(self) -> None:
-        if not self.product.strip():
-            raise ValueError("product is required")
+        if not configured_research_terms(self):
+            raise ValueError("at least one product, keyword, or business offering term is required")
         if self.daily_limit <= 0:
             raise ValueError("daily_limit must be positive")
         if self.qualified_lead_limit <= 0:
@@ -56,6 +56,14 @@ class AcquisitionCriteria:
             raise ValueError("candidate_limit must cover qualified_lead_limit")
         validate_unique_keys(self.business_offerings)
         validate_unique_keys(self.research_fields)
+
+
+def configured_research_terms(criteria: AcquisitionCriteria) -> tuple[str, ...]:
+    """Return user-provided terms used for discovery and evidence matching."""
+    values: list[str] = [criteria.product, *criteria.keywords]
+    for offering in criteria.business_offerings:
+        values.extend((offering.name, *offering.keywords))
+    return tuple(dict.fromkeys(value.strip() for value in values if value.strip()))
 
 
 @dataclass(frozen=True)
