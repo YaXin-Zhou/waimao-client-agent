@@ -103,6 +103,7 @@ function App() {
         const loaded = (data.items || []).map(mapRemoteLead)
         if (!cancelled) {
           setRemoteLeads(loaded)
+          setDiscoverySummary(data.summary || null)
           setSelected(loaded.find((lead) => lead.qualified) || null)
           setApiState(loaded.length ? 'connected' : 'empty')
         }

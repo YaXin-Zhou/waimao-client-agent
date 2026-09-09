@@ -320,8 +320,9 @@ class ApiApplication:
         self._require_task(task_id)
         # Route reads through the application service so legacy records receive
         # the same evidence sanitization and qualification refresh as other reads.
-        items = [self._assessed(item) for item in self._acquisition.list_leads(task_id)]
-        return 200, {"items": items}
+        assessed = self._acquisition.list_leads(task_id)
+        items = [self._assessed(item) for item in assessed]
+        return 200, {"items": items, "summary": self._discovery_summary(task_id, assessed)}
 
     def _mailbox_status(self) -> tuple[int, dict]:
         return 200, {
@@ -651,6 +652,12 @@ class ApiApplication:
         return 200, self._discovery_payload(task_id, results)
 
     def _discovery_payload(self, task_id: str, results) -> dict:
+        return {
+            "items": [self._assessed(item) for item in results],
+            "summary": self._discovery_summary(task_id, results),
+        }
+
+    def _discovery_summary(self, task_id: str, results) -> dict:
         task = self._tasks.get(task_id)
         if task is None:
             raise KeyError(f"Task not found: {task_id}")
@@ -672,16 +679,13 @@ class ApiApplication:
             ),
         }
         return {
-            "items": [self._assessed(item) for item in results],
-            "summary": {
-                "candidate_count": len(results),
-                "qualified_count": qualified_count,
-                "target_qualified_count": target,
-                "shortfall": max(0, target - qualified_count),
-                "candidate_limit": task.criteria.candidate_limit or task.criteria.daily_limit,
-                "funnel": funnel,
-                "rejection_counts": rejection_counts,
-            },
+            "candidate_count": len(results),
+            "qualified_count": qualified_count,
+            "target_qualified_count": target,
+            "shortfall": max(0, target - qualified_count),
+            "candidate_limit": task.criteria.candidate_limit or task.criteria.daily_limit,
+            "funnel": funnel,
+            "rejection_counts": rejection_counts,
         }
 
     def _import_discovery(self, task_id: str, body: dict) -> tuple[int, dict]:

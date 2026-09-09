@@ -400,6 +400,8 @@ def test_api_returns_lead_list():
 
     assert status == 200
     assert payload["items"][0]["lead"]["domain"] == "alpine.example"
+    assert payload["summary"]["candidate_count"] == 1
+    assert payload["summary"]["funnel"]["public_email_count"] == 1
 
 
 def test_api_lead_list_sanitizes_legacy_source_evidence():
