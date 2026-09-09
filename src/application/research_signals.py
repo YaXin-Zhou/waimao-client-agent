@@ -23,7 +23,7 @@ def build_research_signals(
     )
     email_quality = 15 if lead.emails else 0
     evidence_quality = 5 if research.evidence_status is EvidenceStatus.SUFFICIENT else 0
-    return {
+    signals = {
         "product_match": product_match,
         "market_match": market_match,
         "buying_signal": 0,
@@ -31,3 +31,15 @@ def build_research_signals(
         "company_size": 0,
         "evidence_quality": evidence_quality,
     }
+    if criteria.business_offerings:
+        searchable_text = " ".join(
+            [research.business_summary, *research.products]
+            + [field.value for field in research.custom_fields.values()]
+        )
+        offering_match = any(
+            _matches(term, searchable_text)
+            for offering in criteria.business_offerings
+            for term in (offering.name, *offering.keywords)
+        )
+        signals["configured_service_match"] = 30 if offering_match else 0
+    return signals
