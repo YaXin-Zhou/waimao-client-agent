@@ -62,3 +62,26 @@ def test_bing_provider_excludes_non_company_result_hosts():
     )
 
     assert [result.website for result in results] == ["https://real-company.example/"]
+
+
+def test_bing_provider_deduplicates_company_pages_by_normalized_domain():
+    html = """
+    <ol>
+      <li class="b_algo"><h2><a href="https://supplier.example/">Supplier home</a></h2></li>
+      <li class="b_algo"><h2><a href="https://supplier.example/contact">
+        Supplier contact</a></h2></li>
+      <li class="b_algo"><h2><a href="https://another.example/">Another company</a></h2></li>
+    </ol>
+    """
+
+    provider = BingSearchProvider(opener=lambda request, timeout: Response(html))
+    results = provider.search(
+        AcquisitionCriteria(
+            product="portable power station", candidate_limit=2, qualified_lead_limit=2
+        )
+    )
+
+    assert [result.website for result in results] == [
+        "https://supplier.example/",
+        "https://another.example/",
+    ]

@@ -10,7 +10,7 @@ from urllib.parse import parse_qs, quote_plus, urlsplit
 from urllib.request import Request, urlopen
 
 from src.application.search_queries import build_search_queries
-from src.domain.lead import LeadRecord
+from src.domain.lead import LeadRecord, canonical_website_domain
 from src.domain.task import AcquisitionCriteria
 from src.infrastructure.google_search_provider import GoogleSearchProvider, SearchProviderError
 
@@ -77,7 +77,7 @@ class BingSearchProvider:
     def search(self, criteria: AcquisitionCriteria) -> list[LeadRecord]:
         candidate_limit = criteria.candidate_limit or criteria.daily_limit
         records: list[LeadRecord] = []
-        seen: set[str] = set()
+        seen_domains: set[str] = set()
         for query in build_search_queries(criteria):
             for start in range(1, candidate_limit + 1, self._max_results):
                 url = (
@@ -100,14 +100,16 @@ class BingSearchProvider:
                     parsed = urlsplit(href)
                     resolved = self._resolve_result_url(href)
                     parsed = urlsplit(resolved)
+                    domain = canonical_website_domain(resolved)
                     if (
                         not GoogleSearchProvider._is_candidate(resolved, title)
                         or not parsed.hostname
+                        or not domain
                     ):
                         continue
-                    if resolved in seen:
+                    if domain in seen_domains:
                         continue
-                    seen.add(resolved)
+                    seen_domains.add(domain)
                     records.append(
                         LeadRecord(
                             company_name=title,
