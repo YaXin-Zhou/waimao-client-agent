@@ -111,24 +111,45 @@ class WebsiteFetcher:
         max_pages: int,
         priority_terms: tuple[str, ...],
     ) -> None:
-        """Use a same-domain sitemap only when linked pages did not fill the budget."""
-        sitemap_url = urljoin(home_url, "/sitemap.xml")
-        try:
-            sitemap = self.fetch(sitemap_url)
-        except Exception:
-            return
+        """Use bounded same-domain sitemaps only when navigation is insufficient."""
+        home_host = self._host_key(home_url)
+        sitemap_queue = [
+            urljoin(home_url, "/sitemap.xml"),
+            urljoin(home_url, "/sitemap_index.xml"),
+        ]
+        visited_sitemaps: set[str] = set()
+        page_urls: list[str] = []
+        # Sitemap indexes commonly point to several child sitemaps.  Read only
+        # a small same-domain set so a large site cannot turn this bounded crawl
+        # into an unbounded download.
+        while sitemap_queue and len(visited_sitemaps) < 4:
+            sitemap_url = sitemap_queue.pop(0)
+            sitemap_key = self._page_key(sitemap_url)
+            if sitemap_key in visited_sitemaps or self._host_key(sitemap_url) != home_host:
+                continue
+            visited_sitemaps.add(sitemap_key)
+            try:
+                sitemap = self.fetch(sitemap_url)
+            except Exception:
+                continue
+            for link in self._extract_sitemap_urls(sitemap.text):
+                if self._host_key(link) != home_host:
+                    continue
+                if self._is_sitemap_url(link):
+                    if self._page_key(link) not in visited_sitemaps:
+                        sitemap_queue.append(link)
+                else:
+                    page_urls.append(link)
         sitemap_urls = sorted(
-            self._extract_sitemap_urls(sitemap.text),
+            dict.fromkeys(page_urls),
             key=lambda item: self._link_priority(item, priority_terms),
             reverse=True,
         )
-        home_host = (urlparse(home_url).hostname or "").lower().removeprefix("www.")
         for link in sitemap_urls:
             if len(documents) >= max_pages:
                 return
             page_key = self._page_key(link)
-            link_host = (urlparse(link).hostname or "").lower().removeprefix("www.")
-            if page_key in seen or link_host != home_host:
+            if page_key in seen or self._host_key(link) != home_host:
                 continue
             seen.add(page_key)
             try:
@@ -141,6 +162,14 @@ class WebsiteFetcher:
         parsed = urlparse(url)
         hostname = (parsed.hostname or "").lower().removeprefix("www.")
         return parsed._replace(netloc=hostname).geturl().rstrip("/")
+
+    @staticmethod
+    def _host_key(url: str) -> str:
+        return (urlparse(url).hostname or "").lower().removeprefix("www.")
+
+    @staticmethod
+    def _is_sitemap_url(url: str) -> bool:
+        return urlparse(url).path.lower().endswith((".xml", ".xml.gz"))
 
     @staticmethod
     def _link_priority(url: str, priority_terms: tuple[str, ...] = ()) -> int:

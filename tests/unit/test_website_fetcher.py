@@ -211,3 +211,27 @@ def test_fetch_contact_pages_uses_same_domain_sitemap_when_navigation_is_empty()
         "https://alpine.example/",
         "https://alpine.example/portable-power-stations",
     ]
+
+
+def test_fetch_contact_pages_reads_bounded_sitemap_indexes():
+    pages = {
+        "https://alpine.example/": b"<html><body>JavaScript navigation</body></html>",
+        "https://alpine.example/sitemap.xml": b"<sitemapindex></sitemapindex>",
+        "https://alpine.example/sitemap_index.xml": (
+            b"<sitemapindex><loc>https://alpine.example/products.xml</loc></sitemapindex>"
+        ),
+        "https://alpine.example/products.xml": (
+            b"<urlset><loc>https://alpine.example/contact</loc></urlset>"
+        ),
+        "https://alpine.example/contact": b"Contact sales@alpine.example",
+    }
+
+    documents = WebsiteFetcher(opener=lambda url, timeout: pages[url]).fetch_contact_pages(
+        "https://alpine.example/", max_pages=2
+    )
+
+    assert [document.url for document in documents] == [
+        "https://alpine.example/",
+        "https://alpine.example/contact",
+    ]
+    assert documents[1].public_emails[0].address == "sales@alpine.example"
