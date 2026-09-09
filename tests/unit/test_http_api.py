@@ -401,6 +401,23 @@ def test_api_creates_task_from_form_configuration():
                 "countries": ["France"],
                 "customer_types": ["distributor"],
                 "daily_limit": 5,
+                "qualified_lead_limit": 3,
+                "keywords": ["portable power station", "solar generator supplier"],
+                "business_offerings": [
+                    {
+                        "name": "CNC machining",
+                        "key": "cnc_parts",
+                        "keywords": ["CNC", "precision machining"],
+                    }
+                ],
+                "research_fields": [
+                    {
+                        "name": "Buyer role",
+                        "key": "buyer_role",
+                        "keywords": ["sourcing manager"],
+                        "human_review": True,
+                    }
+                ],
             },
             "sender_profile": {
                 "company_name": "Northstar Trading",
@@ -413,8 +430,14 @@ def test_api_creates_task_from_form_configuration():
     assert status == 201
     assert payload["name"] == "France solar distributors"
     assert payload["status"] == "draft"
-    assert app._tasks.get(payload["id"]).criteria.countries == ("France",)
-    assert app._tasks.get(payload["id"]).sender_profile.company_name == "Northstar Trading"
+    created = app._tasks.get(payload["id"])
+    assert created.criteria.countries == ("France",)
+    assert created.criteria.qualified_lead_limit == 3
+    assert created.criteria.keywords == ("portable power station", "solar generator supplier")
+    assert created.criteria.business_offerings[0].key == "cnc_parts"
+    assert created.criteria.research_fields[0].key == "buyer_role"
+    assert created.criteria.research_fields[0].human_review is True
+    assert created.sender_profile.company_name == "Northstar Trading"
 
 
 def test_api_returns_lead_list():
