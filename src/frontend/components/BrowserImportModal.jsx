@@ -13,8 +13,10 @@ export default function BrowserImportModal({ onClose, onImport, loading }) {
       const records = sourceRecords.map((item, index) => {
         const website = String(item.website || item.url || '').trim()
         if (!website) throw new Error(`第 ${index + 1} 条缺少 website`)
+        const companyName = String(item.company_name || item.title || '').trim()
+        if (!companyName) throw new Error(`第 ${index + 1} 条缺少 company_name 或 title`)
         return {
-          company_name: String(item.company_name || item.title || '').trim() || 'Unknown',
+          company_name: companyName,
           website,
           country: String(item.country || '').trim(),
           source_url: String(item.source_url || '').trim() || website,
