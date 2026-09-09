@@ -122,3 +122,19 @@ pytest -q
 ruff check src/application/acquisition_service.py src/domain/lead.py src/infrastructure/website_fetcher.py tests/unit/test_website_fetcher.py tests/integration/test_acquisition_service.py
 Invoke-RestMethod http://127.0.0.1:8001/api/ready
 ```
+
+## 2026-09-09 真实候选池扩展测试
+
+为验证“每天尽量筛出 30 个合格客户”的数据基础，使用 Google 可见浏览器结果获取真实制造商官网，再由官网采集器逐站核验。此次没有使用模拟记录，也没有把搜索摘要中的邮箱直接视为官网邮箱。
+
+| 指标 | 结果 |
+|---|---:|
+| 真实候选官网 | 28 |
+| 官网成功访问 | 23 |
+| 同时有公开邮箱和业务关键词证据 | 18 |
+| 因证书错误、超时或无邮箱未确认 | 10 |
+| 邮箱去重规范化 | 已验证 |
+
+本轮测试支持扩大候选池后获取足量联系人的判断，但 18 个“邮箱+业务证据”是抓取层指标，不等同于最终交付合格数。最终合格数仍需通过评分阈值、邮箱域名一致性、公司身份和人工复核规则。按当前观测结果，若目标为 30 个合格客户，应准备至少 50～100 个候选官网，并以实际漏斗数据为准。
+
+本轮还修复了 `mailto:` 前缀与可见邮箱重复计数的问题；修复后 `china-plasticparts.com` 的同一邮箱只保留一条记录。全量自动化测试为 196 项通过。
