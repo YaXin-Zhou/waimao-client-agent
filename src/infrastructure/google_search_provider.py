@@ -159,7 +159,10 @@ class GoogleSearchProvider:
                     if len(results) >= candidate_limit:
                         return results
                 if added_on_page == 0:
-                    break
+                    # A page may contain only filtered directories, duplicates,
+                    # or non-company results. Keep the bounded pagination so a
+                    # noisy page cannot hide valid candidates on the next one.
+                    continue
         return results
 
     @staticmethod

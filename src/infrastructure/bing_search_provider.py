@@ -122,7 +122,9 @@ class BingSearchProvider:
                     if len(records) >= candidate_limit:
                         return records
                 if added == 0:
-                    break
+                    # Keep scanning the bounded result pages after a page that
+                    # contains only filtered or duplicate entries.
+                    continue
         if not records:
             raise SearchProviderError("Bing search returned no public website results")
         return records

@@ -52,6 +52,31 @@ def test_google_provider_deduplicates_multiple_pages_from_one_domain():
     ]
 
 
+def test_google_provider_continues_after_a_page_with_only_filtered_results():
+    pages = {
+        0: '<a href="https://www.linkedin.com/company/example">Directory</a>',
+        5: '<a href="https://real-manufacturer.example/"><h3>Real Manufacturer</h3></a>',
+    }
+
+    def open_search(request, timeout):
+        start = int(request.full_url.split("start=")[-1])
+        return FakeResponse(pages.get(start, ""))
+
+    provider = GoogleSearchProvider(opener=open_search, max_results_per_query=5)
+    results = provider.search(
+        AcquisitionCriteria(
+            product="portable power station",
+            daily_limit=1,
+            qualified_lead_limit=1,
+            candidate_limit=10,
+        )
+    )
+
+    assert [item.website for item in results] == [
+        "https://real-manufacturer.example/"
+    ]
+
+
 def test_google_provider_uses_default_candidate_pool_of_at_least_100():
     html = "".join(
         f'<a href="https://example-{index}.com"><h3>Example {index}</h3></a>' for index in range(4)
