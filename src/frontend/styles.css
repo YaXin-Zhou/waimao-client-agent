@@ -193,6 +193,11 @@ h1 { color: #132238; font-size: 29px; font-weight: 700; letter-spacing: -.8px; }
 .maintenance-tools-body { position: absolute; z-index: 3; top: calc(100% + 7px); right: 0; width: 240px; padding: 11px; border: 1px solid #dce7f0; border-radius: 7px; background: #fff; box-shadow: 0 12px 28px rgba(23, 53, 84, .14); }
 .maintenance-tools-body small { display: block; margin-bottom: 9px; color: #8796a6; line-height: 1.5; }
 .maintenance-tools-body .outline-button { width: 100%; justify-content: center; }
+.maintenance-inline { margin-top: 17px; padding-top: 13px; border-top: 1px solid #e9eef3; }
+.maintenance-inline summary { color: #7b8b9c; cursor: pointer; font-size: 12px; font-weight: 600; list-style: none; }
+.maintenance-inline summary::-webkit-details-marker { display: none; }
+.maintenance-inline summary::before { content: '⚙'; margin-right: 6px; color: #9aa8b7; }
+.maintenance-inline[open] summary { margin-bottom: 2px; color: #5f7287; }
 .discovery-funnel { margin: -4px 0 16px; padding: 11px 13px; border: 1px solid #dce8f2; border-radius: 6px; color: #718196; background: #fff; font-size: 11px; }
 .discovery-funnel > div:first-child { display: flex; align-items: center; justify-content: space-between; gap: 12px; }
 .discovery-funnel strong { color: #41566d; font-size: 12px; }
