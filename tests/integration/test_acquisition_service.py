@@ -146,6 +146,38 @@ def test_service_enriches_automatic_search_with_real_public_website_emails():
     assert results[0].lead.sources[-1][0] == "https://alpine.example"
 
 
+def test_service_uses_fetched_website_text_as_match_evidence_without_query_injection():
+    class Search:
+        def search(self, criteria):
+            return [LeadRecord("Alpine", "https://alpine.example", "", "Germany")]
+
+    class Reader:
+        def fetch(self, url):
+            return SourceDocument(
+                url,
+                "Alpine portable power station",
+                "We distribute portable power stations for outdoor retailers.",
+            )
+
+    tasks = InMemoryTaskRepository()
+    service = AcquisitionService(
+        tasks,
+        InMemoryLeadRepository(),
+        search_provider=Search(),
+        website_reader=Reader(),
+    )
+    task = service.create_task(
+        "Website evidence", AcquisitionCriteria(product="portable power station")
+    )
+
+    result = service.discover_and_assess(
+        task.id, {"product_match": 30}, {}
+    )[0]
+
+    assert result.score.breakdown["product_match"] == 30
+    assert "portable power stations" in result.lead.sources[0][1]
+
+
 def test_service_updates_configurable_criteria_without_recreating_task():
     service = AcquisitionService(InMemoryTaskRepository(), InMemoryLeadRepository())
     task = service.create_task("EU outdoor leads", AcquisitionCriteria(product="old service"))

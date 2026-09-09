@@ -34,7 +34,7 @@ def test_bing_provider_parses_public_result_links_and_keeps_source():
 
     assert len(results) == 1
     assert results[0].website == "https://supplier.example/"
-    assert "Bing result for" in results[0].source_excerpt
+    assert results[0].source_excerpt == "Supplier"
     assert calls[0][0].startswith("https://www.bing.com/search?")
 
 

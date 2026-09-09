@@ -2,6 +2,7 @@
 
 from __future__ import annotations
 
+import re
 from dataclasses import dataclass, replace
 from email.utils import parseaddr
 from enum import StrEnum
@@ -126,6 +127,18 @@ def is_plausible_email(email: str) -> bool:
     return True
 
 
+def is_credible_source_excerpt(excerpt: str) -> bool:
+    """Reject obvious asset names and placeholder-only evidence snippets."""
+    value = _normalize_text(excerpt)
+    if not value:
+        return False
+    if re.fullmatch(r"[^\s/]+\.(?:png|jpe?g|gif|svg|webp|avif|ico)", value, re.IGNORECASE):
+        return False
+    if re.fullmatch(r"[^\s@]+@[^\s@]+", value):
+        return is_plausible_email(value)
+    return True
+
+
 def _normalize_country(country: str) -> str:
     value = _normalize_text(country)
     return _COUNTRY_NAMES.get(value.upper(), value)
@@ -159,7 +172,7 @@ def clean_leads(records: list[LeadRecord]) -> list[CleanLead]:
             dict.fromkeys(
                 (item.source_url.strip(), item.source_excerpt.strip())
                 for item in group
-                if item.source_url.strip()
+                if item.source_url.strip() and is_credible_source_excerpt(item.source_excerpt)
             )
         )
         flags: list[str] = []

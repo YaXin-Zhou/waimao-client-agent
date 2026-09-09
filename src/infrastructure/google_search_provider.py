@@ -107,7 +107,7 @@ class GoogleSearchProvider:
                             company_name=title,
                             website=url,
                             source_url=url,
-                            source_excerpt=f"Google result for: {query}",
+                            source_excerpt=title,
                         )
                     )
                     added_on_page += 1

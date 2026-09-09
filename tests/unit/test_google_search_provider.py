@@ -30,7 +30,7 @@ def test_google_provider_extracts_public_urls_deduplicates_and_never_guesses_ema
         "https://north.example/",
     ]
     assert results[0].email == ""
-    assert "portable power station" in results[0].source_excerpt
+    assert results[0].source_excerpt == "Alpine Energy"
 
 
 def test_google_provider_honors_daily_limit():

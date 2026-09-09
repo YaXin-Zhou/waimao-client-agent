@@ -92,6 +92,34 @@ def test_clean_leads_marks_public_email_on_a_different_domain():
     assert "email_domain_mismatch" in cleaned[0].flags
 
 
+def test_clean_leads_drops_asset_and_placeholder_only_source_excerpts():
+    cleaned = clean_leads(
+        [
+            LeadRecord(
+                "Supplier",
+                "https://supplier.example",
+                "sales@supplier.example",
+                source_url="https://supplier.example",
+                source_excerpt="Public sales contact",
+            ),
+            LeadRecord(
+                "Supplier",
+                "https://supplier.example",
+                source_url="https://supplier.example",
+                source_excerpt="hero-banner.png",
+            ),
+            LeadRecord(
+                "Supplier",
+                "https://supplier.example",
+                source_url="https://supplier.example",
+                source_excerpt="contoso@example.com",
+            ),
+        ]
+    )
+
+    assert cleaned[0].sources == (("https://supplier.example", "Public sales contact"),)
+
+
 def test_clean_leads_normalizes_explicitly_obfuscated_public_email():
     cleaned = clean_leads(
         [

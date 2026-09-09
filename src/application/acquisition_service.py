@@ -12,7 +12,15 @@ from src.application.ports import (
     TaskRepository,
 )
 from src.domain.audit_event import AuditEvent
-from src.domain.lead import CleanLead, LeadRecord, LeadScore, LeadStatus, clean_leads, score_lead
+from src.domain.lead import (
+    CleanLead,
+    LeadRecord,
+    LeadScore,
+    LeadStatus,
+    clean_leads,
+    is_credible_source_excerpt,
+    score_lead,
+)
 from src.domain.sender_profile import SenderProfile
 from src.domain.task import AcquisitionCriteria, AcquisitionTask, TaskStatus
 
@@ -165,6 +173,23 @@ class AcquisitionService:
         if task is None:
             raise KeyError(f"Task not found: {task_id}")
         current = self._leads.list_assessments(task_id)
+        sanitized = [
+            replace(
+                item,
+                lead=replace(
+                    item.lead,
+                    sources=tuple(
+                        source
+                        for source in item.lead.sources
+                        if source[0].strip() and is_credible_source_excerpt(source[1])
+                    ),
+                ),
+            )
+            for item in current
+        ]
+        if sanitized != current:
+            self._leads.save_assessments(task_id, sanitized)
+            current = sanitized
         # 兼容升级前写入的记录：旧记录没有资格判断字段，需要按当前任务规则重评估。
         refreshed = self._qualify(current, task.criteria)
         if refreshed != current:
@@ -389,6 +414,18 @@ class AcquisitionService:
             except Exception:
                 continue
             for document in documents:
+                excerpt = self._document_excerpt(document)
+                if excerpt:
+                    enriched.append(
+                        LeadRecord(
+                            company_name=record.company_name,
+                            website=record.website,
+                            country=record.country,
+                            source_url=document.url,
+                            source_excerpt=excerpt,
+                        )
+                    )
+            for document in documents:
                 for public_email in getattr(document, "public_emails", ()):
                     enriched.append(
                         LeadRecord(
@@ -401,3 +438,14 @@ class AcquisitionService:
                         )
                     )
         return enriched
+
+    @staticmethod
+    def _document_excerpt(document) -> str:
+        """Persist a bounded, human-readable excerpt from a fetched public page."""
+        title = " ".join(str(getattr(document, "title", "")).split())
+        text = " ".join(str(getattr(document, "text", "")).split())
+        if not title and not text:
+            return ""
+        if len(text) > 600:
+            text = text[:600].rstrip() + "…"
+        return " - ".join(value for value in (title, text) if value)

@@ -110,7 +110,7 @@ class BingSearchProvider:
                             company_name=title,
                             website=resolved,
                             source_url=url,
-                            source_excerpt=f"Bing result for: {query}",
+                            source_excerpt=title,
                         )
                     )
                     added += 1
