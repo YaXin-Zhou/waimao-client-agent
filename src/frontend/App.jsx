@@ -663,7 +663,7 @@ function DiscoveryFunnel({ summary }) {
 
 function DiscoveryNotice({ error }) {
   const unavailable = error.code === 'search_provider_unavailable'
-  return <div className="discovery-notice" role="status"><strong>{unavailable ? '搜索入口暂时不可用' : '搜索未完成'}</strong><span>{unavailable ? '本次未生成客户记录；可以稍后重试，或导入真实搜索结果。' : error.message || '未生成客户记录，请检查搜索条件。'}</span>{error.retryable && <small>可稍后重试</small>}</div>
+  return <div className="discovery-notice" role="status"><strong>{unavailable ? '搜索入口暂时不可用' : '搜索未完成'}</strong><span>{unavailable ? '本次未生成客户记录，请稍后重试。必要时由技术人员在维护工具中处理。' : error.message || '未生成客户记录，请检查搜索条件。'}</span>{error.retryable && <small>可稍后重试</small>}</div>
 }
 
 function Metric({ icon, label, value, note }) { return <div className="metric"><span className={`metric-icon ${icon}`}><Icon name={icon === 'researching' ? 'users' : icon} size={20}/></span><div><span>{label}</span><strong>{value}<Icon name="arrow" size={16}/></strong><small>{note}</small></div></div> }
