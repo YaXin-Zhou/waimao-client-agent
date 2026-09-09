@@ -287,3 +287,57 @@ def test_research_company_requires_sources_when_configured_for_a_field():
     )
 
     assert result.evidence_status is EvidenceStatus.INSUFFICIENT
+
+
+def test_research_company_accepts_equivalent_source_url_format_and_keeps_allowed_url():
+    provider = FakeStructuredProvider(
+        {
+            "business_summary": "Manufacturer of precision parts.",
+            "customer_type": "manufacturer",
+            "products": ["precision parts"],
+            "country": "Germany",
+            "confidence": 0.9,
+            "custom_fields": {
+                "company_type": {
+                    "value": "GmbH",
+                    "status": "reported",
+                    "sources": ["HTTPS://ALPINE.EXAMPLE/about/#company"],
+                }
+            },
+        }
+    )
+
+    result = research_company(
+        provider,
+        CleanLead("Alpine", "alpine.example", (), "Germany", "needs_review"),
+        "https://alpine.example/about/",
+        "A sufficiently long source text for the research report.",
+        (ResearchFieldDefinition("Company type", "company_type"),),
+        ("https://alpine.example/about/",),
+    )
+
+    assert result.custom_fields["company_type"].sources == (
+        "https://alpine.example/about/",
+    )
+
+
+def test_research_company_rejects_malformed_custom_field_sources():
+    provider = FakeStructuredProvider(
+        {
+            "business_summary": "Manufacturer of precision parts.",
+            "customer_type": "manufacturer",
+            "products": ["precision parts"],
+            "country": "Germany",
+            "confidence": 0.9,
+            "custom_fields": {"company_type": {"value": "GmbH", "sources": "not-a-list"}},
+        }
+    )
+
+    with pytest.raises(ValueError, match="sources must be an array"):
+        research_company(
+            provider,
+            CleanLead("Alpine", "alpine.example", (), "Germany", "needs_review"),
+            "https://alpine.example/about",
+            "A sufficiently long source text for the research report.",
+            (ResearchFieldDefinition("Company type", "company_type"),),
+        )

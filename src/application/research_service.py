@@ -6,7 +6,7 @@ from datetime import datetime, timezone
 from typing import Protocol
 
 from src.domain.custom_research import ResearchFieldDefinition, ResearchFieldValue
-from src.domain.lead import CleanLead
+from src.domain.lead import CleanLead, canonical_source_url
 from src.domain.research import CustomerType, EvidenceStatus, ResearchResult
 
 
@@ -32,7 +32,21 @@ def _custom_field_value(
     checked_at: str,
 ) -> ResearchFieldValue:
     """Normalize one model field and force review when cited values disagree."""
-    allowed = set(allowed_sources)
+    allowed_by_key = {
+        canonical_source_url(source): source
+        for source in allowed_sources
+        if canonical_source_url(source)
+    }
+
+    def permitted_source(value: object) -> str:
+        source = str(value).strip()
+        return allowed_by_key.get(canonical_source_url(source), "")
+
+    raw_sources = raw.get("sources", [])
+    if not isinstance(raw_sources, list) or not all(
+        isinstance(source, str) for source in raw_sources
+    ):
+        raise ValueError("custom field sources must be an array of URLs")
     candidates = raw.get("candidates", [])
     if isinstance(candidates, list):
         parsed = [
@@ -40,7 +54,7 @@ def _custom_field_value(
             for item in candidates
             if isinstance(item, dict)
             and str(item.get("value", "")).strip()
-            and str(item.get("source", "")) in allowed
+            and permitted_source(item.get("source", ""))
         ]
         values = list(dict.fromkeys(str(item["value"]).strip() for item in parsed))
         if len(values) > 1:
@@ -48,15 +62,20 @@ def _custom_field_value(
                 value=" / ".join(values),
                 status="conflicting",
                 confidence=0.0,
-                sources=tuple(dict.fromkeys(str(item["source"]) for item in parsed)),
+                sources=tuple(
+                    dict.fromkeys(permitted_source(item["source"]) for item in parsed)
+                ),
                 checked_at=checked_at,
             )
 
+    permitted_sources = [permitted_source(source) for source in raw_sources]
     return ResearchFieldValue(
         value=str(raw.get("value", "")),
         status=str(raw.get("status", "unknown")),
         confidence=float(raw.get("confidence", 0)),
-        sources=tuple(str(item) for item in raw.get("sources", []) if str(item) in allowed),
+        sources=tuple(
+            dict.fromkeys(source for source in permitted_sources if source)
+        ),
         checked_at=checked_at,
     )
 
