@@ -45,9 +45,10 @@ function FieldInput({ label, value, onChange, placeholder }) {
   return <label className="criteria-input">{label}<input value={value} onChange={(event) => onChange(event.target.value)} placeholder={placeholder} /></label>
 }
 
-export default function TaskCriteriaBuilder({ initialCriteria = {} }) {
+export default function TaskCriteriaBuilder({ initialCriteria = {}, collapsedByDefault = false }) {
   const [offerings, setOfferings] = useState(() => (initialCriteria.business_offerings?.length ? initialCriteria.business_offerings : DEFAULT_OFFERINGS).map((item) => ({ ...item, keywords: Array.isArray(item.keywords) ? item.keywords.join(', ') : item.keywords })))
   const [fields, setFields] = useState(() => (initialCriteria.research_fields?.length ? initialCriteria.research_fields : DEFAULT_FIELDS).map((item) => ({ ...item, type: item.type || 'text', keywords: Array.isArray(item.keywords) ? item.keywords.join(', ') : item.keywords, options: Array.isArray(item.options) ? item.options.join(', ') : item.options })))
+  const [expanded, setExpanded] = useState(!collapsedByDefault)
   const offeringsRef = useRef(null)
   const fieldsRef = useRef(null)
   const update = (setter, index, key, value) => setter((items) => items.map((item, itemIndex) => itemIndex === index ? { ...item, [key]: value } : item))
@@ -60,8 +61,9 @@ export default function TaskCriteriaBuilder({ initialCriteria = {} }) {
     if (fieldsRef.current) fieldsRef.current.value = fieldsJson
   }, [offeringsJson, fieldsJson])
 
-  return <section className="criteria-builder">
-    <div className="criteria-builder-heading"><div><strong>可配置研究规则</strong><p>已预填当前客户需要的项目，可删除、修改或继续添加。</p></div><span>{serializedOfferings.length + serializedFields.length} 项</span></div>
+  return <details className="criteria-builder criteria-advanced" open={expanded} onToggle={(event) => setExpanded(event.currentTarget.open)}>
+    <summary className="criteria-builder-heading"><div><strong>可配置研究规则</strong><p>{expanded ? '已预填当前客户需要的项目，可删除、修改或继续添加。' : '已预填常用规则，不修改也可以直接开始搜索。'}</p></div><span>{serializedOfferings.length + serializedFields.length} 项</span></summary>
+    <div className="criteria-builder-content">
     <input type="hidden" name="language" defaultValue="English" />
     <textarea hidden ref={offeringsRef} name="business_offerings" readOnly defaultValue="[]" />
     <textarea hidden ref={fieldsRef} name="research_fields" readOnly defaultValue="[]" />
@@ -89,5 +91,6 @@ export default function TaskCriteriaBuilder({ initialCriteria = {} }) {
         <div className="criteria-checks"><label><input type="checkbox" checked={item.required} onChange={(event) => update(setFields, index, 'required', event.target.checked)} />必须填写</label><label><input type="checkbox" checked={item.evidence_required} onChange={(event) => update(setFields, index, 'evidence_required', event.target.checked)} />必须有来源</label><label><input type="checkbox" checked={item.human_review} onChange={(event) => update(setFields, index, 'human_review', event.target.checked)} />人工复核</label></div>
       </div>)}
     </div>
-  </section>
+    </div>
+  </details>
 }
