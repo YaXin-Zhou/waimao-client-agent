@@ -6,7 +6,7 @@ import re
 from dataclasses import dataclass
 from html import unescape
 from typing import Callable
-from urllib.parse import urlparse
+from urllib.parse import urljoin, urlparse
 from urllib.request import Request, urlopen
 
 
@@ -23,6 +23,7 @@ class SourceDocument:
     title: str
     text: str
     public_emails: tuple[PublicEmail, ...] = ()
+    links: tuple[str, ...] = ()
 
 
 class WebsiteFetcher:
@@ -47,7 +48,42 @@ class WebsiteFetcher:
             title=title,
             text=text,
             public_emails=self._extract_public_emails(html, url),
+            links=self._extract_links(html, url),
         )
+
+    def fetch_contact_pages(
+        self,
+        url: str,
+        max_pages: int = 5,
+        allow_external_sources: bool = False,
+        max_external_pages: int = 3,
+    ) -> tuple[SourceDocument, ...]:
+        """抓取有限的相关页面；外站只跟随官网明确链接且有独立上限。"""
+        if max_pages <= 0:
+            raise ValueError("max_pages must be positive")
+        if max_external_pages < 0:
+            raise ValueError("max_external_pages must not be negative")
+        home = self.fetch(url)
+        documents = [home]
+        seen = {home.url}
+        external_count = 0
+        for link in home.links:
+            if len(documents) >= max_pages or link in seen:
+                break
+            parsed_link = urlparse(link)
+            same_domain = (parsed_link.hostname or "").lower() == (
+                urlparse(home.url).hostname or ""
+            ).lower()
+            if not same_domain:
+                if not allow_external_sources or external_count >= max_external_pages:
+                    continue
+                external_count += 1
+            seen.add(link)
+            try:
+                documents.append(self.fetch(link))
+            except Exception:
+                continue
+        return tuple(documents)
 
     @staticmethod
     def _open(url: str, timeout: int) -> bytes:
@@ -94,3 +130,37 @@ class WebsiteFetcher:
             result.append(PublicEmail(normalized, source_url, excerpt))
             seen.add(normalized)
         return tuple(result)
+
+    @staticmethod
+    def _extract_links(html: str, base_url: str) -> tuple[str, ...]:
+        base = urlparse(base_url)
+        if not base.hostname:
+            return ()
+        matches = re.findall(
+            r"<a[^>]+href=[\"']([^\"']+)[\"'][^>]*>(.*?)</a>",
+            html,
+            flags=re.IGNORECASE | re.DOTALL,
+        )
+        keywords = (
+            "contact",
+            "about",
+            "imprint",
+            "impressum",
+            "legal",
+            "company",
+            "support",
+            "purchase",
+            "sourcing",
+        )
+        links: list[str] = []
+        for href, anchor in matches:
+            candidate = urljoin(base_url, unescape(href).strip()).split("#", 1)[0]
+            parsed = urlparse(candidate)
+            if parsed.scheme not in {"http", "https"}:
+                continue
+            haystack = f"{parsed.path} {unescape(anchor)}".lower()
+            if not any(keyword in haystack for keyword in keywords):
+                continue
+            if candidate not in links:
+                links.append(candidate)
+        return tuple(links)

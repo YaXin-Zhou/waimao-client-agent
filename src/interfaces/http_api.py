@@ -635,7 +635,7 @@ class ApiApplication:
                 if isinstance(signals, dict)
             },
         )
-        return 200, {"items": [self._assessed(item) for item in results]}
+        return 200, self._discovery_payload(task_id, results)
 
     def _discover_leads(self, task_id: str, body: dict) -> tuple[int, dict]:
         weights = body.get(
@@ -646,7 +646,24 @@ class ApiApplication:
         if not isinstance(weights, dict) or not isinstance(signals, dict):
             raise ValueError("weights and signals_by_domain must be objects")
         results = self._acquisition.discover_and_assess(task_id, weights, signals)
-        return 200, {"items": [self._assessed(item) for item in results]}
+        return 200, self._discovery_payload(task_id, results)
+
+    def _discovery_payload(self, task_id: str, results) -> dict:
+        task = self._tasks.get(task_id)
+        if task is None:
+            raise KeyError(f"Task not found: {task_id}")
+        qualified_count = sum(1 for item in results if item.qualified)
+        target = task.criteria.qualified_lead_limit
+        return {
+            "items": [self._assessed(item) for item in results],
+            "summary": {
+                "candidate_count": len(results),
+                "qualified_count": qualified_count,
+                "target_qualified_count": target,
+                "shortfall": max(0, target - qualified_count),
+                "candidate_limit": task.criteria.candidate_limit or task.criteria.daily_limit,
+            },
+        }
 
     def _import_discovery(self, task_id: str, body: dict) -> tuple[int, dict]:
         if str(body.get("source_mode", "")).strip() != "browser":

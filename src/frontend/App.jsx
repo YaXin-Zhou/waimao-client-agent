@@ -331,7 +331,8 @@ function App() {
       setRemoteLeads(loaded)
       setSelected(loaded.find((lead) => lead.qualified) || null)
       setApiState(loaded.length ? 'connected' : 'empty')
-      notify(`搜索完成：发现 ${loaded.length} 条候选客户，已进入客户池`)
+      const summary = payload.summary
+      notify(`搜索完成：${summary?.qualified_count || 0}/${summary?.target_qualified_count || 0} 家合格，候选 ${summary?.candidate_count || loaded.length} 家${summary?.shortfall ? `，还缺 ${summary.shortfall} 家` : ''}`)
     } catch (error) { notify(error.message || '搜索失败，请检查外网或搜索适配器') } finally { setDiscoverLoading(false) }
   }
   const syncMailbox = async () => {

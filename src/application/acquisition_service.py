@@ -39,6 +39,8 @@ class AcquisitionService:
         self._search = search_provider
         self._audit = audit_repository
         self._website_reader = website_reader
+        self._website_page_limit = 5
+        self._external_source_limit = 3
 
     def create_task(
         self,
@@ -363,18 +365,29 @@ class AcquisitionService:
                 continue
             fetched.add(domain)
             try:
-                document = self._website_reader.fetch(record.website.strip())
+                fetch_pages = getattr(self._website_reader, "fetch_contact_pages", None)
+                documents = (
+                    fetch_pages(
+                        record.website.strip(),
+                        max_pages=self._website_page_limit,
+                        allow_external_sources=True,
+                        max_external_pages=self._external_source_limit,
+                    )
+                    if fetch_pages is not None
+                    else (self._website_reader.fetch(record.website.strip()),)
+                )
             except Exception:
                 continue
-            for public_email in getattr(document, "public_emails", ()):
-                enriched.append(
-                    LeadRecord(
-                        company_name=record.company_name,
-                        website=record.website,
-                        email=public_email.address,
-                        country=record.country,
-                        source_url=public_email.source_url,
-                        source_excerpt=public_email.excerpt,
+            for document in documents:
+                for public_email in getattr(document, "public_emails", ()):
+                    enriched.append(
+                        LeadRecord(
+                            company_name=record.company_name,
+                            website=record.website,
+                            email=public_email.address,
+                            country=record.country,
+                            source_url=public_email.source_url,
+                            source_excerpt=public_email.excerpt,
+                        )
                     )
-                )
         return enriched
