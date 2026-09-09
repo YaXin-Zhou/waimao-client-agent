@@ -5,6 +5,7 @@ from src.application.reply_analysis import classify_inbound
 from src.application.reply_analysis_service import ReplyAnalysisService
 from src.application.reply_draft_service import ReplyDraftService
 from src.domain.audit_event import AuditEvent
+from src.domain.custom_research import ResearchFieldValue
 from src.domain.email_draft import EmailDraft
 from src.domain.inbound_email import InboundEmail
 from src.domain.lead import CleanLead, LeadScore
@@ -51,6 +52,20 @@ class Research:
             0.9,
             "https://alpine.example/about",
             EvidenceStatus.SUFFICIENT,
+            website_language="en",
+            custom_fields={
+                "buyer_role": ResearchFieldValue(
+                    value="Sourcing Manager",
+                    status="verified",
+                    confidence=0.88,
+                    sources=("https://alpine.example/contact",),
+                    checked_at="2026-09-09T10:00:00Z",
+                )
+            },
+            evidence_urls=(
+                "https://alpine.example/about",
+                "https://alpine.example/contact",
+            ),
         )
 
 
@@ -191,6 +206,14 @@ def test_api_returns_leads_and_research_detail():
     assert payload["lead"]["company_name"] == "Alpine Energy"
     assert payload["lead"]["website"] == "https://alpine.example"
     assert payload["research"]["evidence_status"] == "sufficient"
+    assert payload["research"]["evidence_urls"] == [
+        "https://alpine.example/about",
+        "https://alpine.example/contact",
+    ]
+    assert payload["research"]["custom_fields"]["buyer_role"]["value"] == "Sourcing Manager"
+    assert payload["research"]["custom_fields"]["buyer_role"]["sources"] == [
+        "https://alpine.example/contact"
+    ]
     assert payload["draft"]["recipient_email"] == "sales@alpine.example"
 
 
