@@ -37,3 +37,13 @@ def test_multilingual_pricing_and_complaint_are_classified_without_model():
     assert pricing.category is ReplyCategory.PRICING
     assert complaint.category is ReplyCategory.COMPLAINT
     assert complaint.needs_human_review
+
+
+def test_system_notification_is_not_classified_as_customer_reply():
+    message = InboundEmail.create(
+        "2", "<welcome@example>", "", (), "no-reply@mailsupport.aliyun.com",
+        ("seller@example.com",), "Welcome to your mailbox", "Welcome",
+        "2026-09-08T10:00:00+00:00", "task-1", "",
+    )
+
+    assert message.is_system_notification

@@ -23,6 +23,10 @@ class InboundEmail:
     lead_domain: str = ""
     is_bounce: bool = False
 
+    @property
+    def is_system_notification(self) -> bool:
+        return is_system_notification(self.from_email, self.subject)
+
     @classmethod
     def create(
         cls,
@@ -75,6 +79,28 @@ def is_bounce_subject(subject: str) -> bool:
 def is_bounce_sender(sender: str) -> bool:
     value = sender.lower()
     return "mailer-daemon" in value or "postmaster" in value
+
+
+def is_system_notification(sender: str, subject: str) -> bool:
+    """识别明显的系统通知，避免把平台邮件当成客户意向。"""
+    sender_value = sender.strip().lower()
+    subject_value = subject.strip().lower()
+    automated_sender = any(
+        token in sender_value
+        for token in ("no-reply", "noreply", "donotreply", "do-not-reply")
+    )
+    provider_notification = any(
+        domain in sender_value
+        for domain in ("@mailsupport.aliyun.com", "@aliyun.com")
+    )
+    system_subject = any(
+        token in subject_value
+        for token in (
+            "welcome", "欢迎使用", "account verification", "验证邮箱",
+            "系统通知", "security alert", "安全提醒",
+        )
+    )
+    return provider_notification or (automated_sender and system_subject)
 
 
 def parse_received_date(value: str) -> str:

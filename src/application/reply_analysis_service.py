@@ -25,6 +25,8 @@ class ReplyAnalysisService:
         reused = 0
         items = []
         for message in self._messages.list_for_task(task_id):
+            if message.is_system_notification:
+                continue
             existing = self._analyses.get_by_message_id(message.message_id)
             if existing is not None:
                 reused += 1

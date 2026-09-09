@@ -34,6 +34,18 @@ def test_bounce_is_detected_without_model_call():
     assert parse_email("8", raw).is_bounce
 
 
+def test_platform_welcome_mail_is_marked_as_system_notification():
+    raw = (
+        b"Message-ID: <welcome-1@aliyun.com>\n"
+        b"From: Aliyun <no-reply@mailsupport.aliyun.com>\n"
+        b"To: postmaster@example.com\n"
+        b"Subject: Welcome to your mailbox\n\n"
+        b"Welcome"
+    )
+
+    assert parse_email("9", raw).is_system_notification
+
+
 def test_incomplete_imap_config_is_not_configured():
     assert not AliImapConfig("imap.example", "user", "").configured
 

@@ -790,6 +790,7 @@ class ApiApplication:
             "thread_key": message.thread_key,
             "lead_domain": message.lead_domain,
             "is_bounce": message.is_bounce,
+            "is_system_notification": message.is_system_notification,
         }
 
     @staticmethod
