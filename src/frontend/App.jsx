@@ -742,8 +742,34 @@ function ReviewControls({ lead, sendingEnabled, onReview, onSafetyCheck, safetyL
 
 export default App
 function LeadTimeline({ lead, events, onTransition, loading }) {
+  const transitionOptions = {
+    new: ['cleaning', 'awaiting_score'],
+    cleaning: ['awaiting_score', 'invalid'],
+    awaiting_score: ['awaiting_review', 'selected', 'invalid'],
+    awaiting_review: ['selected', 'invalid'],
+    selected: ['contacted', 'paused', 'invalid'],
+    contacted: ['replied', 'following_up', 'paused'],
+    replied: ['following_up', 'converted', 'paused'],
+    following_up: ['replied', 'converted', 'paused'],
+    paused: ['selected', 'contacted', 'following_up'],
+  }
   const [target, setTarget] = useState('awaiting_score')
   const [actor, setActor] = useState('')
   const [note, setNote] = useState('')
-  return <div className="lead-timeline"><div className="section-title"><h3>状态时间线</h3><span>当前：{lead.workflowStatus || 'new'} · {events.length} 条记录</span></div><div className="lead-transition"><select value={target} onChange={(event) => setTarget(event.target.value)}><option value="awaiting_score">待评分</option><option value="awaiting_review">待审核</option><option value="selected">已入选</option><option value="contacted">已联系</option><option value="replied">已回复</option><option value="following_up">跟进中</option><option value="paused">暂缓</option><option value="invalid">无效</option></select><input value={actor} onChange={(event) => setActor(event.target.value)} placeholder="操作人"/><input value={note} onChange={(event) => setNote(event.target.value)} placeholder="变更原因（可选）"/><button className="outline-button" disabled={loading || !actor.trim() || target === lead.workflowStatus} onClick={() => onTransition(target, actor, note)}>{loading ? '保存中…' : target === lead.workflowStatus ? '已是当前状态' : '更新状态'}</button></div>{events.length ? <div className="timeline-list">{events.map((event) => <div className="timeline-row" key={event.id}><strong>{event.from_status} → {event.to_status}</strong><span>{event.actor} · {new Date(event.occurred_at).toLocaleString()}</span>{event.note && <p>{event.note}</p>}</div>)}</div> : <p className="timeline-empty">客户状态尚未发生可审计变更。</p>}</div>
+  const currentStatus = lead.workflowStatus || 'new'
+  const options = transitionOptions[currentStatus] || []
+  useEffect(() => {
+    setTarget(options[0] || '')
+    setActor('')
+    setNote('')
+  }, [lead.domain, currentStatus])
+  return <div className="lead-timeline"><div className="section-title"><h3>状态时间线</h3><span>当前：{workflowStatusLabel(currentStatus)} · {events.length} 条记录</span></div><div className="lead-transition"><select value={target} onChange={(event) => setTarget(event.target.value)} disabled={!options.length}>{options.length ? options.map((status) => <option value={status} key={status}>{workflowStatusLabel(status)}</option>) : <option value="">暂无可用流转</option>}</select><input value={actor} onChange={(event) => setActor(event.target.value)} placeholder="操作人"/><input value={note} onChange={(event) => setNote(event.target.value)} placeholder="变更原因（可选）"/><button className="outline-button" disabled={loading || !options.length || !actor.trim()} onClick={() => onTransition(target, actor, note)}>{loading ? '保存中…' : options.length ? '更新状态' : '状态已结束'}</button></div>{events.length ? <div className="timeline-list">{events.map((event) => <div className="timeline-row" key={event.id}><strong>{workflowStatusLabel(event.from_status)} → {workflowStatusLabel(event.to_status)}</strong><span>{event.actor} · {new Date(event.occurred_at).toLocaleString()}</span>{event.note && <p>{event.note}</p>}</div>)}</div> : <p className="timeline-empty">客户状态尚未发生可审计变更。</p>}</div>
+}
+
+function workflowStatusLabel(status) {
+  return {
+    new: '新客户', cleaning: '清洗中', awaiting_score: '待评分', awaiting_review: '待审核',
+    selected: '已入选', contacted: '已联系', replied: '已回复', following_up: '跟进中',
+    converted: '已转化', paused: '暂缓', invalid: '无效',
+  }[status] || status || '未知状态'
 }
