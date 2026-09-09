@@ -26,7 +26,7 @@ function Icon({ name, size = 18 }) {
 
 function Status({ status }) {
   const labels = { evidence: ['证据充分', 'green'], complete: ['待补充', 'amber'], researching: ['研究中', 'blue'], review: ['待审核', 'orange'] }
-  const [label, tone] = labels[status]
+  const [label, tone] = labels[status] || ['状态未知', 'amber']
   return <span className={`status status-${tone}`}><i />{label}</span>
 }
 
@@ -358,7 +358,7 @@ function App() {
       <div className="sidebar-bottom"><div className="sidebar-rule"/><p>让中国制造<br/>连接全球真实需求</p><small>NORTHSTAR OPS<br/><em>v0.1.0 · LOCAL</em></small></div>
     </aside>
     <main className="main-shell">
-      <header className="topbar"><div className="search-global"><Icon name="search" size={17}/><input value={query} onChange={(event) => setQuery(event.target.value)} placeholder="搜索公司、域名或关键词…"/><kbd>⌘ K</kbd></div><div className="top-actions"><button className="icon-button" onClick={() => notify('暂无新的系统通知')} aria-label="通知"><Icon name="bell" size={20}/><i className="notification-dot"/></button><span className="top-divider"/><div className="profile"><span className="avatar">ZL</span><span><strong>张力</strong><small>销售团队</small></span><span className="chevron">⌄</span></div></div></header>
+      <header className="topbar"><div className="search-global"><Icon name="search" size={17}/><input value={query} onChange={(event) => setQuery(event.target.value)} placeholder="搜索公司、域名或关键词…"/><kbd>⌘ K</kbd></div><div className="top-actions"><button className="icon-button" onClick={() => notify('暂无新的系统通知')} aria-label="通知"><Icon name="bell" size={20}/><i className="notification-dot"/></button><span className="top-divider"/><div className="profile"><span className="avatar">LO</span><span><strong>本地操作人</strong><small>当前工作区</small></span><span className="chevron">⌄</span></div></div></header>
       <div className="content">
         <div className="page-heading"><div><h1>客户智能工作台</h1><p>从公开证据到可审核的下一步</p></div><button className="primary-button" onClick={() => setShowTask(true)}><Icon name="plus" size={19}/>新建获客任务</button></div>
         <div className={`data-notice ${apiState}`}><span />{apiState === 'loading' ? '正在读取本地任务数据…' : apiState === 'connected' ? '已连接本地 API · 当前显示持久化客户档案' : apiState === 'empty' ? 'API 已连接 · 当前没有可显示的真实客户档案' : 'API 连接失败 · 为避免混淆，已隐藏演示数据'}</div>
