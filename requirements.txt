@@ -1,1 +1,2 @@
 deep-translator==1.11.4
+playwright==1.60.0

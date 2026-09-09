@@ -14,6 +14,10 @@
 `src/infrastructure/browser_search_provider.py` 接收浏览器读取的可见结果，适用于
 Google 返回 JavaScript 页面时的真实搜索流程。两者都保存查询来源，不从域名推测邮箱。
 
+本地 API 默认还配置 `FallbackSearchProvider`：静态 Google 请求明确失败后，自动调用
+`PlaywrightSearchProvider` 的无界面 Chrome；它通过导航和 DOM/重定向读取结果，不执行人工
+点击。Consent、验证码和异常流量页面会停止流程并返回错误，人工导入仅作为显式兜底。
+
 本机真实验证表明，Google 无浏览器会话的静态请求可能返回仅含 `enablejs` 的页面，
 此时 `GoogleSearchProvider` 必须明确失败，不能返回空客户池或虚构结果。使用浏览器
 获得可见结果后，通过统一的 `POST /api/tasks/{task_id}/discover/import` 入口导入，仍然经过同一

@@ -42,7 +42,7 @@ Invoke-RestMethod http://127.0.0.1:8001/api/ready
 
 ## Google Consent 页面处理
 
-如果点击“开始搜索客户”后 Google 返回 JavaScript/Consent 页面，系统会明确提示失败，不会生成空客户或猜测数据。此时在浏览器中完成可见搜索，把结果整理为 JSON，在工作台点击“导入浏览器结果”；导入后系统会自动抓取官网及相关联系页、过滤占位邮箱、保存来源并重新筛选。
+点击“开始搜索客户”后，系统先自动发送静态请求；若 Google 返回 JavaScript/Consent 页面，会自动尝试以无界面 Chrome 读取公开可见结果，不弹出窗口、不模拟人工点击。若 Google 对自动化会话返回 Consent、验证码或异常流量页，系统会明确提示失败，不生成空客户或猜测数据。此时才使用“导入浏览器结果”作为人工兜底；导入后系统会自动抓取官网及相关联系页、过滤占位邮箱、保存来源并重新筛选。
 
 JSON 最少包含 `title`（或 `company_name`）、`website`，推荐同时保留 `excerpt` 和 `source_url`：
 

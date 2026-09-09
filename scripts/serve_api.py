@@ -28,10 +28,12 @@ from src.application.translation_service import TranslationService  # noqa: E402
 from src.infrastructure.ali_imap import AliImapConfig, AliImapMailbox  # noqa: E402
 from src.infrastructure.ali_smtp import AliSmtpConfig, AliSmtpMailer  # noqa: E402
 from src.infrastructure.deepseek_provider import DeepSeekConfig, DeepSeekProvider  # noqa: E402
+from src.infrastructure.fallback_search_provider import FallbackSearchProvider  # noqa: E402
 from src.infrastructure.google_search_provider import GoogleSearchProvider  # noqa: E402
 from src.infrastructure.machine_translation_provider import (  # noqa: E402
     GoogleMachineTranslationProvider,
 )
+from src.infrastructure.playwright_search_provider import PlaywrightSearchProvider  # noqa: E402
 from src.infrastructure.sqlite_repositories import (  # noqa: E402
     SQLiteAuditEventRepository,
     SQLiteEmailDraftRepository,
@@ -81,11 +83,22 @@ email_draft_repository = SQLiteEmailDraftRepository(DATABASE)
 email_send_attempt_repository = SQLiteEmailSendAttemptRepository(DATABASE)
 follow_up_task_repository = SQLiteFollowUpTaskRepository(DATABASE)
 audit_repository = SQLiteAuditEventRepository(DATABASE)
-search_provider = GoogleSearchProvider(
+static_search_provider = GoogleSearchProvider(
     timeout=float(config_values.get("SEARCH_TIMEOUT_SECONDS", "15")),
     max_results_per_query=int(config_values.get("SEARCH_RESULTS_PER_QUERY", "10")),
     host=config_values.get("SEARCH_GOOGLE_HOST", "www.google.com.hk"),
 )
+browser_search_provider = None
+if config_values.get("SEARCH_BROWSER_ENABLED", "true").lower() == "true":
+    browser_search_provider = PlaywrightSearchProvider(
+        timeout=float(config_values.get("SEARCH_BROWSER_TIMEOUT_SECONDS", "30")),
+        max_results_per_query=int(config_values.get("SEARCH_RESULTS_PER_QUERY", "10")),
+        host=config_values.get("SEARCH_GOOGLE_HOST", "www.google.com.hk"),
+        executable_path=config_values.get("SEARCH_BROWSER_EXECUTABLE", ""),
+        headless=config_values.get("SEARCH_BROWSER_HEADLESS", "true").lower() == "true",
+        proxy=config_values.get("SEARCH_BROWSER_PROXY", ""),
+    )
+search_provider = FallbackSearchProvider(static_search_provider, browser_search_provider)
 try:
     deepseek_provider = DeepSeekProvider(DeepSeekConfig.from_env_file(ROOT / "config" / ".env"))
 except (FileNotFoundError, ValueError):

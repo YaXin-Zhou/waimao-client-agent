@@ -8,3 +8,7 @@
 
 `browser_search_provider.py` 接收浏览器控制器读取到的可见结果，负责转换为统一的
 `LeadRecord`。它不会自行点击页面，也不会从公司域名推测邮箱。
+
+`playwright_search_provider.py` 是本地自动 fallback：默认以无界面 Chrome 导航并读取
+Google 可见结果，通过请求解析 Google 重定向，不模拟人工点击。遇到 Consent、验证码或
+异常流量页面时明确失败；`fallback_search_provider.py` 只在静态搜索明确失败时切换它。
