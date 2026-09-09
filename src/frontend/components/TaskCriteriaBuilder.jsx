@@ -6,6 +6,21 @@ const emptyField = () => ({
   required: false, evidence_required: true, human_review: true, options: '',
 })
 
+const DEFAULT_OFFERINGS = [
+  { name: '注塑件 / Injection molded parts', key: 'injection_molded_parts', description: '判断客户是否确实采购或使用塑料注塑件。', keywords: 'injection molding, injection molded parts, plastic components' },
+  { name: 'CNC 机加工 / CNC machined parts', key: 'cnc_machined_parts', description: '判断客户是否确实采购或使用 CNC 精密机加工件。', keywords: 'CNC machining, precision machining, machined parts' },
+  { name: '模具与工装 / Molds and tooling', key: 'molds_and_tooling', description: '判断客户是否确实采购模具、工装或相关制造服务。', keywords: 'injection mold, mold making, tooling' },
+]
+
+const DEFAULT_FIELDS = [
+  { name: '公司主体信息', key: 'company_identity', description: '公司全称、注册地址、成立时间和公司类型。', keywords: 'registered address, founded, established, legal form, LLC, Inc', type: 'text', required: true, evidence_required: true, human_review: true, options: '' },
+  { name: '官网与联系方式', key: 'official_contact_channels', description: '官网、社媒、公开邮箱和电话。', keywords: 'official website, LinkedIn, Facebook, Instagram, email, phone, contact', type: 'text', required: true, evidence_required: true, human_review: true, options: '' },
+  { name: '主营产品与业务定位', key: 'business_positioning', description: '主营产品，以及品牌方、贸易商、采购方或加工厂等定位。', keywords: 'products, brand, distributor, wholesaler, importer, manufacturer, OEM', type: 'text', required: true, evidence_required: true, human_review: true, options: '' },
+  { name: '行业与业务需求匹配', key: 'industry_business_fit', description: '所在行业，以及是否确实需要注塑件、CNC 机加工或模具。', keywords: 'industry, plastic parts, injection molding, CNC machining, mold, tooling', type: 'text', required: true, evidence_required: true, human_review: true, options: '' },
+  { name: '采购与决策层信息', key: 'procurement_decision_makers', description: 'Sourcing Manager、Purchaser、Engineering Manager、Product Development 等岗位及公开联系人。', keywords: 'sourcing manager, purchaser, procurement, engineering manager, product development', type: 'text', required: false, evidence_required: true, human_review: true, options: '' },
+  { name: '过往采购品类', key: 'historical_sourcing_categories', description: '过往是否采购塑料件、模具或相关产品。', keywords: 'purchasing, procurement, plastic parts, injection molded, CNC parts, molds', type: 'text', required: false, evidence_required: true, human_review: true, options: '' },
+]
+
 function toList(value) {
   return value.split(',').map((item) => item.trim()).filter(Boolean)
 }
@@ -31,8 +46,8 @@ function FieldInput({ label, value, onChange, placeholder }) {
 }
 
 export default function TaskCriteriaBuilder({ initialCriteria = {} }) {
-  const [offerings, setOfferings] = useState(() => (initialCriteria.business_offerings || []).map((item) => ({ ...item, keywords: (item.keywords || []).join(', ') })))
-  const [fields, setFields] = useState(() => (initialCriteria.research_fields || []).map((item) => ({ ...item, type: item.type || 'text', keywords: (item.keywords || []).join(', '), options: (item.options || []).join(', ') })))
+  const [offerings, setOfferings] = useState(() => (initialCriteria.business_offerings?.length ? initialCriteria.business_offerings : DEFAULT_OFFERINGS).map((item) => ({ ...item, keywords: Array.isArray(item.keywords) ? item.keywords.join(', ') : item.keywords })))
+  const [fields, setFields] = useState(() => (initialCriteria.research_fields?.length ? initialCriteria.research_fields : DEFAULT_FIELDS).map((item) => ({ ...item, type: item.type || 'text', keywords: Array.isArray(item.keywords) ? item.keywords.join(', ') : item.keywords, options: Array.isArray(item.options) ? item.options.join(', ') : item.options })))
   const offeringsRef = useRef(null)
   const fieldsRef = useRef(null)
   const update = (setter, index, key, value) => setter((items) => items.map((item, itemIndex) => itemIndex === index ? { ...item, [key]: value } : item))
@@ -46,7 +61,7 @@ export default function TaskCriteriaBuilder({ initialCriteria = {} }) {
   }, [offeringsJson, fieldsJson])
 
   return <section className="criteria-builder">
-    <div className="criteria-builder-heading"><div><strong>可配置研究规则</strong><p>按客户当前目标填写；不需要的项目可以留空。</p></div><span>{serializedOfferings.length + serializedFields.length} 项</span></div>
+    <div className="criteria-builder-heading"><div><strong>可配置研究规则</strong><p>已预填当前客户需要的项目，可删除、修改或继续添加。</p></div><span>{serializedOfferings.length + serializedFields.length} 项</span></div>
     <input type="hidden" name="language" defaultValue="English" />
     <textarea hidden ref={offeringsRef} name="business_offerings" readOnly defaultValue="[]" />
     <textarea hidden ref={fieldsRef} name="research_fields" readOnly defaultValue="[]" />
