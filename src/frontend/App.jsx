@@ -468,13 +468,20 @@ function ReplyCenter({ mailboxStatus, threads, analyses, followUpTasks, loading,
 }
 
 function replyCategoryLabel(category) { return { interested: '有意向', pricing: '询价', delivery: '交期/物流', complaint: '投诉', bounce: '退信', not_interested: '暂不考虑', other: '其他' }[category] || category }
+function CustomFieldResults({ research }) {
+  const fields = Object.entries(research?.custom_fields || {})
+  if (!fields.length) return null
+  const statusLabel = { verified: '已验证', reported: '来源报告', conflicting: '来源冲突', unknown: '未知' }
+  return <div className="custom-field-results"><div className="section-title"><h3>配置化背调字段</h3><span className="evidence-count">{fields.length} 项</span></div><div className="custom-field-list">{fields.map(([key, field]) => <div className="custom-field-row" key={key}><div className="custom-field-main"><strong>{key}</strong><span className={`custom-field-status ${field.status}`}>{statusLabel[field.status] || field.status}</span></div><p>{field.status === 'unknown' ? '当前来源未能确认' : field.value || '未填写'}</p><div className="custom-field-meta"><span>置信度 {Math.round((field.confidence || 0) * 100)}%</span>{field.sources?.length ? <span>{field.sources.map((source) => <a href={source} target="_blank" rel="noreferrer" key={source}>{source}<Icon name="external" size={11}/></a>)}</span> : <span>暂无来源</span>}</div></div>)}</div></div>
+}
+
 function ResearchPanel({ lead, loading, onStart }) {
   const [sourceUrl, setSourceUrl] = useState(lead.website || '')
   const [maxAttempts, setMaxAttempts] = useState('2')
   const [requestKey, setRequestKey] = useState('')
   const run = lead.researchRun
   const running = run?.status === 'running'
-  return <div className="review-controls research-panel"><div className="section-title"><h3>官网背调队列</h3><span>{run ? `${researchStepLabel(run.step)} · ${run.attempts} 次尝试` : '尚未提交'}</span></div><label>来源网址<input value={sourceUrl} onChange={(event) => setSourceUrl(event.target.value)} /></label><div className="research-fields"><label>最大尝试次数<select value={maxAttempts} onChange={(event) => setMaxAttempts(event.target.value)}><option value="1">1 次</option><option value="2">2 次</option><option value="3">3 次</option></select></label><label>幂等键（可选）<input value={requestKey} onChange={(event) => setRequestKey(event.target.value)} placeholder="同一请求复用" /></label></div><button className="primary-button full" disabled={loading || running || !sourceUrl.trim()} onClick={() => onStart(sourceUrl.trim(), Number(maxAttempts), requestKey.trim())}>{loading ? '提交中…' : running ? '队列执行中…' : run?.status === 'failed' ? '重新提交背调' : '加入背调队列'} <Icon name="arrow" size={16}/></button>{run?.error && <p className="generator-hint">失败原因：{run.error}</p>}{['succeeded', 'review_required'].includes(run?.status) && <p className="research-success">运行已完成，研究报告已自动刷新。</p>}</div>
+  return <div className="review-controls research-panel"><CustomFieldResults research={lead.research}/><div className="section-title"><h3>官网背调队列</h3><span>{run ? `${researchStepLabel(run.step)} · ${run.attempts} 次尝试` : '尚未提交'}</span></div><label>来源网址<input value={sourceUrl} onChange={(event) => setSourceUrl(event.target.value)} /></label><div className="research-fields"><label>最大尝试次数<select value={maxAttempts} onChange={(event) => setMaxAttempts(event.target.value)}><option value="1">1 次</option><option value="2">2 次</option><option value="3">3 次</option></select></label><label>幂等键（可选）<input value={requestKey} onChange={(event) => setRequestKey(event.target.value)} placeholder="同一请求复用" /></label></div><button className="primary-button full" disabled={loading || running || !sourceUrl.trim()} onClick={() => onStart(sourceUrl.trim(), Number(maxAttempts), requestKey.trim())}>{loading ? '提交中…' : running ? '队列执行中…' : run?.status === 'failed' ? '重新提交背调' : '加入背调队列'} <Icon name="arrow" size={16}/></button>{run?.error && <p className="generator-hint">失败原因：{run.error}</p>}{['succeeded', 'review_required'].includes(run?.status) && <p className="research-success">运行已完成，研究报告已自动刷新。</p>}</div>
 }
 
 function researchStepLabel(step) { return { queued: '排队中', fetching: '抓取官网', analyzing: '分析内容', scoring: '计算评分', persisting: '保存报告', completed: '已完成', failed: '失败' }[step] || step }
