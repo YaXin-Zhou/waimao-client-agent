@@ -511,6 +511,10 @@ class AcquisitionService:
             )
         return results
 
+    def enrich_records(self, task_id: str, records: list[LeadRecord]) -> list[LeadRecord]:
+        """核验外部导入的官网并补充真实页面、公开邮箱证据。"""
+        return self._enrich_search_records(task_id, records)
+
     def _enrich_search_records(self, task_id: str, records: list[LeadRecord]) -> list[LeadRecord]:
         """从候选官网提取公开邮箱；失败时保留原始候选，不猜测联系方式。"""
         if self._website_reader is None:

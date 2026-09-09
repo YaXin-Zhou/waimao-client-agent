@@ -45,8 +45,8 @@ export default function BrowserImportModal({ onClose, onImport, loading }) {
 
   return <div className="modal-backdrop" onClick={onClose}><form className="task-modal browser-import-modal" onSubmit={submit} onClick={(event) => event.stopPropagation()}>
     <button type="button" className="modal-close" onClick={onClose}>×</button>
-    <span className="modal-icon">⌁</span><h2>导入浏览器搜索结果</h2>
-    <p>当 Google 返回 JavaScript/Consent 页面时，把可见结果整理为 JSON 导入。导入后仍会经过官网抓取、邮箱清洗、评分和来源保存。</p>
+    <span className="modal-icon">⌁</span><h2>维护工具：导入搜索结果</h2>
+    <p>这是搜索源受限时的技术备用入口，正常使用无需操作。导入后仍会经过官网抓取、邮箱清洗、评分和来源保存。</p>
     <label>结构化结果 JSON<textarea value={raw} onChange={(event) => setRaw(event.target.value)} placeholder={'[{"title":"公司名称","website":"https://example.com","excerpt":"Google 可见摘要","source_url":"https://www.google.com/search?q=..."}]'} rows={9} required /></label>
     {error && <div className="form-error">{error}</div>}
     {summary && <div className="browser-import-summary">{summary}</div>}

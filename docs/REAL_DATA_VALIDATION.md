@@ -187,3 +187,20 @@ Invoke-RestMethod http://127.0.0.1:8001/api/ready
 在可见浏览器页面中使用 `"plastic components" manufacturer Germany official website` 进行真实搜索，页面返回了 Haumann Technology、AKF Plastics、KB Components、COJEMA、REINER 等公司官网候选，同时也混入 Techpilot、Inven 和 Europages 等目录来源。应用侧的 Playwright 可见模式曾成功获取 5 个真实结果；同一搜索源随后再次触发 Consent/异常流量限制，程序按规则停止并不生成记录。
 
 因此，可见浏览器模式能够作为真实搜索入口，但搜索源放行状态不是应用可控变量。目录结果仍需过滤，官网、邮箱、身份和业务证据核验仍是进入合格客户池的必要条件。
+
+## 真实浏览器结果端到端导入
+
+将可见 Google 页面中的真实 `REINER` 官网结果导入本地任务，来源为该 Google 搜索结果页，官网为 `https://www.reiner.de/`。导入后系统实际访问官网并执行有限页面核验：
+
+| 指标 | 结果 |
+|---|---:|
+| 导入记录 | 1 |
+| 规范化公司 | 1 |
+| 官网成功访问 | 1 |
+| 同域公开邮箱 | 4 |
+| 同域来源页面 | 5 |
+| 身份一致性 | strong / 80 |
+| 产品证据 | 未找到 |
+| 最终合格客户 | 0 |
+
+该记录被保留在候选池，但没有进入合格客户池。搜索摘要中的“plastic components”没有被当作官网产品事实，符合来源证据边界；需要后续配置更精确的采购/产品词，或人工打开官网产品页确认后再复核。

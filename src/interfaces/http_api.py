@@ -640,7 +640,7 @@ class ApiApplication:
         task = self._acquisition.create_task(str(body.get("name", "")), criteria, sender_profile)
         return 201, self._task(task)
 
-    def _assess_leads(self, task_id: str, body: dict) -> tuple[int, dict]:
+    def _assess_leads(self, task_id: str, body: dict, enrich: bool = False) -> tuple[int, dict]:
         """接收外部搜索适配器的原始记录，统一清洗、评分并持久化。"""
         records = [
             LeadRecord(
@@ -658,6 +658,8 @@ class ApiApplication:
         signals_by_domain = body.get("signals_by_domain", {})
         if not isinstance(weights, dict) or not isinstance(signals_by_domain, dict):
             raise ValueError("weights and signals_by_domain must be objects")
+        if enrich:
+            records = self._acquisition.enrich_records(task_id, records)
         results = self._acquisition.assess_leads(
             task_id,
             records,
@@ -762,7 +764,7 @@ class ApiApplication:
             "weights": body.get("weights", DEFAULT_QUALIFICATION_WEIGHTS),
             "signals_by_domain": body.get("signals_by_domain", {}),
         }
-        status, result = self._assess_leads(task_id, payload)
+        status, result = self._assess_leads(task_id, payload, enrich=True)
         domains = {
             canonical_website_domain(str(record.get("website", "")))
             or str(record.get("company_name", "")).strip().casefold()
