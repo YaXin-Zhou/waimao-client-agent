@@ -146,6 +146,29 @@ def test_derived_signals_ignore_search_result_page_as_business_evidence():
     assert result.score.breakdown == {"product_match": 0, "evidence_quality": 0}
 
 
+def test_product_evidence_funnel_uses_current_website_sources_not_old_score_breakdown():
+    service = AcquisitionService(InMemoryTaskRepository(), InMemoryLeadRepository())
+    criteria = AcquisitionCriteria(product="portable power station")
+    with_evidence = clean_leads(
+        [
+            LeadRecord(
+                "Supply Co",
+                "https://supply.example",
+                source_url="https://www.google.com/search?q=portable+power+station",
+                source_excerpt="search result",
+            ),
+            LeadRecord(
+                "Supply Co",
+                "https://supply.example",
+                source_url="https://supply.example/about",
+                source_excerpt="We distribute portable power stations.",
+            ),
+        ]
+    )[0]
+
+    assert service.has_product_evidence(with_evidence, criteria)
+
+
 def test_service_enriches_automatic_search_with_real_public_website_emails():
     class Search:
         def search(self, criteria):

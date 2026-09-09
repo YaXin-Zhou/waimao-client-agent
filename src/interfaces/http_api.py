@@ -675,7 +675,8 @@ class ApiApplication:
                 for item in results
             ),
             "product_evidence_count": sum(
-                item.score.breakdown.get("product_match", 0) > 0 for item in results
+                self._acquisition.has_product_evidence(item.lead, task.criteria)
+                for item in results
             ),
         }
         return {

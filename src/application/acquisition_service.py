@@ -97,25 +97,9 @@ class AcquisitionService:
         if task is None:
             return {}
         criteria = task.criteria
-        website_sources = tuple(
-            source
-            for source in lead.sources
-            if not is_search_source(source[0])
-        )
-        searchable = " ".join(
-            (
-                lead.company_name,
-                lead.domain,
-                *(source[1] for source in website_sources),
-            )
-        ).lower()
-        configured_terms = tuple(
-            term.strip().lower()
-            for term in (criteria.product, *criteria.keywords)
-            if term.strip()
-        )
+        website_sources = self._website_sources(lead)
         signals: dict[str, int] = {}
-        if "product_match" in weights and any(term in searchable for term in configured_terms):
+        if "product_match" in weights and self.has_product_evidence(lead, criteria):
             signals["product_match"] = weights["product_match"]
         if "email_quality" in weights and lead.emails:
             signals["email_quality"] = weights["email_quality"]
@@ -126,6 +110,23 @@ class AcquisitionService:
             if not markets or lead.country.lower() in markets:
                 signals["market_match"] = weights["market_match"]
         return signals
+
+    @staticmethod
+    def _website_sources(lead: CleanLead) -> tuple[tuple[str, str], ...]:
+        return tuple(source for source in lead.sources if not is_search_source(source[0]))
+
+    @classmethod
+    def has_product_evidence(cls, lead: CleanLead, criteria: AcquisitionCriteria) -> bool:
+        """Check configured product terms against non-search-page source text."""
+        terms = tuple(
+            term.strip().lower()
+            for term in (criteria.product, *criteria.keywords)
+            if term.strip()
+        )
+        searchable = " ".join(
+            source[1] for source in cls._website_sources(lead)
+        ).lower()
+        return bool(terms) and any(term in searchable for term in terms)
 
     @staticmethod
     def _qualify(
