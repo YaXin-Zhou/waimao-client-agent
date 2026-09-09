@@ -18,6 +18,7 @@ from src.domain.lead import (
     LeadRecord,
     LeadScore,
     LeadStatus,
+    canonical_website_domain,
     clean_leads,
     is_credible_source_excerpt,
     is_search_source,
@@ -98,7 +99,7 @@ class AcquisitionService:
         if task is None:
             return {}
         criteria = task.criteria
-        website_sources = self._website_sources(lead)
+        website_sources = self._same_domain_sources(lead)
         signals: dict[str, int] = {}
         if "product_match" in weights and self.has_product_evidence(lead, criteria):
             signals["product_match"] = weights["product_match"]
@@ -117,6 +118,15 @@ class AcquisitionService:
         return tuple(source for source in lead.sources if not is_search_source(source[0]))
 
     @classmethod
+    def _same_domain_sources(cls, lead: CleanLead) -> tuple[tuple[str, str], ...]:
+        domain = canonical_website_domain(lead.domain)
+        return tuple(
+            source
+            for source in cls._website_sources(lead)
+            if canonical_website_domain(source[0]) == domain
+        )
+
+    @classmethod
     def has_product_evidence(cls, lead: CleanLead, criteria: AcquisitionCriteria) -> bool:
         """Check configured product terms against non-search-page source text."""
         terms = tuple(
@@ -125,7 +135,7 @@ class AcquisitionService:
             if term.strip()
         )
         searchable = " ".join(
-            source[1] for source in cls._website_sources(lead)
+            source[1] for source in cls._same_domain_sources(lead)
         ).lower()
         return bool(terms) and any(
             cls._term_in_evidence(term, searchable) for term in terms
@@ -166,7 +176,7 @@ class AcquisitionService:
             if (
                 criteria.require_public_email
                 and item.lead.emails
-                and not AcquisitionService._website_sources(item.lead)
+                and not AcquisitionService._same_domain_sources(item.lead)
             ):
                 reasons.append("missing_website_evidence")
             if criteria.product.strip() and not AcquisitionService.has_product_evidence(

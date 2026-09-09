@@ -468,6 +468,35 @@ def test_service_keeps_conflicting_identity_records_out_of_qualified_results():
     assert "email_domain_mismatch" in result.rejection_reasons
 
 
+def test_external_page_cannot_be_the_only_product_evidence():
+    service = AcquisitionService(InMemoryTaskRepository(), InMemoryLeadRepository())
+    task = service.create_task(
+        "External evidence boundary",
+        AcquisitionCriteria(
+            product="portable power station",
+            minimum_qualification_score=0,
+            require_public_email=False,
+        ),
+    )
+
+    result = service.assess_leads(
+        task.id,
+        [
+            LeadRecord(
+                "Alpine",
+                "https://alpine.example",
+                source_url="https://group.example/products",
+                source_excerpt="Alpine group portable power station products",
+            )
+        ],
+        weights={"product_match": 30},
+        signals_by_domain={},
+    )[0]
+
+    assert result.score.breakdown["product_match"] == 0
+    assert "missing_product_evidence" in result.rejection_reasons
+
+
 def test_service_requalifies_legacy_assessments_when_reading_task_leads():
     tasks = InMemoryTaskRepository()
     leads = InMemoryLeadRepository()
