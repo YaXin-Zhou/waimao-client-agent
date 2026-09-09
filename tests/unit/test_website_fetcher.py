@@ -85,10 +85,10 @@ def test_fetcher_follows_bounded_same_domain_contact_pages():
 
     assert [document.url for document in documents] == [
         "https://alpine.example/",
-        "https://alpine.example/about",
         "https://alpine.example/contact",
+        "https://alpine.example/about",
     ]
-    assert documents[-1].public_emails[0].address == "sales@alpine.example"
+    assert documents[1].public_emails[0].address == "sales@alpine.example"
 
 
 def test_fetcher_can_follow_bounded_relevant_external_sources_when_enabled():
@@ -109,4 +109,58 @@ def test_fetcher_can_follow_bounded_relevant_external_sources_when_enabled():
     assert [document.url for document in documents] == [
         "https://alpine.example/",
         "https://group.example/contact",
+    ]
+
+
+def test_fetch_contact_pages_skips_current_page_link_without_stopping_crawl():
+    pages = {
+        "https://alpine.example/": (
+            b"<a href='https://alpine.example/'>Home</a>"
+            b"<a href='/products'>Products</a>"
+        ),
+        "https://alpine.example/products": b"Products",
+    }
+
+    documents = WebsiteFetcher(opener=lambda url, timeout: pages[url]).fetch_contact_pages(
+        "https://alpine.example/", max_pages=2
+    )
+
+    assert [document.url for document in documents] == [
+        "https://alpine.example/",
+        "https://alpine.example/products",
+    ]
+
+
+def test_fetch_contact_pages_treats_www_variant_as_same_domain():
+    pages = {
+        "https://alpine.example/": b"<a href='https://www.alpine.example/products'>Products</a>",
+        "https://www.alpine.example/products": b"Products",
+    }
+
+    documents = WebsiteFetcher(opener=lambda url, timeout: pages[url]).fetch_contact_pages(
+        "https://alpine.example/", max_pages=2
+    )
+
+    assert [document.url for document in documents] == [
+        "https://alpine.example/",
+        "https://www.alpine.example/products",
+    ]
+
+
+def test_fetch_contact_pages_prioritizes_product_evidence_links():
+    pages = {
+        "https://alpine.example/": (
+            b"<a href='/about'>About</a><a href='/products'>Products</a>"
+        ),
+        "https://alpine.example/about": b"Company",
+        "https://alpine.example/products": b"Portable power stations",
+    }
+
+    documents = WebsiteFetcher(opener=lambda url, timeout: pages[url]).fetch_contact_pages(
+        "https://alpine.example/", max_pages=2
+    )
+
+    assert [document.url for document in documents] == [
+        "https://alpine.example/",
+        "https://alpine.example/products",
     ]

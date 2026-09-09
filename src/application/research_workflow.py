@@ -76,7 +76,15 @@ class ResearchWorkflow:
         fetch_contact_pages = getattr(self._websites, "fetch_contact_pages", None)
         if callable(fetch_contact_pages):
             try:
-                crawled = fetch_contact_pages(source_url, max_pages=5)
+                try:
+                    crawled = fetch_contact_pages(
+                        source_url,
+                        max_pages=5,
+                        priority_terms=(task.criteria.product, *task.criteria.keywords),
+                    )
+                except TypeError:
+                    # Keep the port compatible with simple test or custom readers.
+                    crawled = fetch_contact_pages(source_url, max_pages=5)
             except (ConnectionError, OSError, TimeoutError):
                 crawled = ()
             for document in crawled:

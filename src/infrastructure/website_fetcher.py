@@ -59,6 +59,7 @@ class WebsiteFetcher:
         max_pages: int = 5,
         allow_external_sources: bool = False,
         max_external_pages: int = 3,
+        priority_terms: tuple[str, ...] = (),
     ) -> tuple[SourceDocument, ...]:
         """抓取有限的相关页面；外站只跟随官网明确链接且有独立上限。"""
         if max_pages <= 0:
@@ -67,25 +68,57 @@ class WebsiteFetcher:
             raise ValueError("max_external_pages must not be negative")
         home = self.fetch(url)
         documents = [home]
-        seen = {home.url}
+        seen = {self._page_key(home.url)}
         external_count = 0
-        for link in home.links:
-            if len(documents) >= max_pages or link in seen:
+        for link in sorted(
+            home.links,
+            key=lambda item: self._link_priority(item, priority_terms),
+            reverse=True,
+        ):
+            if len(documents) >= max_pages:
                 break
+            page_key = self._page_key(link)
+            if page_key in seen:
+                continue
             parsed_link = urlparse(link)
-            same_domain = (parsed_link.hostname or "").lower() == (
-                urlparse(home.url).hostname or ""
-            ).lower()
+            link_host = (parsed_link.hostname or "").lower().removeprefix("www.")
+            home_host = (urlparse(home.url).hostname or "").lower().removeprefix("www.")
+            same_domain = link_host == home_host
             if not same_domain:
                 if not allow_external_sources or external_count >= max_external_pages:
                     continue
                 external_count += 1
-            seen.add(link)
+            seen.add(page_key)
             try:
                 documents.append(self.fetch(link))
             except Exception:
                 continue
         return tuple(documents)
+
+    @staticmethod
+    def _page_key(url: str) -> str:
+        parsed = urlparse(url)
+        hostname = (parsed.hostname or "").lower().removeprefix("www.")
+        return parsed._replace(netloc=hostname).geturl().rstrip("/")
+
+    @staticmethod
+    def _link_priority(url: str, priority_terms: tuple[str, ...] = ()) -> int:
+        """Prioritize product/contact evidence while preserving link order within a tier."""
+        path = urlparse(url).path.lower()
+        path_tokens = {token.rstrip("s") for token in re.findall(r"[a-z0-9]+", path)}
+        for term in priority_terms:
+            term_tokens = {
+                token.rstrip("s") for token in re.findall(r"[a-z0-9]+", term.lower())
+            }
+            if term_tokens and term_tokens <= path_tokens:
+                return 60
+        if any(term in path for term in ("product", "power-station", "generator", "solution")):
+            return 30
+        if any(term in path for term in ("contact", "imprint", "impressum", "legal")):
+            return 20
+        if any(term in path for term in ("company", "about", "history")):
+            return 10
+        return 0
 
     @staticmethod
     def _open(url: str, timeout: int) -> bytes:

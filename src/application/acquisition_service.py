@@ -262,14 +262,17 @@ class AcquisitionService:
         )
         if assessed is None:
             raise KeyError(f"Lead not found: {domain}")
+        task = self._tasks.get(task_id)
+        if task is None:
+            raise KeyError(f"Task not found: {task_id}")
         website = f"https://{domain}"
         fetch_pages = getattr(website_reader, "fetch_contact_pages", None)
         documents = (
-            fetch_pages(
+            self._fetch_contact_pages(
+                fetch_pages,
                 website,
-                max_pages=self._website_page_limit,
+                task.criteria,
                 allow_external_sources=True,
-                max_external_pages=self._external_source_limit,
             )
             if fetch_pages is not None
             else (website_reader.fetch(website),)
@@ -395,10 +398,10 @@ class AcquisitionService:
         if self._search is None:
             raise RuntimeError("Search provider is not configured")
         records = self._search.search(task.criteria)
-        records = self._enrich_search_records(records)
+        records = self._enrich_search_records(task_id, records)
         return self.assess_leads(task_id, records, weights, signals_by_domain)
 
-    def _enrich_search_records(self, records: list[LeadRecord]) -> list[LeadRecord]:
+    def _enrich_search_records(self, task_id: str, records: list[LeadRecord]) -> list[LeadRecord]:
         """从候选官网提取公开邮箱；失败时保留原始候选，不猜测联系方式。"""
         if self._website_reader is None:
             return records
@@ -414,11 +417,11 @@ class AcquisitionService:
             try:
                 fetch_pages = getattr(self._website_reader, "fetch_contact_pages", None)
                 documents = (
-                    fetch_pages(
+                    self._fetch_contact_pages(
+                        fetch_pages,
                         record.website.strip(),
-                        max_pages=self._website_page_limit,
+                        self._tasks.get(task_id).criteria,
                         allow_external_sources=True,
-                        max_external_pages=self._external_source_limit,
                     )
                     if fetch_pages is not None
                     else (self._website_reader.fetch(record.website.strip()),)
@@ -450,6 +453,19 @@ class AcquisitionService:
                         )
                     )
         return enriched
+
+    def _fetch_contact_pages(self, fetch_pages, website, criteria, allow_external_sources):
+        kwargs = {
+            "max_pages": self._website_page_limit,
+            "allow_external_sources": allow_external_sources,
+            "max_external_pages": self._external_source_limit,
+            "priority_terms": (criteria.product, *criteria.keywords),
+        }
+        try:
+            return fetch_pages(website, **kwargs)
+        except TypeError:
+            kwargs.pop("priority_terms")
+            return fetch_pages(website, **kwargs)
 
     @staticmethod
     def _document_excerpt(document) -> str:
