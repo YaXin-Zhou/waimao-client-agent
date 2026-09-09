@@ -408,6 +408,8 @@ class AcquisitionService:
     def transition_lead(
         self, task_id: str, domain: str, target: LeadStatus, actor: str, note: str = ""
     ) -> AssessedLead:
+        if self._audit is not None and not actor.strip():
+            raise ValueError("audit actor is required")
         assessed = next(
             (item for item in self.list_leads(task_id) if item.lead.domain == domain), None
         )
@@ -415,22 +417,25 @@ class AcquisitionService:
             raise KeyError(f"Lead not found: {domain}")
         updated_lead = assessed.lead.transition_to(target)
         updated = AssessedLead(updated_lead, assessed.score)
+        audit_event = (
+            AuditEvent.status_change(
+                entity_type="lead",
+                entity_id=f"{task_id}:{domain}",
+                action="transition",
+                actor=actor,
+                from_status=assessed.lead.status.value,
+                to_status=target.value,
+                note=note,
+            )
+            if self._audit is not None
+            else None
+        )
         self._leads.save_assessments(
             task_id,
             [item if item.lead.domain != domain else updated for item in self.list_leads(task_id)],
         )
-        if self._audit is not None:
-            self._audit.save(
-                AuditEvent.status_change(
-                    entity_type="lead",
-                    entity_id=f"{task_id}:{domain}",
-                    action="transition",
-                    actor=actor,
-                    from_status=assessed.lead.status.value,
-                    to_status=target.value,
-                    note=note,
-                )
-            )
+        if audit_event is not None:
+            self._audit.save(audit_event)
         return updated
 
     def update_sender_profile(self, task_id: str, sender_profile: SenderProfile) -> AcquisitionTask:

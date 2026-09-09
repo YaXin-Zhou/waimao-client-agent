@@ -599,6 +599,21 @@ def test_api_rejects_invalid_task_transition():
     assert "Invalid task transition" in payload["error"]
 
 
+def test_api_rejects_lead_transition_without_actor_before_persisting_state():
+    app, task, _, audit = make_app()
+
+    status, payload = app.handle(
+        "POST",
+        f"/api/tasks/{task.id}/leads/alpine.example/transition",
+        {"status": "awaiting_review", "actor": "  "},
+    )
+
+    assert status == 400
+    assert payload["error"] == "audit actor is required"
+    assert app._leads.results[0].lead.status.value == "new"
+    assert audit.events == []
+
+
 def test_api_assesses_external_records_with_request_configuration():
     app, task, _, _ = make_app()
 
