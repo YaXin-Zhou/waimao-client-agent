@@ -211,6 +211,7 @@ function App() {
       const response = await fetch(`/api/drafts/${selectedDraft.id}/${action}`, { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ reviewer: reviewer.trim(), note: note.trim() }) })
       if (!response.ok) throw new Error('review failed')
       setSelectedDraft(await response.json())
+      setSendSafety(null)
       notify(action === 'approve' ? '草稿已批准，尚未发送' : action === 'request-revision' ? '草稿已退回修改' : '草稿已拒绝')
     } catch { notify('审核操作失败，请检查本地 API') } finally { setReviewLoading(false) }
   }
@@ -485,7 +486,7 @@ function ReviewControls({ lead, onReview, onSafetyCheck, safetyLoading, safetyRe
   const [note, setNote] = useState('')
   if (!lead.draft) return null
   const locked = loading || lead.draft.status === 'approved' || lead.draft.status === 'rejected'
-  return <div className="review-controls"><div className="section-title"><h3>审核操作</h3><span>仅改变审核状态，不发送邮件</span></div><label>审核人<input value={reviewer} onChange={(event) => setReviewer(event.target.value)} placeholder="填写姓名" /></label><label>处理意见<textarea value={note} onChange={(event) => setNote(event.target.value)} placeholder="退回或拒绝时必填" rows="2" /></label><div className="review-control-actions"><button className="outline-button" disabled={safetyLoading} onClick={onSafetyCheck}>{safetyLoading ? '检查中…' : '运行发送前检查'}</button><button className="outline-button" disabled={locked || !reviewer.trim() || !note.trim()} onClick={() => onReview('request-revision', note, reviewer)}>{loading ? '处理中…' : '退回修改'}</button><button className="primary-button" disabled={locked || !reviewer.trim()} onClick={() => onReview('approve', note, reviewer)}>批准草稿</button></div>{safetyResult && <div className={`send-safety-result ${safetyResult.allowed ? 'allowed' : 'blocked'}`}><strong>{safetyResult.allowed ? '检查通过' : '检查阻断'}</strong>{safetyResult.reasons?.length ? <ul>{safetyResult.reasons.map((reason) => <li key={reason}>{reason}</li>)}</ul> : <p>当前未发现配置层面的阻断原因，但发送前仍需人工确认。</p>}</div>}</div>
+  return <div className="review-controls"><div className="section-title"><h3>审核操作</h3><span>仅改变审核状态，不发送邮件</span></div><label>审核人<input value={reviewer} onChange={(event) => setReviewer(event.target.value)} placeholder="填写姓名" /></label><label>处理意见<textarea value={note} onChange={(event) => setNote(event.target.value)} placeholder="退回或拒绝时必填" rows="2" /></label><div className="review-control-actions"><button className="outline-button" disabled={safetyLoading} onClick={onSafetyCheck}>{safetyLoading ? '检查中…' : lead.draft.status === 'approved' ? '重新运行发送前检查' : '运行发送前检查'}</button><button className="outline-button" disabled={locked || !reviewer.trim() || !note.trim()} onClick={() => onReview('request-revision', note, reviewer)}>{loading ? '处理中…' : '退回修改'}</button><button className="primary-button" disabled={locked || !reviewer.trim()} onClick={() => onReview('approve', note, reviewer)}>批准草稿</button></div>{safetyResult && <div className={`send-safety-result ${safetyResult.allowed ? 'allowed' : 'blocked'}`}><strong>{safetyResult.allowed ? '检查通过' : '检查阻断'}</strong>{safetyResult.reasons?.length ? <ul>{safetyResult.reasons.map((reason) => <li key={reason}>{reason}</li>)}</ul> : <p>当前未发现配置层面的阻断原因，但发送前仍需人工确认。</p>}</div>}</div>
 }
 
 export default App
