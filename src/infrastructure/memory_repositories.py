@@ -2,7 +2,10 @@
 
 from __future__ import annotations
 
+from dataclasses import replace
+
 from src.application.acquisition_service import AssessedLead
+from src.domain.lead import LeadScore
 from src.domain.task import AcquisitionTask
 
 
@@ -26,3 +29,10 @@ class InMemoryLeadRepository:
 
     def list_assessments(self, task_id: str) -> list[AssessedLead]:
         return list(self._items.get(task_id, []))
+
+    def update_score(self, task_id: str, domain: str, score: LeadScore) -> None:
+        items = self._items.get(task_id, [])
+        self._items[task_id] = [
+            replace(item, score=score) if item.lead.domain == domain else item
+            for item in items
+        ]

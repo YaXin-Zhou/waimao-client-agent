@@ -91,6 +91,7 @@ research_execution = (
             ),
             deepseek_provider,
             research_repository,
+            lead_repository,
         ),
         research_run_repository,
     )

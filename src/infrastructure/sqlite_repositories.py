@@ -367,6 +367,31 @@ class SQLiteLeadRepository:
             )
         return results
 
+    def update_score(self, task_id: str, domain: str, score: LeadScore) -> None:
+        with _connect(self._database) as connection:
+            row = connection.execute(
+                "SELECT 1 FROM lead_assessments WHERE task_id = ? AND domain = ?",
+                (task_id, domain),
+            ).fetchone()
+            if row is None:
+                raise KeyError(f"Lead not found: {domain}")
+            connection.execute(
+                """
+                UPDATE lead_assessments
+                SET score_json = ?
+                WHERE task_id = ? AND domain = ?
+                """,
+                (
+                    json.dumps({
+                        "total": score.total,
+                        "priority": score.priority,
+                        "breakdown": score.breakdown,
+                    }),
+                    task_id,
+                    domain,
+                ),
+            )
+
 
 class SQLiteResearchRepository:
     def __init__(self, database: str | Path):

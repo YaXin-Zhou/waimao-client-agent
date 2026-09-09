@@ -24,6 +24,10 @@ class ResearchWriter(Protocol):
     def save(self, task_id: str, domain: str, report: ResearchResult) -> None: ...
 
 
+class LeadScoreWriter(Protocol):
+    def update_score(self, task_id: str, domain: str, score: LeadScore) -> None: ...
+
+
 @dataclass(frozen=True)
 class ResearchAssessment:
     research: ResearchResult
@@ -37,11 +41,13 @@ class ResearchWorkflow:
         website_reader: WebsiteReader,
         ai_provider,
         research_writer: ResearchWriter,
+        lead_score_writer: LeadScoreWriter | None = None,
     ):
         self._tasks = tasks
         self._websites = website_reader
         self._ai = ai_provider
         self._reports = research_writer
+        self._lead_scores = lead_score_writer
 
     def run(
         self,
@@ -67,4 +73,6 @@ class ResearchWorkflow:
         if progress:
             progress(ResearchRunStep.PERSISTING)
         self._reports.save(task_id, lead.domain, research)
+        if self._lead_scores is not None:
+            self._lead_scores.update_score(task_id, lead.domain, score)
         return ResearchAssessment(research=research, score=score)
