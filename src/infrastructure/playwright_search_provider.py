@@ -11,7 +11,7 @@ from typing import Any
 from urllib.parse import quote_plus, urlsplit
 
 from src.application.search_queries import build_search_queries
-from src.domain.lead import LeadRecord
+from src.domain.lead import LeadRecord, canonical_website_domain
 from src.domain.task import AcquisitionCriteria
 from src.infrastructure.google_search_provider import GoogleSearchProvider, SearchProviderError
 
@@ -47,7 +47,7 @@ class PlaywrightSearchProvider:
 
         candidate_limit = criteria.candidate_limit or criteria.daily_limit
         records: list[LeadRecord] = []
-        seen_urls: set[str] = set()
+        seen_domains: set[str] = set()
         with sync_playwright() as playwright:
             launch_options: dict[str, Any] = {"headless": self._headless}
             if self._executable_path:
@@ -90,9 +90,10 @@ class PlaywrightSearchProvider:
                             result_url = self._resolve_result_url(page, row.get("href", ""))
                             if not GoogleSearchProvider._is_candidate(result_url):
                                 continue
-                            if result_url in seen_urls:
+                            domain = canonical_website_domain(result_url)
+                            if not domain or domain in seen_domains:
                                 continue
-                            seen_urls.add(result_url)
+                            seen_domains.add(domain)
                             records.append(
                                 LeadRecord(
                                     company_name=str(row.get("text", "")).strip(),

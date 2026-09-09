@@ -29,6 +29,23 @@ def test_browser_provider_normalizes_visible_results_and_deduplicates_urls():
     assert calls[0][1] == 2
 
 
+def test_browser_provider_deduplicates_different_pages_from_one_domain():
+    provider = BrowserSearchProvider(
+        lambda query, limit: [
+            BrowserSearchResult("About", "https://alpine.example/about"),
+            BrowserSearchResult("Products", "https://www.alpine.example/products"),
+            BrowserSearchResult("North", "https://north.example/"),
+        ]
+    )
+
+    results = provider.search(AcquisitionCriteria(product="solar generator", daily_limit=2))
+
+    assert [item.website for item in results] == [
+        "https://alpine.example/about",
+        "https://north.example/",
+    ]
+
+
 def test_browser_provider_uses_all_configured_queries_until_limit():
     calls = []
 

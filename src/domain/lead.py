@@ -102,6 +102,11 @@ def _normalize_domain(website: str) -> str:
     return (parsed.hostname or "").lower().removeprefix("www.")
 
 
+def canonical_website_domain(website: str) -> str:
+    """Return the stable host key used to deduplicate website candidates."""
+    return _normalize_domain(website)
+
+
 def _normalize_email(email: str) -> str:
     raw = email.strip().lower()
     for token in ("(at)", "[at]", " at "):

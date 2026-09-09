@@ -33,6 +33,24 @@ def test_google_provider_extracts_public_urls_deduplicates_and_never_guesses_ema
     assert results[0].source_excerpt == "Alpine Energy"
 
 
+def test_google_provider_deduplicates_multiple_pages_from_one_domain():
+    html = (
+        '<a href="https://alpine.example/about">About</a>'
+        '<a href="https://alpine.example/products">Products</a>'
+        '<a href="https://north.example/">North Supply</a>'
+    )
+    provider = GoogleSearchProvider(
+        opener=lambda request, timeout: FakeResponse(html), max_results_per_query=5
+    )
+
+    results = provider.search(AcquisitionCriteria(product="portable power station", daily_limit=2))
+
+    assert [item.website for item in results] == [
+        "https://alpine.example/about",
+        "https://north.example/",
+    ]
+
+
 def test_google_provider_honors_daily_limit():
     html = "".join(
         f'<a href="https://example-{index}.com"><h3>Example {index}</h3></a>' for index in range(4)

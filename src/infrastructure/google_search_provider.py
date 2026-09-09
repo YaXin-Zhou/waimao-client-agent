@@ -12,7 +12,7 @@ from urllib.parse import parse_qs, quote_plus, urlsplit
 from urllib.request import Request, urlopen
 
 from src.application.search_queries import build_search_queries
-from src.domain.lead import LeadRecord
+from src.domain.lead import LeadRecord, canonical_website_domain
 from src.domain.task import AcquisitionCriteria
 
 
@@ -72,7 +72,7 @@ class GoogleSearchProvider:
 
     def search(self, criteria: AcquisitionCriteria) -> list[LeadRecord]:
         results: list[LeadRecord] = []
-        seen_urls: set[str] = set()
+        seen_domains: set[str] = set()
         candidate_limit = criteria.candidate_limit or criteria.daily_limit
         for query in build_search_queries(criteria):
             for page_start in range(0, candidate_limit, self._max_results):
@@ -99,9 +99,10 @@ class GoogleSearchProvider:
                 added_on_page = 0
                 for href, title in parser.results:
                     url = self._result_url(href)
-                    if not self._is_candidate(url) or url in seen_urls:
+                    domain = canonical_website_domain(url)
+                    if not self._is_candidate(url) or not domain or domain in seen_domains:
                         continue
-                    seen_urls.add(url)
+                    seen_domains.add(domain)
                     results.append(
                         LeadRecord(
                             company_name=title,
