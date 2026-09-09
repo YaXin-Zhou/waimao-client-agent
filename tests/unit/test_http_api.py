@@ -8,7 +8,7 @@ from src.domain.audit_event import AuditEvent
 from src.domain.custom_research import ResearchFieldValue
 from src.domain.email_draft import EmailDraft
 from src.domain.inbound_email import InboundEmail
-from src.domain.lead import CleanLead, LeadScore
+from src.domain.lead import CleanLead, LeadRecord, LeadScore
 from src.domain.research import CustomerType, EvidenceStatus, ResearchResult
 from src.domain.research_run import ResearchRun
 from src.domain.task import AcquisitionCriteria, AcquisitionTask, TaskStatus
@@ -39,6 +39,20 @@ class Leads:
 
     def save_assessments(self, task_id, results):
         self.results = results
+
+
+class SearchProvider:
+    def search(self, criteria):
+        return [
+            LeadRecord(
+                "Discovered Alpine",
+                "discovered.example",
+                "sales@discovered.example",
+                "Germany",
+                "https://discovered.example",
+                "Google result",
+            )
+        ]
 
 
 class Research:
@@ -469,6 +483,21 @@ def test_api_assesses_external_records_with_request_configuration():
     assert status == 200
     assert payload["items"][0]["lead"]["domain"] == "alpine.example"
     assert payload["items"][0]["score"]["total"] == 65
+
+
+def test_api_discovers_and_assesses_using_configured_search_provider():
+    app, task, _, _ = make_app()
+    app._acquisition = AcquisitionService(app._tasks, app._leads, search_provider=SearchProvider())
+
+    status, payload = app.handle(
+        "POST",
+        f"/api/tasks/{task.id}/discover",
+        {"weights": {"product_match": 40}, "signals_by_domain": {}},
+    )
+
+    assert status == 200
+    assert payload["items"][0]["lead"]["domain"] == "discovered.example"
+    assert payload["items"][0]["lead"]["sources"][0][0] == "https://discovered.example"
 
 
 def test_api_rejects_non_object_scoring_configuration():

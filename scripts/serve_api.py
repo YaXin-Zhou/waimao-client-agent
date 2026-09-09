@@ -13,6 +13,7 @@ from pathlib import Path
 ROOT = Path(__file__).resolve().parents[1]
 sys.path.insert(0, str(ROOT))
 
+from src.application.acquisition_service import AcquisitionService  # noqa: E402
 from src.application.email_draft_service import EmailDraftService  # noqa: E402
 from src.application.email_send_service import EmailSendService  # noqa: E402
 from src.application.follow_up_task_service import FollowUpTaskService  # noqa: E402
@@ -27,6 +28,7 @@ from src.application.translation_service import TranslationService  # noqa: E402
 from src.infrastructure.ali_imap import AliImapConfig, AliImapMailbox  # noqa: E402
 from src.infrastructure.ali_smtp import AliSmtpConfig, AliSmtpMailer  # noqa: E402
 from src.infrastructure.deepseek_provider import DeepSeekConfig, DeepSeekProvider  # noqa: E402
+from src.infrastructure.google_search_provider import GoogleSearchProvider  # noqa: E402
 from src.infrastructure.machine_translation_provider import (  # noqa: E402
     GoogleMachineTranslationProvider,
 )
@@ -78,6 +80,11 @@ reply_analysis_repository = SQLiteReplyAnalysisRepository(DATABASE)
 email_draft_repository = SQLiteEmailDraftRepository(DATABASE)
 email_send_attempt_repository = SQLiteEmailSendAttemptRepository(DATABASE)
 follow_up_task_repository = SQLiteFollowUpTaskRepository(DATABASE)
+audit_repository = SQLiteAuditEventRepository(DATABASE)
+search_provider = GoogleSearchProvider(
+    timeout=float(config_values.get("SEARCH_TIMEOUT_SECONDS", "15")),
+    max_results_per_query=int(config_values.get("SEARCH_RESULTS_PER_QUERY", "10")),
+)
 try:
     deepseek_provider = DeepSeekProvider(DeepSeekConfig.from_env_file(ROOT / "config" / ".env"))
 except (FileNotFoundError, ValueError):
@@ -125,7 +132,6 @@ imap_config = AliImapConfig(
     mailbox=config_values.get("ALI_IMAP_MAILBOX", "INBOX"),
 )
 mailbox = AliImapMailbox(imap_config) if imap_config.configured else None
-audit_repository = SQLiteAuditEventRepository(DATABASE)
 mailbox_sync = MailboxSyncService(lead_repository, inbound_email_repository, audit=audit_repository)
 follow_up_task_service = FollowUpTaskService(follow_up_task_repository)
 reply_analysis_service = ReplyAnalysisService(
@@ -148,6 +154,12 @@ email_send_service = EmailSendService(
 )
 if research_queue is not None:
     research_queue.recover()
+acquisition_service = AcquisitionService(
+    task_repository,
+    lead_repository,
+    search_provider=search_provider,
+    audit_repository=audit_repository,
+)
 application = ApiApplication(
     task_repository,
     lead_repository,
@@ -156,6 +168,7 @@ application = ApiApplication(
     email_drafts=email_draft_service,
     translation=TranslationService(GoogleMachineTranslationProvider()),
     audit=audit_repository,
+    acquisition=acquisition_service,
     research_execution=research_execution,
     research_runs=research_run_repository,
     research_queue=research_queue,

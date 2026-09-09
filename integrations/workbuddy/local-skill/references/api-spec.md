@@ -20,6 +20,7 @@ GET  /api/tasks/{task_id}/reply-analyses
 
 ```text
 POST /api/tasks
+POST /api/tasks/{task_id}/discover
 POST /api/tasks/{task_id}/leads/{domain}/research
 POST /api/tasks/{task_id}/leads/{domain}/draft
 PATCH /api/tasks/{task_id}/leads/{domain}/research-fields/{field_key}

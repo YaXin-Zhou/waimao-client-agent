@@ -161,6 +161,13 @@ class ApiApplication:
             if method == "POST" and segments == ["api", "tasks"]:
                 return self._create_task(self._parse_body(body))
             if (
+                method == "POST"
+                and len(segments) == 4
+                and segments[:2] == ["api", "tasks"]
+                and segments[3] == "discover"
+            ):
+                return self._discover_leads(segments[2], self._parse_body(body))
+            if (
                 method == "PATCH"
                 and len(segments) == 4
                 and segments[:2] == ["api", "tasks"]
@@ -601,6 +608,17 @@ class ApiApplication:
                 if isinstance(signals, dict)
             },
         )
+        return 200, {"items": [self._assessed(item) for item in results]}
+
+    def _discover_leads(self, task_id: str, body: dict) -> tuple[int, dict]:
+        weights = body.get(
+            "weights",
+            {"product_match": 30, "market_match": 20, "email_quality": 15, "evidence_quality": 5},
+        )
+        signals = body.get("signals_by_domain", {})
+        if not isinstance(weights, dict) or not isinstance(signals, dict):
+            raise ValueError("weights and signals_by_domain must be objects")
+        results = self._acquisition.discover_and_assess(task_id, weights, signals)
         return 200, {"items": [self._assessed(item) for item in results]}
 
     def _research_lead(self, task_id: str, domain: str, body: dict) -> tuple[int, dict]:

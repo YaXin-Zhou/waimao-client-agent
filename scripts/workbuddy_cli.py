@@ -32,6 +32,8 @@ def main() -> int:
     sub.add_parser("tasks")
     leads = sub.add_parser("leads")
     leads.add_argument("task_id")
+    discover = sub.add_parser("discover")
+    discover.add_argument("task_id")
     lead = sub.add_parser("lead")
     lead.add_argument("task_id")
     lead.add_argument("domain")
@@ -52,6 +54,8 @@ def main() -> int:
     }
     if args.command == "leads":
         routes[args.command] = ("GET", f"/api/tasks/{args.task_id}/leads", None)
+    elif args.command == "discover":
+        routes[args.command] = ("POST", f"/api/tasks/{args.task_id}/discover", {})
     elif args.command == "lead":
         routes[args.command] = ("GET", f"/api/tasks/{args.task_id}/leads/{args.domain}", None)
     elif args.command == "review-field":
