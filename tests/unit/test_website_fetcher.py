@@ -142,6 +142,20 @@ def test_fetcher_deduplicates_mailto_and_visible_email_forms():
     ]
 
 
+def test_fetcher_removes_encoded_html_suffix_from_mailto_address():
+    fetcher = WebsiteFetcher(
+        opener=lambda url, timeout: (
+            b"<a href='mailto:webmaster@alpine.example\\u0022\\u003ewebmaster'>Contact</a>"
+        )
+    )
+
+    document = fetcher.fetch("https://alpine.example/")
+
+    assert [item.address for item in document.public_emails] == [
+        "webmaster@alpine.example"
+    ]
+
+
 def test_fetcher_follows_bounded_same_domain_contact_pages():
     pages = {
         "https://alpine.example/": (
