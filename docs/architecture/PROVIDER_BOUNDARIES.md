@@ -16,7 +16,7 @@ Google 返回 JavaScript 页面时的真实搜索流程。两者都保存查询�
 
 本机真实验证表明，Google 无浏览器会话的静态请求可能返回仅含 `enablejs` 的页面，
 此时 `GoogleSearchProvider` 必须明确失败，不能返回空客户池或虚构结果。使用浏览器
-获得可见结果后，通过统一的 `POST /api/tasks/{task_id}/assess` 入口导入，仍然经过同一
+获得可见结果后，通过统一的 `POST /api/tasks/{task_id}/discover/import` 入口导入，仍然经过同一
 套清洗、去重、评分和来源保存流程。
 
 ## 责任分配
