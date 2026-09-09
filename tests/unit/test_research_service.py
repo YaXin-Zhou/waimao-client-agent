@@ -202,3 +202,54 @@ def test_research_company_marks_country_conflict_between_lead_and_website():
     assert result.country == "Austria"
     assert result.country_conflict is True
     assert result.evidence_status is EvidenceStatus.INSUFFICIENT
+
+
+def test_research_company_requires_evidence_for_required_custom_fields():
+    provider = FakeStructuredProvider(
+        {
+            "business_summary": "Manufacturer of precision parts.",
+            "customer_type": "manufacturer",
+            "products": ["precision parts"],
+            "country": "Germany",
+            "confidence": 0.9,
+            "custom_fields": {
+                "buyer_role": {"value": "", "status": "unknown", "sources": []}
+            },
+        }
+    )
+
+    result = research_company(
+        provider,
+        CleanLead("Alpine", "alpine.example", (), "Germany", "needs_review"),
+        "https://alpine.example/about",
+        "A sufficiently long source text for the research report.",
+        (ResearchFieldDefinition("Buyer role", "buyer_role", required=True),),
+        ("https://alpine.example/about",),
+    )
+
+    assert result.evidence_status is EvidenceStatus.INSUFFICIENT
+
+
+def test_research_company_requires_sources_when_configured_for_a_field():
+    provider = FakeStructuredProvider(
+        {
+            "business_summary": "Manufacturer of precision parts.",
+            "customer_type": "manufacturer",
+            "products": ["precision parts"],
+            "country": "Germany",
+            "confidence": 0.9,
+            "custom_fields": {
+                "company_type": {"value": "GmbH", "status": "reported", "sources": []}
+            },
+        }
+    )
+
+    result = research_company(
+        provider,
+        CleanLead("Alpine", "alpine.example", (), "Germany", "needs_review"),
+        "https://alpine.example/about",
+        "A sufficiently long source text for the research report.",
+        (ResearchFieldDefinition("Company type", "company_type"),),
+    )
+
+    assert result.evidence_status is EvidenceStatus.INSUFFICIENT

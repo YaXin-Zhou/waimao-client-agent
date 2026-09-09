@@ -59,6 +59,24 @@ def _custom_field_value(
     )
 
 
+def _custom_fields_have_sufficient_evidence(
+    definitions: tuple[ResearchFieldDefinition, ...],
+    values: dict[str, ResearchFieldValue],
+) -> bool:
+    """Apply user-configured field gates before a research report is trusted."""
+    for definition in definitions:
+        value = values.get(definition.key, ResearchFieldValue())
+        if definition.required and (
+            not value.value.strip() or value.status == "unknown"
+        ):
+            return False
+        if definition.evidence_required and not value.sources:
+            return False
+        if value.status == "conflicting":
+            return False
+    return True
+
+
 def research_company(
     provider: StructuredProvider,
     lead: CleanLead,
@@ -127,6 +145,9 @@ def research_company(
         and reported_country.lower() not in {"unknown", "n/a", "not found"}
         and reported_country.casefold() != lead.country.strip().casefold()
     )
+    field_evidence_ok = _custom_fields_have_sufficient_evidence(
+        field_definitions, custom_fields
+    )
     return ResearchResult(
         company_name=lead.company_name,
         business_summary=str(data["business_summary"]),
@@ -137,7 +158,12 @@ def research_company(
         evidence_url=source_url,
         evidence_status=(
             EvidenceStatus.SUFFICIENT
-            if len(website_text.strip()) >= 40 and confidence >= 0.5 and not country_conflict
+            if (
+                len(website_text.strip()) >= 40
+                and confidence >= 0.5
+                and not country_conflict
+                and field_evidence_ok
+            )
             else EvidenceStatus.INSUFFICIENT
         ),
         website_language=str(data.get("website_language", "unknown")),
