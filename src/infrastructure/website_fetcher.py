@@ -69,31 +69,23 @@ class WebsiteFetcher:
         home = self.fetch(url)
         documents = [home]
         seen = {self._page_key(home.url)}
-        external_count = 0
-        for link in sorted(
-            home.links,
-            key=lambda item: self._link_priority(item, priority_terms),
-            reverse=True,
-        ):
+        home_host = self._host_key(home.url)
+        same_domain_links = [
+            link for link in home.links if self._host_key(link) == home_host
+        ]
+        external_links = [
+            link for link in home.links if self._host_key(link) != home_host
+        ]
+        for link in self._order_same_domain_links(same_domain_links, priority_terms):
             if len(documents) >= max_pages:
                 break
             page_key = self._page_key(link)
             if page_key in seen:
                 continue
-            parsed_link = urlparse(link)
-            link_host = (parsed_link.hostname or "").lower().removeprefix("www.")
-            home_host = (urlparse(home.url).hostname or "").lower().removeprefix("www.")
-            same_domain = link_host == home_host
-            if not same_domain:
-                if not allow_external_sources or external_count >= max_external_pages:
-                    continue
-                external_count += 1
             seen.add(page_key)
             try:
                 document = self.fetch(link)
             except Exception:
-                continue
-            if not same_domain and not self._external_matches_identity(home, link, document):
                 continue
             documents.append(document)
         if len(documents) < max_pages:
@@ -105,7 +97,63 @@ class WebsiteFetcher:
                 priority_terms,
             )
         self._append_fallback_pages(documents, seen, home.url, max_pages)
+        if allow_external_sources:
+            external_count = 0
+            for link in sorted(
+                external_links,
+                key=lambda item: self._link_priority(item, priority_terms),
+                reverse=True,
+            ):
+                if len(documents) >= max_pages or external_count >= max_external_pages:
+                    break
+                page_key = self._page_key(link)
+                if page_key in seen:
+                    continue
+                external_count += 1
+                seen.add(page_key)
+                try:
+                    document = self.fetch(link)
+                except Exception:
+                    continue
+                if not self._external_matches_identity(home, link, document):
+                    continue
+                documents.append(document)
         return tuple(documents)
+
+    @classmethod
+    def _order_same_domain_links(
+        cls, links: list[str], priority_terms: tuple[str, ...]
+    ) -> tuple[str, ...]:
+        """Reserve crawl budget for both contact and product evidence when available."""
+        ranked = sorted(
+            dict.fromkeys(links),
+            key=lambda item: cls._link_priority(item, priority_terms),
+            reverse=True,
+        )
+        selected: list[str] = []
+        for predicate in (
+            cls._is_contact_path,
+            lambda item: cls._is_product_path(item)
+            or cls._link_priority(item, priority_terms) >= 60,
+        ):
+            match = next((item for item in ranked if predicate(item)), None)
+            if match and match not in selected:
+                selected.append(match)
+        selected.extend(item for item in ranked if item not in selected)
+        return tuple(selected)
+
+    @staticmethod
+    def _is_contact_path(url: str) -> bool:
+        path = urlparse(url).path.lower()
+        return any(term in path for term in ("contact", "imprint", "impressum", "legal"))
+
+    @staticmethod
+    def _is_product_path(url: str) -> bool:
+        path = urlparse(url).path.lower()
+        return any(
+            term in path
+            for term in ("product", "power-station", "generator", "solution")
+        )
 
     def _append_fallback_pages(
         self,

@@ -132,6 +132,32 @@ def test_fetcher_can_follow_bounded_relevant_external_sources_when_enabled():
     ]
 
 
+def test_fetcher_fills_same_domain_budget_before_following_external_sources():
+    pages = {
+        "https://alpine.example/": (
+            b"<title>Alpine Outdoor</title>"
+            b"<a href='/products'>Products</a>"
+            b"<a href='https://group.example/contact'>Alpine group contact</a>"
+        ),
+        "https://alpine.example/products": b"Alpine portable power station products",
+        "https://group.example/contact": b"Alpine Group sales@group.example",
+    }
+
+    fetcher = WebsiteFetcher(opener=lambda url, timeout: pages[url])
+
+    documents = fetcher.fetch_contact_pages(
+        "https://alpine.example/",
+        max_pages=2,
+        allow_external_sources=True,
+        max_external_pages=1,
+    )
+
+    assert [document.url for document in documents] == [
+        "https://alpine.example/",
+        "https://alpine.example/products",
+    ]
+
+
 def test_fetcher_rejects_explicit_external_link_without_identity_match():
     pages = {
         "https://alpine.example/": (
