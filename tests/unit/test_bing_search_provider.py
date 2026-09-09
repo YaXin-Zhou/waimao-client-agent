@@ -44,3 +44,21 @@ def test_bing_provider_resolves_encoded_redirect_without_clicking():
     assert BingSearchProvider._resolve_result_url(
         f"https://www.bing.com/ck/a?u={token}"
     ) == "https://supplier.example/"
+
+
+def test_bing_provider_excludes_non_company_result_hosts():
+    html = """
+    <ol>
+      <li class="b_algo"><h2><a href="https://en.wikipedia.org/wiki/Injection_molding">Wikipedia</a></h2></li>
+      <li class="b_algo"><h2><a href="https://real-company.example/">Real company</a></h2></li>
+    </ol>
+    """
+
+    provider = BingSearchProvider(opener=lambda request, timeout: Response(html))
+    results = provider.search(
+        AcquisitionCriteria(
+            product="portable power station", candidate_limit=1, qualified_lead_limit=1
+        )
+    )
+
+    assert [result.website for result in results] == ["https://real-company.example/"]

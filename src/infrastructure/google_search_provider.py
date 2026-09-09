@@ -66,6 +66,18 @@ class GoogleSearchProvider:
             "youtube.com",
             "zoominfo.com",
             "exactdata.com",
+            "wikipedia.org",
+            "britannica.com",
+            "merriam-webster.com",
+            "npr.org",
+            "reddit.com",
+            "quora.com",
+            "pinterest.com",
+            "amazon.com",
+            "alibaba.com",
+            "aliexpress.com",
+            "thomasnet.com",
+            "europages.com",
         }
     )
 

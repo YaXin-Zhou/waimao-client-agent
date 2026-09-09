@@ -12,7 +12,7 @@ from urllib.request import Request, urlopen
 from src.application.search_queries import build_search_queries
 from src.domain.lead import LeadRecord
 from src.domain.task import AcquisitionCriteria
-from src.infrastructure.google_search_provider import SearchProviderError
+from src.infrastructure.google_search_provider import GoogleSearchProvider, SearchProviderError
 
 
 class _BingResultParser(HTMLParser):
@@ -100,9 +100,12 @@ class BingSearchProvider:
                     parsed = urlsplit(href)
                     resolved = self._resolve_result_url(href)
                     parsed = urlsplit(resolved)
-                    if parsed.scheme not in {"http", "https"} or not parsed.hostname:
+                    if (
+                        not GoogleSearchProvider._is_candidate(resolved)
+                        or not parsed.hostname
+                    ):
                         continue
-                    if parsed.hostname.endswith("bing.com") or resolved in seen:
+                    if resolved in seen:
                         continue
                     seen.add(resolved)
                     records.append(
