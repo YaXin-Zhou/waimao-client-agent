@@ -1087,9 +1087,15 @@ class ApiApplication:
 
         checks = {
             "company_name": check(lead.company_name),
-            "country": check(lead.country) if lead.country else "not_configured",
+            "country": (
+                "conflicting"
+                if "conflicting_country" in lead.flags
+                else check(lead.country) if lead.country else "not_configured"
+            ),
             "email": (
-                "supported"
+                "conflicting"
+                if "email_domain_mismatch" in lead.flags
+                else "supported"
                 if lead.emails and any(email.lower() in text for email in lead.emails)
                 else "not_found"
             ),

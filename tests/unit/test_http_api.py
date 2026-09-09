@@ -456,6 +456,34 @@ def test_api_returns_field_level_evidence_checks_from_public_excerpts():
     }
 
 
+def test_api_marks_country_and_email_conflicts_in_field_checks():
+    lead = clean_leads(
+        [
+            LeadRecord(
+                "Alpine",
+                "https://alpine.example",
+                "office@alpine.at",
+                "Germany",
+                "https://alpine.example/about",
+                "Alpine Austria office@alpine.at",
+            ),
+            LeadRecord(
+                "Alpine",
+                "https://alpine.example/contact",
+                "",
+                "Austria",
+                "https://alpine.example/contact",
+                "Alpine Austria contact",
+            ),
+        ]
+    )[0]
+
+    checks = ApiApplication._evidence_checks(lead, AcquisitionCriteria(product="solar generator"))
+
+    assert checks["country"] == "conflicting"
+    assert checks["email"] == "conflicting"
+
+
 def test_api_lead_list_sanitizes_legacy_source_evidence():
     app, task, _, _ = make_app()
     result = app._leads.results[0]

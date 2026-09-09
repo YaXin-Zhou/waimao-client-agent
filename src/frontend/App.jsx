@@ -581,7 +581,7 @@ function evidenceCheckLabel(key) {
 }
 
 function evidenceCheckStatus(value) {
-  return { supported: '来源已找到', not_found: '来源未找到', not_configured: '未配置', not_checked: '未检查' }[value] || value
+  return { supported: '来源已找到', not_found: '来源未找到', not_configured: '未配置', not_checked: '未检查', conflicting: '来源冲突' }[value] || value
 }
 
 function DiscoveryFunnel({ summary }) {

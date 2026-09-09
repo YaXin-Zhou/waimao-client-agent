@@ -205,6 +205,7 @@ h1 { color: #132238; font-size: 29px; font-weight: 700; letter-spacing: -.8px; }
 .evidence-check b { color: #52677c; font-weight: 600; }
 .evidence-check-supported { color: #237a63; background: #e7f5ef; }
 .evidence-check-not_found { color: #9a5960; background: #fff0f1; }
+.evidence-check-conflicting { color: #a15c23; background: #fff3e1; }
 .funnel-stages { display: flex; align-items: center; gap: 11px; margin-top: 10px; overflow-x: auto; }
 .funnel-stages > span { position: relative; min-width: 62px; text-align: center; }
 .funnel-stages b, .funnel-stages small { display: block; }
