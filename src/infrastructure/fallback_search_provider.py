@@ -6,19 +6,21 @@ from src.infrastructure.google_search_provider import SearchProviderError
 
 
 class FallbackSearchProvider:
-    def __init__(self, primary, fallback=None):
-        self._primary = primary
-        self._fallback = fallback
+    def __init__(self, primary, fallback=None, *additional):
+        self._providers = tuple(
+            provider for provider in (primary, fallback, *additional) if provider is not None
+        )
 
     def search(self, criteria):
-        try:
-            return self._primary.search(criteria)
-        except SearchProviderError as primary_error:
-            if self._fallback is None:
-                raise
+        errors = []
+        for provider in self._providers:
             try:
-                return self._fallback.search(criteria)
-            except SearchProviderError as fallback_error:
-                raise SearchProviderError(
-                    f"static search failed and browser fallback failed: {fallback_error}"
-                ) from primary_error
+                return provider.search(criteria)
+            except SearchProviderError as error:
+                errors.append(error)
+        if errors:
+            raise SearchProviderError(
+                "all configured search providers failed: "
+                + "; ".join(str(error) for error in errors)
+            ) from errors[-1]
+        raise SearchProviderError("no search provider is configured")

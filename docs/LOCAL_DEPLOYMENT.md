@@ -40,6 +40,10 @@ Invoke-RestMethod http://127.0.0.1:8001/api/ready
 
 返回 `status=ready` 后，才开始搜索或背调。真实客户资料、来源证据、筛选结果和邮件草稿保存在 `data/runtime/acquisition.db`。
 
+默认搜索源为 Google 静态请求和无界面 Chrome fallback。Bing 适配器目前属于实验性可选来源，
+默认关闭；只有经过一轮真实相关性抽检后，才建议在 `config/.env` 中设置
+`SEARCH_BING_ENABLED=true`。
+
 ## Google Consent 页面处理
 
 点击“开始搜索客户”后，系统先自动发送静态请求；若 Google 返回 JavaScript/Consent 页面，会自动尝试以无界面 Chrome 读取公开可见结果，不弹出窗口、不模拟人工点击。若 Google 对自动化会话返回 Consent、验证码或异常流量页，系统会明确提示失败，不生成空客户或猜测数据。此时才使用“导入浏览器结果”作为人工兜底；导入后系统会自动抓取官网及相关联系页、过滤占位邮箱、保存来源并重新筛选。

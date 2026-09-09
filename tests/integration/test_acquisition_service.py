@@ -96,6 +96,31 @@ def test_service_discovers_candidates_through_replaceable_provider():
     assert results[0].score.total == 30
 
 
+def test_derived_product_signal_requires_candidate_source_text():
+    service = AcquisitionService(InMemoryTaskRepository(), InMemoryLeadRepository())
+    task = service.create_task(
+        "Product signal boundary",
+        AcquisitionCriteria(product="portable solar generator", minimum_qualification_score=0),
+    )
+
+    result = service.assess_leads(
+        task.id,
+        [
+            LeadRecord(
+                "Portable Apps",
+                "https://portableapps.example",
+                "sales@portableapps.example",
+                source_url="https://www.google.com/search?q=portable",
+                source_excerpt="Portable software for USB and cloud storage",
+            )
+        ],
+        weights={"product_match": 30},
+        signals_by_domain={},
+    )[0]
+
+    assert result.score.total == 0
+
+
 def test_service_enriches_automatic_search_with_real_public_website_emails():
     class Search:
         def search(self, criteria):

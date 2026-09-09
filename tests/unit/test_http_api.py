@@ -51,7 +51,7 @@ class SearchProvider:
                 "sales@discovered.example",
                 "Germany",
                 "https://discovered.example",
-                "Google result",
+                "Google result for portable power station",
             )
         ]
 

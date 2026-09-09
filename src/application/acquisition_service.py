@@ -93,8 +93,6 @@ class AcquisitionService:
                 lead.company_name,
                 lead.domain,
                 *(source[1] for source in lead.sources),
-                criteria.product,
-                *criteria.keywords,
             )
         ).lower()
         configured_terms = tuple(

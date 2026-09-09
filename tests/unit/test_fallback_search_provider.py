@@ -47,7 +47,7 @@ def test_fallback_runs_only_after_explicit_static_provider_error():
 
 
 def test_fallback_preserves_a_clear_error_when_both_providers_fail():
-    with pytest.raises(SearchProviderError, match="browser fallback failed"):
+    with pytest.raises(SearchProviderError, match="all configured search providers failed"):
         FallbackSearchProvider(
             Primary(SearchProviderError("static")),
             Fallback(SearchProviderError("captcha")),

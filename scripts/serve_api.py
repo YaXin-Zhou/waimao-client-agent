@@ -27,6 +27,7 @@ from src.application.send_safety_service import SendSafetyService  # noqa: E402
 from src.application.translation_service import TranslationService  # noqa: E402
 from src.infrastructure.ali_imap import AliImapConfig, AliImapMailbox  # noqa: E402
 from src.infrastructure.ali_smtp import AliSmtpConfig, AliSmtpMailer  # noqa: E402
+from src.infrastructure.bing_search_provider import BingSearchProvider  # noqa: E402
 from src.infrastructure.deepseek_provider import DeepSeekConfig, DeepSeekProvider  # noqa: E402
 from src.infrastructure.fallback_search_provider import FallbackSearchProvider  # noqa: E402
 from src.infrastructure.google_search_provider import GoogleSearchProvider  # noqa: E402
@@ -98,7 +99,18 @@ if config_values.get("SEARCH_BROWSER_ENABLED", "true").lower() == "true":
         headless=config_values.get("SEARCH_BROWSER_HEADLESS", "true").lower() == "true",
         proxy=config_values.get("SEARCH_BROWSER_PROXY", ""),
     )
-search_provider = FallbackSearchProvider(static_search_provider, browser_search_provider)
+bing_search_provider = (
+    BingSearchProvider(
+        timeout=float(config_values.get("SEARCH_TIMEOUT_SECONDS", "15")),
+        max_results_per_query=int(config_values.get("SEARCH_RESULTS_PER_QUERY", "10")),
+        host=config_values.get("SEARCH_BING_HOST", "www.bing.com"),
+    )
+    if config_values.get("SEARCH_BING_ENABLED", "false").lower() == "true"
+    else None
+)
+search_provider = FallbackSearchProvider(
+    static_search_provider, browser_search_provider, bing_search_provider
+)
 try:
     deepseek_provider = DeepSeekProvider(DeepSeekConfig.from_env_file(ROOT / "config" / ".env"))
 except (FileNotFoundError, ValueError):
