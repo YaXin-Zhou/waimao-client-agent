@@ -40,10 +40,26 @@ Invoke-RestMethod http://127.0.0.1:8001/api/ready
 
 返回 `status=ready` 后，才开始搜索或背调。真实客户资料、来源证据、筛选结果和邮件草稿保存在 `data/runtime/acquisition.db`。
 
+## Google Consent 页面处理
+
+如果点击“开始搜索客户”后 Google 返回 JavaScript/Consent 页面，系统会明确提示失败，不会生成空客户或猜测数据。此时在浏览器中完成可见搜索，把结果整理为 JSON，在工作台点击“导入浏览器结果”；导入后系统会自动抓取官网及相关联系页、过滤占位邮箱、保存来源并重新筛选。
+
+JSON 最少包含 `title`（或 `company_name`）、`website`，推荐同时保留 `excerpt` 和 `source_url`：
+
+```json
+[
+  {
+    "title": "公开搜索结果中的公司名称",
+    "website": "https://company.example",
+    "excerpt": "Google 可见摘要",
+    "source_url": "https://www.google.com/search?q=..."
+  }
+]
+```
+
 ## 当前边界
 
 - 搜索和官网采集使用外部公开网页；结果必须经过清洗、证据保存和合格筛选。
 - 邮件发送仍由人工审核和发送安全策略控制。
 - WorkBuddy 集成暂缓，现有本地 Skill 和相关文件保留，后续可恢复。
 - 当前不是公网生产部署，不包含 HTTPS、多人权限和云端数据库。
-
