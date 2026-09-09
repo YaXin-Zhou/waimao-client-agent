@@ -315,21 +315,38 @@ class AcquisitionService:
             for document in documents
             for email in getattr(document, "public_emails", ())
         )
-        first_source = assessed.lead.sources[0] if assessed.lead.sources else ("", "")
         records = [
             LeadRecord(
                 assessed.lead.company_name,
                 website,
-                email,
+                "",
                 assessed.lead.country,
-                first_source[0],
-                first_source[1],
+                source_url,
+                source_excerpt,
             )
-            for email in assessed.lead.emails or ("",)
+            for source_url, source_excerpt in assessed.lead.sources
+            if is_search_source(source_url)
         ]
+        if not records:
+            records.append(
+                LeadRecord(
+                    assessed.lead.company_name,
+                    website,
+                    "",
+                    assessed.lead.country,
+                )
+            )
         records.extend(
-            LeadRecord(assessed.lead.company_name, website, "", assessed.lead.country, url, excerpt)
-            for url, excerpt in assessed.lead.sources[1:]
+            LeadRecord(
+                assessed.lead.company_name,
+                website,
+                "",
+                assessed.lead.country,
+                document.url,
+                self._document_excerpt(document),
+            )
+            for document in documents
+            if self._document_excerpt(document)
         )
         records.extend(
             LeadRecord(

@@ -732,7 +732,7 @@ def test_api_discovers_public_contacts_without_model_and_keeps_evidence():
     )
 
     assert status == 200
-    assert payload["lead"]["emails"] == ["sales@alpine.example", "info@alpine.example"]
+    assert payload["lead"]["emails"] == ["info@alpine.example"]
     assert payload["lead"]["sources"][-1] == [
         "https://alpine.example",
         "Contact info@alpine.example",

@@ -321,6 +321,49 @@ def test_service_removes_invalid_persisted_contact_when_rechecking_public_pages(
     assert "missing_public_email" in result.rejection_reasons
 
 
+def test_service_recheck_replaces_stale_website_email_and_sources():
+    tasks = InMemoryTaskRepository()
+    leads = InMemoryLeadRepository()
+    service = AcquisitionService(tasks, leads)
+    task = service.create_task(
+        "Replace stale contact evidence",
+        AcquisitionCriteria(product="portable power station", require_public_email=False),
+    )
+    service.assess_leads(
+        task.id,
+        [
+            LeadRecord(
+                "Alpine",
+                "https://alpine.example",
+                "old@alpine.example",
+                "Germany",
+                "https://alpine.example/old-contact",
+                "Old contact old@alpine.example",
+            ),
+        ],
+        weights={},
+        signals_by_domain={},
+    )
+
+    class Reader:
+        def fetch_contact_pages(self, url, max_pages, allow_external_sources, max_external_pages):
+            return (
+                SourceDocument(
+                    url,
+                    "Alpine Products",
+                    "Alpine portable power station products",
+                ),
+            )
+
+    result = service.discover_public_contacts(task.id, "alpine.example", Reader())
+
+    assert result.lead.emails == ()
+    assert "old@alpine.example" not in " ".join(excerpt for _, excerpt in result.lead.sources)
+    assert result.lead.sources == (
+        ("https://alpine.example", "Alpine Products - Alpine portable power station products"),
+    )
+
+
 def test_service_keeps_only_qualified_leads_marked_and_records_rejection_reasons():
     service = AcquisitionService(InMemoryTaskRepository(), InMemoryLeadRepository())
     task = service.create_task(
