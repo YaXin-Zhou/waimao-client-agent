@@ -63,7 +63,12 @@ class AcquisitionService:
         results = [
             AssessedLead(
                 lead=lead,
-                score=score_lead(lead, weights, signals_by_domain.get(lead.domain, {})),
+                score=score_lead(
+                    lead,
+                    weights,
+                    signals_by_domain.get(lead.domain)
+                    or self._derive_signals(lead, task_id, weights),
+                ),
             )
             for lead in cleaned
         ]
@@ -72,6 +77,41 @@ class AcquisitionService:
         qualified = self._qualify(results, task.criteria)
         self._leads.save_assessments(task_id, qualified)
         return qualified
+
+    def _derive_signals(
+        self, lead: CleanLead, task_id: str, weights: dict[str, int]
+    ) -> dict[str, int]:
+        """没有外部评分时，按当前任务配置生成可解释的基础信号。"""
+        task = self._tasks.get(task_id)
+        if task is None:
+            return {}
+        criteria = task.criteria
+        searchable = " ".join(
+            (
+                lead.company_name,
+                lead.domain,
+                *(source[1] for source in lead.sources),
+                criteria.product,
+                *criteria.keywords,
+            )
+        ).lower()
+        configured_terms = tuple(
+            term.strip().lower()
+            for term in (criteria.product, *criteria.keywords)
+            if term.strip()
+        )
+        signals: dict[str, int] = {}
+        if "product_match" in weights and any(term in searchable for term in configured_terms):
+            signals["product_match"] = weights["product_match"]
+        if "email_quality" in weights and lead.emails:
+            signals["email_quality"] = weights["email_quality"]
+        if "evidence_quality" in weights and lead.sources:
+            signals["evidence_quality"] = weights["evidence_quality"]
+        if "market_match" in weights and lead.country:
+            markets = {value.strip().lower() for value in criteria.countries if value.strip()}
+            if not markets or lead.country.lower() in markets:
+                signals["market_match"] = weights["market_match"]
+        return signals
 
     @staticmethod
     def _qualify(
