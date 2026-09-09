@@ -90,9 +90,12 @@ class WebsiteFetcher:
                 external_count += 1
             seen.add(page_key)
             try:
-                documents.append(self.fetch(link))
+                document = self.fetch(link)
             except Exception:
                 continue
+            if not same_domain and not self._external_matches_identity(home, link, document):
+                continue
+            documents.append(document)
         if len(documents) < max_pages:
             self._append_sitemap_pages(
                 documents,
@@ -170,6 +173,39 @@ class WebsiteFetcher:
     @staticmethod
     def _is_sitemap_url(url: str) -> bool:
         return urlparse(url).path.lower().endswith((".xml", ".xml.gz"))
+
+    @classmethod
+    def _external_matches_identity(
+        cls, home: SourceDocument, external_url: str, document: SourceDocument
+    ) -> bool:
+        """Require a small identity overlap before accepting an explicitly linked external page."""
+        identity = cls._identity_tokens(home.title or home.url)
+        if not identity:
+            return False
+        external_text = " ".join(
+            (external_url, document.title, document.text[:1200])
+        )
+        return bool(identity & cls._identity_tokens(external_text))
+
+    @staticmethod
+    def _identity_tokens(value: str) -> set[str]:
+        ignored = {
+            "about",
+            "contact",
+            "company",
+            "com",
+            "home",
+            "official",
+            "products",
+            "product",
+            "solutions",
+            "www",
+        }
+        return {
+            token
+            for token in re.findall(r"[a-z0-9]+", value.lower())
+            if len(token) >= 4 and token not in ignored
+        }
 
     @staticmethod
     def _link_priority(url: str, priority_terms: tuple[str, ...] = ()) -> int:

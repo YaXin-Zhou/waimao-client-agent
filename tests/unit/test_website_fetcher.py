@@ -110,8 +110,11 @@ def test_fetcher_follows_bounded_same_domain_contact_pages():
 
 def test_fetcher_can_follow_bounded_relevant_external_sources_when_enabled():
     pages = {
-        "https://alpine.example/": b"<a href='https://group.example/contact'>Group contact</a>",
-        "https://group.example/contact": b"Group sales@group.example",
+        "https://alpine.example/": (
+            b"<title>Alpine Outdoor</title>"
+            b"<a href='https://group.example/contact'>Alpine group contact</a>"
+        ),
+        "https://group.example/contact": b"<title>Alpine Group</title>Alpine sales@group.example",
     }
 
     fetcher = WebsiteFetcher(opener=lambda url, timeout: pages[url])
@@ -127,6 +130,26 @@ def test_fetcher_can_follow_bounded_relevant_external_sources_when_enabled():
         "https://alpine.example/",
         "https://group.example/contact",
     ]
+
+
+def test_fetcher_rejects_explicit_external_link_without_identity_match():
+    pages = {
+        "https://alpine.example/": (
+            b"<title>Alpine Outdoor</title>"
+            b"<a href='https://unrelated.example/contact'>Contact</a>"
+        ),
+        "https://unrelated.example/contact": (
+            b"<title>Unrelated Group</title>sales@unrelated.example"
+        ),
+    }
+
+    fetcher = WebsiteFetcher(opener=lambda url, timeout: pages[url])
+
+    documents = fetcher.fetch_contact_pages(
+        "https://alpine.example/", max_pages=3, allow_external_sources=True, max_external_pages=1
+    )
+
+    assert [document.url for document in documents] == ["https://alpine.example/"]
 
 
 def test_fetch_contact_pages_skips_current_page_link_without_stopping_crawl():
