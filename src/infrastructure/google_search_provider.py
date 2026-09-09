@@ -78,6 +78,10 @@ class GoogleSearchProvider:
             "aliexpress.com",
             "thomasnet.com",
             "europages.com",
+            "scienceinsights.org",
+            "nationalgeographic.org",
+            "investopedia.com",
+            "techtarget.com",
         }
     )
 
@@ -161,15 +165,41 @@ class GoogleSearchProvider:
         hostname = parsed.hostname or ""
         is_google = hostname.endswith("google.com") or hostname.endswith("google.com.hk")
         normalized_host = hostname.lower().removeprefix("www.")
+        normalized_path = parsed.path.lower()
         is_non_company_result = any(
             normalized_host == host or normalized_host.endswith(f".{host}")
             for host in GoogleSearchProvider._NON_COMPANY_RESULT_HOSTS
         )
+        is_non_company_path = any(
+            f"/{segment}/" in f"{normalized_path}/"
+            or normalized_path.endswith(f"/{segment}")
+            for segment in (
+                "article",
+                "articles",
+                "blog",
+                "education",
+                "glossary",
+                "learn",
+                "news",
+                "resources",
+                "wiki",
+                "definition",
+                "terms",
+            )
+        )
+        is_explanatory_path = any(
+            normalized_path.startswith(f"/{prefix}")
+            for prefix in ("/how-", "/what-is-", "/why-")
+        )
+        is_public_institution = hostname.endswith((".gov", ".edu")) or ".gov." in hostname
         return (
             parsed.scheme in {"http", "https"}
             and bool(hostname)
             and not is_google
             and not is_non_company_result
+            and not is_non_company_path
+            and not is_explanatory_path
+            and not is_public_institution
         )
 
     @staticmethod

@@ -70,6 +70,22 @@ def test_google_provider_excludes_job_boards_and_company_directories():
     assert GoogleSearchProvider._is_candidate("https://www.example-manufacturer.com/contact")
 
 
+def test_google_provider_excludes_informational_paths_and_public_institutions():
+    assert not GoogleSearchProvider._is_candidate(
+        "https://www.example.com/resources/plastic-guide"
+    )
+    assert not GoogleSearchProvider._is_candidate("https://www.epa.gov/plastics")
+    assert not GoogleSearchProvider._is_candidate(
+        "https://www.investopedia.com/terms/o/oem.asp"
+    )
+    assert not GoogleSearchProvider._is_candidate(
+        "https://scienceinsights.org/how-is-plastic-recycled"
+    )
+    assert GoogleSearchProvider._is_candidate(
+        "https://www.example-manufacturer.com/products/plastic-parts"
+    )
+
+
 def test_google_provider_surfaces_network_errors():
     def fail(request, timeout):
         raise TimeoutError("proxy timeout")
