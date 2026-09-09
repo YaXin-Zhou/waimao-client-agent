@@ -44,11 +44,15 @@ def main() -> int:
     routes = {
         "ready": ("GET", "/api/ready", None),
         "tasks": ("GET", "/api/tasks", None),
-        "leads": ("GET", f"/api/tasks/{args.task_id}/leads", None),
-        "lead": ("GET", f"/api/tasks/{args.task_id}/leads/{args.domain}", None),
-        "sync-mailbox": ("POST", f"/api/tasks/{args.task_id}/mailbox/sync", {}),
-        "analyze-replies": ("POST", f"/api/tasks/{args.task_id}/reply-analyses/run", {}),
     }
+    if args.command == "leads":
+        routes[args.command] = ("GET", f"/api/tasks/{args.task_id}/leads", None)
+    elif args.command == "lead":
+        routes[args.command] = ("GET", f"/api/tasks/{args.task_id}/leads/{args.domain}", None)
+    elif args.command == "sync-mailbox":
+        routes[args.command] = ("POST", f"/api/tasks/{args.task_id}/mailbox/sync", {})
+    elif args.command == "analyze-replies":
+        routes[args.command] = ("POST", f"/api/tasks/{args.task_id}/reply-analyses/run", {})
     try:
         method, path, payload = routes[args.command]
         print(json.dumps(call(args.base_url, method, path, payload), ensure_ascii=False))
