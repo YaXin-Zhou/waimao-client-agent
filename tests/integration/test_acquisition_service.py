@@ -296,6 +296,35 @@ def test_service_discovers_public_contacts_and_preserves_source_evidence():
     )
 
 
+def test_contact_refresh_recalculates_default_score_for_unscored_import():
+    tasks = InMemoryTaskRepository()
+    leads = InMemoryLeadRepository()
+    service = AcquisitionService(tasks, leads)
+    task = service.create_task(
+        "Re-score imported contacts",
+        AcquisitionCriteria(product="portable power station", minimum_qualification_score=40),
+    )
+    service.assess_leads(
+        task.id,
+        [
+            LeadRecord(
+                "Alpine",
+                "https://alpine.example",
+                "",
+                source_url="https://google.example/result",
+                source_excerpt="Alpine portable power station supplier",
+            )
+        ],
+        weights={},
+        signals_by_domain={},
+    )
+
+    result = service.discover_public_contacts(task.id, "alpine.example", ContactFetcher())
+
+    assert result.score.total == 50
+    assert result.qualified is True
+
+
 def test_service_removes_invalid_persisted_contact_when_rechecking_public_pages():
     tasks = InMemoryTaskRepository()
     leads = InMemoryLeadRepository()

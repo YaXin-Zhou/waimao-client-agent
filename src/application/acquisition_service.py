@@ -41,6 +41,14 @@ class AssessedLead:
     rejection_reasons: tuple[str, ...] = ()
 
 
+DEFAULT_QUALIFICATION_WEIGHTS = {
+    "product_match": 30,
+    "market_match": 20,
+    "email_quality": 15,
+    "evidence_quality": 5,
+}
+
+
 class AcquisitionService:
     def __init__(
         self,
@@ -375,8 +383,15 @@ class AcquisitionService:
             for item in public_emails
         )
         updated_lead = replace(clean_leads(records)[0], status=assessed.lead.status)
+        score = assessed.score
+        if score.total == 0:
+            score = score_lead(
+                updated_lead,
+                DEFAULT_QUALIFICATION_WEIGHTS,
+                self._derive_signals(updated_lead, task_id, DEFAULT_QUALIFICATION_WEIGHTS),
+            )
         result = self._qualify(
-            [AssessedLead(updated_lead, assessed.score)],
+            [AssessedLead(updated_lead, score)],
             self._tasks.get(task_id).criteria,  # type: ignore[union-attr]
         )[0]
         self._leads.save_assessments(

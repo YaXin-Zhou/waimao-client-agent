@@ -7,7 +7,10 @@ from dataclasses import replace
 from datetime import datetime, timezone
 from urllib.parse import unquote, urlsplit
 
-from src.application.acquisition_service import AcquisitionService
+from src.application.acquisition_service import (
+    DEFAULT_QUALIFICATION_WEIGHTS,
+    AcquisitionService,
+)
 from src.application.email_review_service import EmailReviewService
 from src.domain.audit_event import AuditEvent
 from src.domain.custom_research import (
@@ -723,7 +726,7 @@ class ApiApplication:
             raise ValueError("records must be an array")
         payload = {
             "records": records,
-            "weights": body.get("weights", {}),
+            "weights": body.get("weights", DEFAULT_QUALIFICATION_WEIGHTS),
             "signals_by_domain": body.get("signals_by_domain", {}),
         }
         return self._assess_leads(task_id, payload)
