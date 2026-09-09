@@ -42,6 +42,8 @@ Invoke-RestMethod http://127.0.0.1:8001/api/ready
 
 浏览器搜索默认复用 `HTTPS_PROXY`；如需为浏览器指定不同代理，可在 `config/.env` 增加 `SEARCH_BROWSER_PROXY` 覆盖默认值。修改后需要重启本地 API 进程才能生效。
 
+官网核验默认使用 4 个受控并发 worker；可在 `config/.env` 设置 `WEBSITE_FETCH_WORKERS` 调整。每个站点仍受单站超时和页面数量上限约束，失败站点不会补造资料。
+
 默认搜索源为 Google 静态请求和无界面 Chrome fallback。Bing 适配器目前属于实验性可选来源，
 默认关闭；只有经过一轮真实相关性抽检后，才建议在 `config/.env` 中设置
 `SEARCH_BING_ENABLED=true`。

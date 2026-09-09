@@ -3,6 +3,7 @@
 from __future__ import annotations
 
 import re
+from concurrent.futures import ThreadPoolExecutor
 from dataclasses import dataclass, replace
 from urllib.parse import urlparse
 
@@ -57,6 +58,7 @@ class AcquisitionService:
         search_provider: SearchProvider | None = None,
         audit_repository: AuditEventRepository | None = None,
         website_reader=None,
+        website_workers: int = 4,
     ):
         self._tasks = task_repository
         self._leads = lead_repository
@@ -65,6 +67,9 @@ class AcquisitionService:
         self._website_reader = website_reader
         self._website_page_limit = 5
         self._external_source_limit = 3
+        if website_workers <= 0:
+            raise ValueError("website_workers must be positive")
+        self._website_workers = website_workers
 
     def create_task(
         self,
@@ -485,54 +490,69 @@ class AcquisitionService:
         """从候选官网提取公开邮箱；失败时保留原始候选，不猜测联系方式。"""
         if self._website_reader is None:
             return records
-        enriched: list[LeadRecord] = []
+        enriched = list(records)
+        unique_records: list[LeadRecord] = []
         fetched: set[str] = set()
         for record in records:
-            enriched.append(record)
             parsed = urlparse(record.website.strip())
             domain = (parsed.hostname or "").lower().removeprefix("www.")
-            if not domain or domain in fetched:
-                continue
-            fetched.add(domain)
-            try:
-                fetch_pages = getattr(self._website_reader, "fetch_contact_pages", None)
-                documents = (
-                    self._fetch_contact_pages(
-                        fetch_pages,
-                        record.website.strip(),
-                        self._tasks.get(task_id).criteria,
-                        allow_external_sources=True,
-                    )
-                    if fetch_pages is not None
-                    else (self._website_reader.fetch(record.website.strip()),)
-                )
-            except Exception:
-                continue
-            for document in documents:
-                excerpt = self._document_excerpt(document)
-                if excerpt:
-                    enriched.append(
-                        LeadRecord(
-                            company_name=record.company_name,
-                            website=record.website,
-                            country=record.country,
-                            source_url=document.url,
-                            source_excerpt=excerpt,
-                        )
-                    )
-            for document in documents:
-                for public_email in getattr(document, "public_emails", ()):
-                    enriched.append(
-                        LeadRecord(
-                            company_name=record.company_name,
-                            website=record.website,
-                            email=public_email.address,
-                            country=record.country,
-                            source_url=public_email.source_url,
-                            source_excerpt=public_email.excerpt,
-                        )
-                    )
+            if domain and domain not in fetched:
+                fetched.add(domain)
+                unique_records.append(record)
+        task = self._tasks.get(task_id)
+        if task is None:
+            raise KeyError(f"Task not found: {task_id}")
+        with ThreadPoolExecutor(max_workers=self._website_workers) as executor:
+            for additions in executor.map(
+                lambda record: self._enrich_one_search_record(record, task.criteria),
+                unique_records,
+            ):
+                enriched.extend(additions)
         return enriched
+
+    def _enrich_one_search_record(
+        self, record: LeadRecord, criteria: AcquisitionCriteria
+    ) -> list[LeadRecord]:
+        try:
+            fetch_pages = getattr(self._website_reader, "fetch_contact_pages", None)
+            documents = (
+                self._fetch_contact_pages(
+                    fetch_pages,
+                    record.website.strip(),
+                    criteria,
+                    allow_external_sources=True,
+                )
+                if fetch_pages is not None
+                else (self._website_reader.fetch(record.website.strip()),)
+            )
+        except Exception:
+            return []
+        additions: list[LeadRecord] = []
+        for document in documents:
+            excerpt = self._document_excerpt(document)
+            if excerpt:
+                additions.append(
+                    LeadRecord(
+                        company_name=record.company_name,
+                        website=record.website,
+                        country=record.country,
+                        source_url=document.url,
+                        source_excerpt=excerpt,
+                    )
+                )
+        for document in documents:
+            for public_email in getattr(document, "public_emails", ()):
+                additions.append(
+                    LeadRecord(
+                        company_name=record.company_name,
+                        website=record.website,
+                        email=public_email.address,
+                        country=record.country,
+                        source_url=public_email.source_url,
+                        source_excerpt=public_email.excerpt,
+                    )
+                )
+        return additions
 
     def _fetch_contact_pages(self, fetch_pages, website, criteria, allow_external_sources):
         kwargs = {

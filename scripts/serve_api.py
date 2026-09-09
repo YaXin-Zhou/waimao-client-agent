@@ -190,6 +190,7 @@ acquisition_service = AcquisitionService(
     website_reader=WebsiteFetcher(
         timeout=int(config_values.get("WEBSITE_FETCH_TIMEOUT_SECONDS", "15"))
     ),
+    website_workers=int(config_values.get("WEBSITE_FETCH_WORKERS", "4")),
 )
 application = ApiApplication(
     task_repository,

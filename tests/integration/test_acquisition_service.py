@@ -1,3 +1,6 @@
+import threading
+import time
+
 import pytest
 
 from src.application.acquisition_service import AcquisitionService, AssessedLead
@@ -215,6 +218,45 @@ def test_service_enriches_automatic_search_with_real_public_website_emails():
     assert results[0].lead.emails == ("sales@alpine.example",)
     assert results[0].qualified
     assert results[0].lead.sources[-1][0] == "https://alpine.example"
+
+
+def test_service_enriches_multiple_websites_with_bounded_concurrency():
+    class Search:
+        def search(self, criteria):
+            return [
+                LeadRecord("Alpine", "https://alpine.example", "", "Germany"),
+                LeadRecord("North", "https://north.example", "", "Germany"),
+            ]
+
+    state = {"active": 0, "max_active": 0}
+    lock = threading.Lock()
+
+    class Reader:
+        def fetch(self, url):
+            with lock:
+                state["active"] += 1
+                state["max_active"] = max(state["max_active"], state["active"])
+            time.sleep(0.05)
+            with lock:
+                state["active"] -= 1
+            return SourceDocument(url, "Company", "plastic components manufacturer")
+
+    tasks = InMemoryTaskRepository()
+    service = AcquisitionService(
+        tasks,
+        InMemoryLeadRepository(),
+        search_provider=Search(),
+        website_reader=Reader(),
+        website_workers=2,
+    )
+    task = service.create_task(
+        "Concurrent website enrichment",
+        AcquisitionCriteria(product="plastic components", minimum_qualification_score=0),
+    )
+
+    service.discover_and_assess(task.id, {}, {})
+
+    assert state["max_active"] == 2
 
 
 def test_service_uses_fetched_website_text_as_match_evidence_without_query_injection():
