@@ -41,6 +41,7 @@ class ApiApplication:
         email_send=None,
         follow_up_tasks=None,
         reply_drafts=None,
+        sending_enabled=False,
     ):
         self._tasks = tasks
         self._leads = leads
@@ -61,6 +62,7 @@ class ApiApplication:
         self._email_send = email_send
         self._follow_up_tasks = follow_up_tasks
         self._reply_drafts = reply_drafts
+        self._sending_enabled = sending_enabled
         self._reviews = EmailReviewService(drafts, audit)
 
     def handle(self, method: str, path: str, body=None) -> tuple[int, dict]:
@@ -281,7 +283,7 @@ class ApiApplication:
             "provider": "ali_imap",
             "configured": self._mailbox is not None,
             "mode": "read_only",
-            "sending_enabled": False,
+            "sending_enabled": self._sending_enabled,
         }
 
     def _test_mailbox(self) -> tuple[int, dict]:
@@ -341,6 +343,8 @@ class ApiApplication:
         }
 
     def _send_draft(self, draft_id: str, body: dict) -> tuple[int, dict]:
+        if not self._sending_enabled:
+            raise RuntimeError("SMTP sending is disabled; enable it explicitly for a controlled test")
         if self._email_send is None:
             raise RuntimeError("email send service is not configured")
         policy = SendPolicy(

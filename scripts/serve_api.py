@@ -163,6 +163,7 @@ application = ApiApplication(
     follow_up_tasks=follow_up_task_service,
     send_safety=send_safety_service,
     email_send=email_send_service,
+    sending_enabled=config_values.get("ALI_SMTP_SENDING_ENABLED", "false").lower() == "true",
 )
 
 
