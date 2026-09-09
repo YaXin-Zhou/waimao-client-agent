@@ -11,7 +11,8 @@
 
 `playwright_search_provider.py` 是本地自动 fallback：默认以无界面 Chrome 导航并读取
 Google 可见结果，通过请求解析 Google 重定向，不模拟人工点击。遇到 Consent、验证码或
-异常流量页面时明确失败；`fallback_search_provider.py` 只在静态搜索明确失败时切换它。
+异常流量页面时明确失败；`fallback_search_provider.py` 会在来源返回候选不足时继续尝试
+其他已启用来源，合并并按官网域名去重。
 
 `bing_search_provider.py` 是可选的第二自动来源：只有静态 Google 和无界面浏览器都明确失败、
 且 `SEARCH_BING_ENABLED=true` 时才调用。由于不同地区的 Bing 结果相关性需要真实样本验证，

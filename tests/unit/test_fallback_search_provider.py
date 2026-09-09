@@ -1,5 +1,7 @@
 import pytest
 
+from src.domain.lead import LeadRecord
+from src.domain.task import AcquisitionCriteria
 from src.infrastructure.fallback_search_provider import FallbackSearchProvider
 from src.infrastructure.google_search_provider import SearchProviderError
 
@@ -52,3 +54,36 @@ def test_fallback_preserves_a_clear_error_when_both_providers_fail():
             Primary(SearchProviderError("static")),
             Fallback(SearchProviderError("captcha")),
         ).search(object())
+
+
+def test_fallback_supplements_short_primary_results_until_candidate_limit():
+    fallback = Fallback(
+        [LeadRecord("Second", "https://second.example"), LeadRecord("Third", "third.example")]
+    )
+    criteria = AcquisitionCriteria(
+        product="portable power station", candidate_limit=3, qualified_lead_limit=1
+    )
+
+    result = FallbackSearchProvider(
+        Primary([LeadRecord("First", "https://first.example")]), fallback
+    ).search(criteria)
+
+    assert [item.website for item in result] == [
+        "https://first.example",
+        "https://second.example",
+        "third.example",
+    ]
+    assert fallback.called
+
+
+def test_fallback_deduplicates_same_domain_across_sources():
+    fallback = Fallback([LeadRecord("Duplicate", "https://www.first.example/about")])
+    criteria = AcquisitionCriteria(
+        product="portable power station", candidate_limit=2, qualified_lead_limit=1
+    )
+
+    result = FallbackSearchProvider(
+        Primary([LeadRecord("First", "https://first.example")]), fallback
+    ).search(criteria)
+
+    assert len(result) == 1
