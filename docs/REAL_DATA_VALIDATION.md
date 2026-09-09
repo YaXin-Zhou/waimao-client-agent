@@ -181,3 +181,9 @@ Invoke-RestMethod http://127.0.0.1:8001/api/ready
 | 最终可联系合格客户 | 0 |
 
 这轮数据证明后台队列、官网并发核验和失败不补造规则正常，但当前 Bing 买家导向结果供给不足，不能据此承诺每天 30 个合格客户。候选数量与合格数量必须在报表中分开统计；如需扩大真实数据量，应增加经过相关性抽检的搜索来源或由用户导入真实浏览器结果，不能降低邮箱、身份和业务证据门槛。
+
+## 可见 Google 搜索模式验证
+
+在可见浏览器页面中使用 `"plastic components" manufacturer Germany official website` 进行真实搜索，页面返回了 Haumann Technology、AKF Plastics、KB Components、COJEMA、REINER 等公司官网候选，同时也混入 Techpilot、Inven 和 Europages 等目录来源。应用侧的 Playwright 可见模式曾成功获取 5 个真实结果；同一搜索源随后再次触发 Consent/异常流量限制，程序按规则停止并不生成记录。
+
+因此，可见浏览器模式能够作为真实搜索入口，但搜索源放行状态不是应用可控变量。目录结果仍需过滤，官网、邮箱、身份和业务证据核验仍是进入合格客户池的必要条件。
