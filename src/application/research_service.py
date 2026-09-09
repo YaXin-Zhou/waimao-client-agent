@@ -2,6 +2,7 @@
 
 from __future__ import annotations
 
+from datetime import datetime, timezone
 from typing import Protocol
 
 from src.domain.custom_research import ResearchFieldDefinition, ResearchFieldValue
@@ -28,6 +29,7 @@ def _customer_type(value: object) -> CustomerType:
 def _custom_field_value(
     raw: dict,
     allowed_sources: tuple[str, ...],
+    checked_at: str,
 ) -> ResearchFieldValue:
     """Normalize one model field and force review when cited values disagree."""
     allowed = set(allowed_sources)
@@ -47,7 +49,7 @@ def _custom_field_value(
                 status="conflicting",
                 confidence=0.0,
                 sources=tuple(dict.fromkeys(str(item["source"]) for item in parsed)),
-                checked_at=str(raw.get("checked_at", "")),
+                checked_at=checked_at,
             )
 
     return ResearchFieldValue(
@@ -55,7 +57,7 @@ def _custom_field_value(
         status=str(raw.get("status", "unknown")),
         confidence=float(raw.get("confidence", 0)),
         sources=tuple(str(item) for item in raw.get("sources", []) if str(item) in allowed),
-        checked_at=str(raw.get("checked_at", "")),
+        checked_at=checked_at,
     )
 
 
@@ -130,6 +132,7 @@ def research_company(
     if not isinstance(products, list) or not all(isinstance(item, str) for item in products):
         raise ValueError("research products must be a list of strings")
     custom_fields = {}
+    checked_at = datetime.now(timezone.utc).isoformat()
     raw_custom_fields = data.get("custom_fields", {})
     if not isinstance(raw_custom_fields, dict):
         raise ValueError("research custom_fields must be an object")
@@ -137,7 +140,7 @@ def research_company(
         raw = raw_custom_fields.get(field.key, {})
         if not isinstance(raw, dict):
             raise ValueError(f"research custom field must be an object: {field.key}")
-        custom_fields[field.key] = _custom_field_value(raw, normalized_sources)
+        custom_fields[field.key] = _custom_field_value(raw, normalized_sources, checked_at)
     reported_country = str(data["country"]).strip()
     country_conflict = bool(
         lead.country.strip()

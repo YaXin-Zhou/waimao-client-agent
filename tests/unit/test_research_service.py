@@ -1,3 +1,5 @@
+from datetime import datetime
+
 import pytest
 
 from src.application.research_service import research_company
@@ -130,6 +132,38 @@ def test_research_company_keeps_only_allowed_multi_source_urls_for_custom_fields
     assert result.evidence_urls == ("https://alpine.example/about", "https://alpine.example/team")
     assert result.custom_fields["buyer_role"].sources == ("https://alpine.example/team",)
     assert "https://untrusted.example" not in provider.prompt
+
+
+def test_research_company_uses_runtime_check_time_not_model_supplied_timestamp():
+    provider = FakeStructuredProvider(
+        {
+            "business_summary": "Manufacturer of precision parts.",
+            "customer_type": "manufacturer",
+            "products": ["precision parts"],
+            "country": "Germany",
+            "confidence": 0.8,
+            "custom_fields": {
+                "company_type": {
+                    "value": "GmbH",
+                    "status": "reported",
+                    "confidence": 0.8,
+                    "sources": ["https://alpine.example/about"],
+                    "checked_at": "2025-04-09T00:00:00Z",
+                }
+            },
+        }
+    )
+    result = research_company(
+        provider,
+        CleanLead("Alpine", "alpine.example", (), "Germany", "needs_review"),
+        "https://alpine.example/about",
+        "A sufficiently long source text for the research report.",
+        (ResearchFieldDefinition("Company type", "company_type"),),
+    )
+
+    checked_at = result.custom_fields["company_type"].checked_at
+    assert checked_at != "2025-04-09T00:00:00Z"
+    assert datetime.fromisoformat(checked_at).tzinfo is not None
 
 
 def test_research_company_marks_conflicting_source_candidates_for_review():
