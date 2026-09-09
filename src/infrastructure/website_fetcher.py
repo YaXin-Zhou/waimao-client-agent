@@ -435,6 +435,7 @@ class WebsiteFetcher:
         seen: set[str] = set()
         for address in candidates:
             raw_address = address.strip().rstrip(".,;:!?)]}>/\\")
+            raw_address = re.sub(r"^mailto:", "", raw_address, flags=re.IGNORECASE)
             normalized = re.sub(
                 r"\s*(?:\[at\]|\(at\)|\s+at\s+)\s*",
                 "@",

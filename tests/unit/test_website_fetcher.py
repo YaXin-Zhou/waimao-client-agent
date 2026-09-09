@@ -128,6 +128,20 @@ def test_fetcher_ignores_asset_filenames_and_placeholder_addresses():
     ]
 
 
+def test_fetcher_deduplicates_mailto_and_visible_email_forms():
+    fetcher = WebsiteFetcher(
+        opener=lambda url, timeout: (
+            b"<a href='mailto:contact@alpine.example'>contact@alpine.example</a>"
+        )
+    )
+
+    document = fetcher.fetch("https://alpine.example/")
+
+    assert [item.address for item in document.public_emails] == [
+        "contact@alpine.example"
+    ]
+
+
 def test_fetcher_follows_bounded_same_domain_contact_pages():
     pages = {
         "https://alpine.example/": (
