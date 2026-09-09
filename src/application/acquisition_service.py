@@ -202,6 +202,7 @@ class AcquisitionService:
                 rejection_reasons=(
                     item.rejection_reasons
                     if item.lead.domain in selected_domains
+                    or not item.qualified
                     else tuple(
                         dict.fromkeys(
                             item.rejection_reasons + ("qualified_quota_exceeded",)
