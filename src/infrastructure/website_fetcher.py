@@ -240,10 +240,30 @@ class WebsiteFetcher:
                 flags=re.IGNORECASE,
             )
         )
+        candidates.extend(
+            re.findall(
+                r"[A-Z0-9._%+-]+\s*(?:\[at\]|\(at\)|\s+at\s+)\s*"
+                r"[A-Z0-9.-]+\s*(?:\[dot\]|\(dot\)|\s+dot\s+)\s*[A-Z]{2,}",
+                visible,
+                flags=re.IGNORECASE,
+            )
+        )
         result: list[PublicEmail] = []
         seen: set[str] = set()
         for address in candidates:
-            normalized = address.strip().lower()
+            raw_address = address.strip()
+            normalized = re.sub(
+                r"\s*(?:\[at\]|\(at\)|\s+at\s+)\s*",
+                "@",
+                raw_address,
+                flags=re.IGNORECASE,
+            )
+            normalized = re.sub(
+                r"\s*(?:\[dot\]|\(dot\)|\s+dot\s+)\s*",
+                ".",
+                normalized,
+                flags=re.IGNORECASE,
+            ).lower()
             if (
                 normalized in seen
                 or normalized.startswith(("noreply@", "no-reply@"))
@@ -251,6 +271,8 @@ class WebsiteFetcher:
             ):
                 continue
             position = visible.lower().find(normalized)
+            if position < 0:
+                position = visible.lower().find(raw_address.lower())
             excerpt = (
                 visible[max(0, position - 80) : position + len(normalized) + 80]
                 if position >= 0

@@ -53,6 +53,23 @@ def test_fetcher_extracts_public_mailto_and_visible_emails_with_context():
     assert all("@alpine.example" in item.excerpt for item in document.public_emails)
 
 
+def test_fetcher_normalizes_obfuscated_public_emails_and_keeps_context():
+    fetcher = WebsiteFetcher(
+        opener=lambda url, timeout: (
+            b"<main>For sales use sales [at] alpine [dot] example. "
+            b"For support use support(at)alpine(dot)example.</main>"
+        )
+    )
+
+    document = fetcher.fetch("https://alpine.example/contact")
+
+    assert [item.address for item in document.public_emails] == [
+        "sales@alpine.example",
+        "support@alpine.example",
+    ]
+    assert "sales [at] alpine [dot] example" in document.public_emails[0].excerpt
+
+
 def test_fetcher_ignores_asset_filenames_and_placeholder_addresses():
     fetcher = WebsiteFetcher(
         opener=lambda url, timeout: (
