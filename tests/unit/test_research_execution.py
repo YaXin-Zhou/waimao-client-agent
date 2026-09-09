@@ -1,9 +1,11 @@
 import time
+from dataclasses import replace
 
 import pytest
 
 from src.application.research_execution import ResearchExecutionService
 from src.application.research_workflow import ResearchAssessment
+from src.domain.custom_research import ResearchFieldDefinition, ResearchFieldValue
 from src.domain.lead import CleanLead, LeadScore
 from src.domain.research import CustomerType, EvidenceStatus, ResearchResult
 from src.domain.task import AcquisitionCriteria, AcquisitionTask
@@ -101,6 +103,37 @@ def test_execution_marks_insufficient_evidence_for_review():
 
     assert result.run.status.value == "review_required"
     assert result.run.attempts == 1
+
+
+def test_execution_marks_unverified_human_review_field_for_review():
+    task = AcquisitionTask.create(
+        "Test",
+        AcquisitionCriteria(
+            product="power station",
+            research_fields=(
+                ResearchFieldDefinition("Company type", "company_type", human_review=True),
+            ),
+        ),
+    )
+
+    class ReportedFieldWorkflow(FlakyWorkflow):
+        def run(self, *args, **kwargs):
+            assessment = super().run(*args, **kwargs)
+            report = replace(
+                assessment.research,
+                custom_fields={
+                    "company_type": ResearchFieldValue(
+                        "GmbH", "reported", 0.9, ("https://alpine.example",)
+                    )
+                },
+            )
+            return replace(assessment, research=report)
+
+    result = ResearchExecutionService(
+        FakeTaskRepository(task), ReportedFieldWorkflow(failures=0), MemoryRunRepository()
+    ).execute(task.id, clean_alpine(), "https://alpine.example", {})
+
+    assert result.run.status.value == "review_required"
 
 
 def test_execution_does_not_retry_invalid_workflow_input():

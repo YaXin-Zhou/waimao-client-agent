@@ -67,7 +67,7 @@ class ResearchExecutionService:
                 run = run.fail(str(error))
                 self._runs.save(run)
                 raise
-            review_required = assessment.research.evidence_status is EvidenceStatus.INSUFFICIENT
+            review_required = self._requires_human_review(task_id, assessment)
             run = run.succeed(review_required=review_required)
             self._runs.save(run)
             return ResearchExecutionResult(run, assessment)
@@ -83,3 +83,18 @@ class ResearchExecutionService:
     def _check_deadline(deadline: float) -> None:
         if monotonic() > deadline:
             raise ResearchTimeoutError("research run exceeded timeout_seconds")
+
+    def _requires_human_review(self, task_id: str, assessment: ResearchAssessment) -> bool:
+        if assessment.research.evidence_status is EvidenceStatus.INSUFFICIENT:
+            return True
+        task = self._tasks.get(task_id)
+        if task is None:
+            return True
+        return any(
+            definition.human_review
+            and (
+                assessment.research.custom_fields.get(definition.key) is None
+                or assessment.research.custom_fields[definition.key].status != "verified"
+            )
+            for definition in task.criteria.research_fields
+        )
