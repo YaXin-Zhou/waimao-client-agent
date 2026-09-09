@@ -9,7 +9,7 @@ from src.domain.audit_event import AuditEvent
 from src.domain.custom_research import ResearchFieldValue
 from src.domain.email_draft import EmailDraft
 from src.domain.inbound_email import InboundEmail
-from src.domain.lead import CleanLead, LeadRecord, LeadScore
+from src.domain.lead import CleanLead, LeadRecord, LeadScore, clean_leads
 from src.domain.research import CustomerType, EvidenceStatus, ResearchResult
 from src.domain.research_run import ResearchRun
 from src.domain.task import AcquisitionCriteria, AcquisitionTask, TaskStatus
@@ -403,6 +403,32 @@ def test_api_returns_lead_list():
     assert payload["items"][0]["lead"]["domain"] == "alpine.example"
     assert payload["summary"]["candidate_count"] == 1
     assert payload["summary"]["funnel"]["public_email_count"] == 1
+
+
+def test_api_marks_external_sources_as_linked_but_requiring_review():
+    lead = clean_leads(
+        [
+            LeadRecord(
+                "Alpine",
+                "https://alpine.example",
+                source_url="https://alpine.example/about",
+                source_excerpt="Official company page",
+            ),
+            LeadRecord(
+                "Alpine",
+                "https://alpine.example",
+                source_url="https://linkedin.example/company/alpine",
+                source_excerpt="Linked company profile",
+            ),
+        ]
+    )[0]
+
+    assert ApiApplication._source_summary(lead) == {
+        "website_count": 2,
+        "same_domain_count": 1,
+        "external_count": 1,
+        "external_status": "linked_requires_review",
+    }
 
 
 def test_api_lead_list_sanitizes_legacy_source_evidence():

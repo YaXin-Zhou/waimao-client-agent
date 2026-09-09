@@ -1087,6 +1087,7 @@ class ApiApplication:
             "website_count": len(website_urls),
             "same_domain_count": len(website_urls) - len(external_urls),
             "external_count": len(external_urls),
+            "external_status": "linked_requires_review" if external_urls else "none",
         }
 
     @staticmethod
