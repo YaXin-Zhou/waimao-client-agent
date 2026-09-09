@@ -16,7 +16,14 @@ def test_task_and_assessments_survive_repository_recreation(tmp_path):
     service = AcquisitionService(task_repository, lead_repository)
     task = service.create_task(
         "Portable power leads",
-        AcquisitionCriteria(product="portable power station", countries=("Germany",)),
+        AcquisitionCriteria(
+            product="portable power station",
+            countries=("Germany",),
+            qualified_lead_limit=3,
+            candidate_limit=20,
+            minimum_qualification_score=45,
+            require_public_email=True,
+        ),
     )
     service.assess_leads(
         task.id,
@@ -31,6 +38,10 @@ def test_task_and_assessments_survive_repository_recreation(tmp_path):
 
     assert reloaded_service.list_leads(task.id)[0].lead.company_name == "Alpine Camp Supply"
     assert reloaded_service.list_leads(task.id)[0].score.total == 50
+    reloaded_task = SQLiteTaskRepository(database).get(task.id)
+    assert reloaded_task.criteria.qualified_lead_limit == 3
+    assert reloaded_task.criteria.candidate_limit == 20
+    assert reloaded_service.list_leads(task.id)[0].qualified
 
 
 def test_audit_events_survive_repository_recreation(tmp_path):
