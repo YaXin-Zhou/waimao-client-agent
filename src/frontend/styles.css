@@ -197,6 +197,7 @@ h1 { color: #132238; font-size: 29px; font-weight: 700; letter-spacing: -.8px; }
 .evidence-level-multi_source { color: #237a63; background: #e7f5ef; }
 .evidence-level-single_source { color: #8b6728; background: #fff5dd; }
 .evidence-level-search_only, .evidence-level-none { color: #9a5960; background: #fff0f1; }
+.evidence-mini small { display: block; margin-top: 4px; color: #8b9aaa; font-size: 10px; }
 .funnel-stages { display: flex; align-items: center; gap: 11px; margin-top: 10px; overflow-x: auto; }
 .funnel-stages > span { position: relative; min-width: 62px; text-align: center; }
 .funnel-stages b, .funnel-stages small { display: block; }

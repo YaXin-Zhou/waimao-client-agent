@@ -19,7 +19,13 @@ from src.domain.custom_research import (
 from src.domain.email_send import EmailSendAttempt
 from src.domain.follow_up_task import FollowUpTask
 from src.domain.inbound_email import InboundEmail
-from src.domain.lead import LeadRecord, LeadStatus, evidence_level, is_search_source
+from src.domain.lead import (
+    LeadRecord,
+    LeadStatus,
+    canonical_website_domain,
+    evidence_level,
+    is_search_source,
+)
 from src.domain.reply_analysis import ReplyAnalysis
 from src.domain.research_run import ResearchRun
 from src.domain.send_safety import SendPolicy
@@ -685,6 +691,9 @@ class ApiApplication:
                 len({url for url, _excerpt in item.lead.sources if not is_search_source(url)})
                 for item in results
             ),
+            "external_source_count": sum(
+                self._source_summary(item.lead)["external_count"] for item in results
+            ),
             "multi_source_evidence_count": sum(
                 len({url for url, _excerpt in item.lead.sources if not is_search_source(url)}) >= 2
                 for item in results
@@ -1058,6 +1067,26 @@ class ApiApplication:
             "flags": list(lead.flags),
             "sources": [list(source) for source in lead.sources],
             "evidence_level": evidence_level(lead),
+            "source_summary": ApiApplication._source_summary(lead),
+        }
+
+    @staticmethod
+    def _source_summary(lead) -> dict:
+        website_urls = {
+            url.strip()
+            for url, _excerpt in lead.sources
+            if url.strip() and not is_search_source(url)
+        }
+        lead_domain = canonical_website_domain(lead.domain)
+        external_urls = {
+            url
+            for url in website_urls
+            if canonical_website_domain(url) and canonical_website_domain(url) != lead_domain
+        }
+        return {
+            "website_count": len(website_urls),
+            "same_domain_count": len(website_urls) - len(external_urls),
+            "external_count": len(external_urls),
         }
 
     @staticmethod
