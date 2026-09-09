@@ -34,6 +34,9 @@ def main() -> int:
     leads.add_argument("task_id")
     discover = sub.add_parser("discover")
     discover.add_argument("task_id")
+    import_search = sub.add_parser("import-search")
+    import_search.add_argument("task_id")
+    import_search.add_argument("json_file")
     lead = sub.add_parser("lead")
     lead.add_argument("task_id")
     lead.add_argument("domain")
@@ -56,6 +59,14 @@ def main() -> int:
         routes[args.command] = ("GET", f"/api/tasks/{args.task_id}/leads", None)
     elif args.command == "discover":
         routes[args.command] = ("POST", f"/api/tasks/{args.task_id}/discover", {})
+    elif args.command == "import-search":
+        with open(args.json_file, encoding="utf-8") as source:
+            payload = json.load(source)
+        routes[args.command] = (
+            "POST",
+            f"/api/tasks/{args.task_id}/discover/import",
+            payload,
+        )
     elif args.command == "lead":
         routes[args.command] = ("GET", f"/api/tasks/{args.task_id}/leads/{args.domain}", None)
     elif args.command == "review-field":

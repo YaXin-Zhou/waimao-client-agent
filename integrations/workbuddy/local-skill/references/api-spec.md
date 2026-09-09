@@ -21,6 +21,7 @@ GET  /api/tasks/{task_id}/reply-analyses
 ```text
 POST /api/tasks
 POST /api/tasks/{task_id}/discover
+POST /api/tasks/{task_id}/discover/import
 POST /api/tasks/{task_id}/leads/{domain}/research
 POST /api/tasks/{task_id}/leads/{domain}/draft
 PATCH /api/tasks/{task_id}/leads/{domain}/research-fields/{field_key}
@@ -33,6 +34,13 @@ POST /api/tasks/{task_id}/reply-analyses/run
 
 ```text
 python scripts/workbuddy_cli.py review-field <task_id> <domain> <field_key> --value "..."
+```
+
+浏览器搜索结果导入必须声明 `source_mode=browser`，并提交每条结果的 `website`、
+`source_url` 和可见摘要 `source_excerpt`。对应 CLI 命令：
+
+```text
+python scripts/workbuddy_cli.py import-search <task_id> browser-results.json
 ```
 
 ## 邮件发送

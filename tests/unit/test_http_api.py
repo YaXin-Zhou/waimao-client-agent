@@ -500,6 +500,48 @@ def test_api_discovers_and_assesses_using_configured_search_provider():
     assert payload["items"][0]["lead"]["sources"][0][0] == "https://discovered.example"
 
 
+def test_api_imports_browser_discovery_results_through_same_assessment_pipeline():
+    app, task, _, _ = make_app()
+
+    status, payload = app.handle(
+        "POST",
+        f"/api/tasks/{task.id}/discover/import",
+        {
+            "source_mode": "browser",
+            "records": [
+                {
+                    "company_name": "Visible Search Result",
+                    "website": "https://visible.example/contact",
+                    "country": "Germany",
+                    "source_url": "https://www.google.com.hk/search?q=solar+generator",
+                    "source_excerpt": "Visible Google result excerpt",
+                }
+            ],
+            "weights": {"evidence_quality": 5},
+            "signals_by_domain": {},
+        },
+    )
+
+    assert status == 200
+    assert payload["items"][0]["lead"]["domain"] == "visible.example"
+    assert payload["items"][0]["lead"]["sources"] == [
+        ["https://www.google.com.hk/search?q=solar+generator", "Visible Google result excerpt"]
+    ]
+
+
+def test_api_rejects_non_browser_discovery_imports():
+    app, task, _, _ = make_app()
+
+    status, payload = app.handle(
+        "POST",
+        f"/api/tasks/{task.id}/discover/import",
+        {"source_mode": "manual", "records": []},
+    )
+
+    assert status == 400
+    assert payload["error"] == "browser discovery import requires source_mode=browser"
+
+
 def test_api_rejects_non_object_scoring_configuration():
     app, task, _, _ = make_app()
 

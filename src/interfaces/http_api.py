@@ -162,6 +162,13 @@ class ApiApplication:
                 return self._create_task(self._parse_body(body))
             if (
                 method == "POST"
+                and len(segments) == 5
+                and segments[:2] == ["api", "tasks"]
+                and segments[3:5] == ["discover", "import"]
+            ):
+                return self._import_discovery(segments[2], self._parse_body(body))
+            if (
+                method == "POST"
                 and len(segments) == 4
                 and segments[:2] == ["api", "tasks"]
                 and segments[3] == "discover"
@@ -621,6 +628,19 @@ class ApiApplication:
         results = self._acquisition.discover_and_assess(task_id, weights, signals)
         return 200, {"items": [self._assessed(item) for item in results]}
 
+    def _import_discovery(self, task_id: str, body: dict) -> tuple[int, dict]:
+        if str(body.get("source_mode", "")).strip() != "browser":
+            raise ValueError("browser discovery import requires source_mode=browser")
+        records = body.get("records", [])
+        if not isinstance(records, list):
+            raise ValueError("records must be an array")
+        payload = {
+            "records": records,
+            "weights": body.get("weights", {}),
+            "signals_by_domain": body.get("signals_by_domain", {}),
+        }
+        return self._assess_leads(task_id, payload)
+
     def _research_lead(self, task_id: str, domain: str, body: dict) -> tuple[int, dict]:
         if self._research_execution is None:
             raise RuntimeError("research execution service is not configured")
@@ -941,7 +961,7 @@ class ApiApplication:
             "quality": lead.quality,
             "status": lead.status.value,
             "flags": lead.flags,
-            "sources": lead.sources,
+            "sources": [list(source) for source in lead.sources],
         }
 
     @staticmethod
