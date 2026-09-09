@@ -4,6 +4,7 @@ from __future__ import annotations
 
 from typing import Protocol
 
+from src.domain.custom_research import ResearchFieldDefinition, ResearchFieldValue
 from src.domain.lead import CleanLead
 from src.domain.research import CustomerType, EvidenceStatus, ResearchResult
 
@@ -29,16 +30,31 @@ def research_company(
     lead: CleanLead,
     source_url: str,
     website_text: str,
+    field_definitions: tuple[ResearchFieldDefinition, ...] = (),
 ) -> ResearchResult:
     if not source_url.strip() or not website_text.strip():
         raise ValueError("source_url and website_text are required")
+    custom_instruction = ""
+    if field_definitions:
+        fields = ", ".join(
+            f"{field.key}: {field.name} "
+            f"({field.description or 'no extra description'}; "
+            f"keywords={list(field.keywords)})"
+            for field in field_definitions
+        )
+        custom_instruction = (
+            f" Also return custom_fields as an object with exactly these keys: {fields}. "
+            "Each value must be an object with value, status (verified, reported, unknown, "
+            "or conflicting), confidence, sources (array of URLs), and checked_at. "
+            "Use unknown and empty sources when the supplied text does not support a fact."
+        )
     prompt = (
         "Analyze the company using only the supplied source text. Do not invent facts. "
         "Return JSON with exactly these fields: business_summary (string), customer_type "
         "(one of distributor, wholesaler, retailer, manufacturer, consumer, "
         "service_provider, unknown), products (array of strings), country (string or unknown), "
         "confidence (number 0 to 1), website_language (English, Spanish, Russian, "
-        "German, French, Italian, Portuguese, Chinese, or unknown).\n"
+        f"German, French, Italian, Portuguese, Chinese, or unknown).{custom_instruction}\n"
         f"Company name: {lead.company_name}\nSource URL: {source_url}\n"
         f"Source text:\n{website_text}"
     )
@@ -53,6 +69,21 @@ def research_company(
     products = data["products"]
     if not isinstance(products, list) or not all(isinstance(item, str) for item in products):
         raise ValueError("research products must be a list of strings")
+    custom_fields = {}
+    raw_custom_fields = data.get("custom_fields", {})
+    if not isinstance(raw_custom_fields, dict):
+        raise ValueError("research custom_fields must be an object")
+    for field in field_definitions:
+        raw = raw_custom_fields.get(field.key, {})
+        if not isinstance(raw, dict):
+            raise ValueError(f"research custom field must be an object: {field.key}")
+        custom_fields[field.key] = ResearchFieldValue(
+            value=str(raw.get("value", "")),
+            status=str(raw.get("status", "unknown")),
+            confidence=float(raw.get("confidence", 0)),
+            sources=tuple(str(item) for item in raw.get("sources", [])),
+            checked_at=str(raw.get("checked_at", "")),
+        )
     return ResearchResult(
         company_name=lead.company_name,
         business_summary=str(data["business_summary"]),
@@ -67,4 +98,5 @@ def research_company(
             else EvidenceStatus.INSUFFICIENT
         ),
         website_language=str(data.get("website_language", "unknown")),
+        custom_fields=custom_fields,
     )

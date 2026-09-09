@@ -5,6 +5,8 @@ from __future__ import annotations
 from dataclasses import dataclass
 from enum import StrEnum
 
+from src.domain.custom_research import ResearchFieldValue
+
 
 class CustomerType(StrEnum):
     DISTRIBUTOR = "distributor"
@@ -32,3 +34,8 @@ class ResearchResult:
     evidence_url: str
     evidence_status: EvidenceStatus
     website_language: str = "unknown"
+    custom_fields: dict[str, ResearchFieldValue] | None = None
+
+    def __post_init__(self) -> None:
+        if self.custom_fields is None:
+            object.__setattr__(self, "custom_fields", {})

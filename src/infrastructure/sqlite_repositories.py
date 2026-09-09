@@ -8,6 +8,12 @@ from pathlib import Path
 
 from src.application.acquisition_service import AssessedLead
 from src.domain.audit_event import AuditEvent
+from src.domain.custom_research import (
+    BusinessOffering,
+    ResearchFieldDefinition,
+    ResearchFieldType,
+    ResearchFieldValue,
+)
 from src.domain.email_draft import EmailDraft, EmailDraftKind, EmailDraftStatus
 from src.domain.email_send import EmailSendAttempt, EmailSendStatus
 from src.domain.follow_up_task import FollowUpStatus, FollowUpTask
@@ -74,8 +80,7 @@ def _connect(database: str | Path) -> sqlite3.Connection:
         """
     )
     columns = {
-        row["name"]
-        for row in connection.execute("PRAGMA table_info(research_runs)").fetchall()
+        row["name"] for row in connection.execute("PRAGMA table_info(research_runs)").fetchall()
     }
     if "step" not in columns:
         connection.execute(
@@ -126,8 +131,7 @@ def _connect(database: str | Path) -> sqlite3.Connection:
         """
     )
     draft_columns = {
-        row["name"]
-        for row in connection.execute("PRAGMA table_info(email_drafts)").fetchall()
+        row["name"] for row in connection.execute("PRAGMA table_info(email_drafts)").fetchall()
     }
     if "kind" not in draft_columns:
         connection.execute(
@@ -143,7 +147,8 @@ def _connect(database: str | Path) -> sqlite3.Connection:
         )
     if "language_requires_review" not in draft_columns:
         connection.execute(
-            "ALTER TABLE email_drafts ADD COLUMN language_requires_review INTEGER NOT NULL DEFAULT 1"
+            "ALTER TABLE email_drafts ADD COLUMN "
+            "language_requires_review INTEGER NOT NULL DEFAULT 1"
         )
     connection.execute(
         """
@@ -259,6 +264,8 @@ class SQLiteTaskRepository:
             "language": task.criteria.language,
             "daily_limit": task.criteria.daily_limit,
             "keywords": task.criteria.keywords,
+            "business_offerings": [item.to_dict() for item in task.criteria.business_offerings],
+            "research_fields": [item.to_dict() for item in task.criteria.research_fields],
             "sender_profile": {
                 "company_name": task.sender_profile.company_name,
                 "contact_name": task.sender_profile.contact_name,
@@ -295,6 +302,29 @@ class SQLiteTaskRepository:
             language=criteria_data["language"],
             daily_limit=criteria_data["daily_limit"],
             keywords=tuple(criteria_data.get("keywords", [])),
+            business_offerings=tuple(
+                BusinessOffering(
+                    name=item["name"],
+                    key=item["key"],
+                    description=item.get("description", ""),
+                    keywords=tuple(item.get("keywords", [])),
+                )
+                for item in criteria_data.get("business_offerings", [])
+            ),
+            research_fields=tuple(
+                ResearchFieldDefinition(
+                    name=item["name"],
+                    key=item["key"],
+                    description=item.get("description", ""),
+                    keywords=tuple(item.get("keywords", [])),
+                    field_type=ResearchFieldType(item.get("type", "text")),
+                    required=bool(item.get("required", False)),
+                    evidence_required=bool(item.get("evidence_required", True)),
+                    human_review=bool(item.get("human_review", True)),
+                    options=tuple(item.get("options", [])),
+                )
+                for item in criteria_data.get("research_fields", [])
+            ),
         )
         sender_data = criteria_data.get("sender_profile", {})
         return AcquisitionTask(
@@ -311,9 +341,7 @@ class SQLiteTaskRepository:
 
     def list(self) -> list[AcquisitionTask]:
         with _connect(self._database) as connection:
-            rows = connection.execute(
-                "SELECT id FROM acquisition_tasks ORDER BY rowid"
-            ).fetchall()
+            rows = connection.execute("SELECT id FROM acquisition_tasks ORDER BY rowid").fetchall()
         return [task for row in rows if (task := self.get(row["id"])) is not None]
 
 
@@ -335,21 +363,25 @@ class SQLiteLeadRepository:
                     (
                         task_id,
                         result.lead.domain,
-                        json.dumps({
-                            "company_name": result.lead.company_name,
-                            "domain": result.lead.domain,
-                            "emails": result.lead.emails,
-                            "country": result.lead.country,
-                            "quality": result.lead.quality,
-                            "flags": result.lead.flags,
-                            "sources": result.lead.sources,
-                            "status": result.lead.status.value,
-                        }),
-                        json.dumps({
-                            "total": result.score.total,
-                            "priority": result.score.priority,
-                            "breakdown": result.score.breakdown,
-                        }),
+                        json.dumps(
+                            {
+                                "company_name": result.lead.company_name,
+                                "domain": result.lead.domain,
+                                "emails": result.lead.emails,
+                                "country": result.lead.country,
+                                "quality": result.lead.quality,
+                                "flags": result.lead.flags,
+                                "sources": result.lead.sources,
+                                "status": result.lead.status.value,
+                            }
+                        ),
+                        json.dumps(
+                            {
+                                "total": result.score.total,
+                                "priority": result.score.priority,
+                                "breakdown": result.score.breakdown,
+                            }
+                        ),
                     )
                     for result in results
                 ],
@@ -406,11 +438,13 @@ class SQLiteLeadRepository:
                 WHERE task_id = ? AND domain = ?
                 """,
                 (
-                    json.dumps({
-                        "total": score.total,
-                        "priority": score.priority,
-                        "breakdown": score.breakdown,
-                    }),
+                    json.dumps(
+                        {
+                            "total": score.total,
+                            "priority": score.priority,
+                            "breakdown": score.breakdown,
+                        }
+                    ),
                     task_id,
                     domain,
                 ),
@@ -432,6 +466,7 @@ class SQLiteResearchRepository:
             "evidence_url": report.evidence_url,
             "evidence_status": report.evidence_status.value,
             "website_language": report.website_language,
+            "custom_fields": {key: value.to_dict() for key, value in report.custom_fields.items()},
         }
         with _connect(self._database) as connection:
             connection.execute(
@@ -462,6 +497,16 @@ class SQLiteResearchRepository:
             evidence_url=data["evidence_url"],
             evidence_status=EvidenceStatus(data["evidence_status"]),
             website_language=data.get("website_language", "unknown"),
+            custom_fields={
+                key: ResearchFieldValue(
+                    value=str(value.get("value", "")),
+                    status=str(value.get("status", "unknown")),
+                    confidence=float(value.get("confidence", 0)),
+                    sources=tuple(value.get("sources", [])),
+                    checked_at=str(value.get("checked_at", "")),
+                )
+                for key, value in data.get("custom_fields", {}).items()
+            },
         )
 
 
@@ -809,9 +854,15 @@ class SQLiteReplyAnalysisRepository:
                     evidence_json=excluded.evidence_json
                 """,
                 (
-                    analysis.id, analysis.message_id, analysis.task_id, analysis.lead_domain,
-                    analysis.category.value, analysis.confidence, analysis.risk_level,
-                    analysis.suggested_action, int(analysis.needs_human_review),
+                    analysis.id,
+                    analysis.message_id,
+                    analysis.task_id,
+                    analysis.lead_domain,
+                    analysis.category.value,
+                    analysis.confidence,
+                    analysis.risk_level,
+                    analysis.suggested_action,
+                    int(analysis.needs_human_review),
                     json.dumps(analysis.evidence),
                 ),
             )
@@ -834,9 +885,13 @@ class SQLiteReplyAnalysisRepository:
 
 def _reply_analysis(row) -> ReplyAnalysis:
     return ReplyAnalysis(
-        id=row["id"], message_id=row["message_id"], task_id=row["task_id"],
-        lead_domain=row["lead_domain"], category=ReplyCategory(row["category"]),
-        confidence=row["confidence"], risk_level=row["risk_level"],
+        id=row["id"],
+        message_id=row["message_id"],
+        task_id=row["task_id"],
+        lead_domain=row["lead_domain"],
+        category=ReplyCategory(row["category"]),
+        confidence=row["confidence"],
+        risk_level=row["risk_level"],
         suggested_action=row["suggested_action"],
         needs_human_review=bool(row["needs_human_review"]),
         evidence=tuple(json.loads(row["evidence_json"])),
@@ -863,9 +918,15 @@ class SQLiteFollowUpTaskRepository:
                     status=excluded.status, completed_at=excluded.completed_at
                 """,
                 (
-                    item.id, item.task_id, item.lead_domain, item.message_id,
-                    item.title, item.description, item.status.value,
-                    item.created_at, item.completed_at,
+                    item.id,
+                    item.task_id,
+                    item.lead_domain,
+                    item.message_id,
+                    item.title,
+                    item.description,
+                    item.status.value,
+                    item.created_at,
+                    item.completed_at,
                 ),
             )
         return item
@@ -895,9 +956,14 @@ class SQLiteFollowUpTaskRepository:
 
 def _follow_up_task(row) -> FollowUpTask:
     return FollowUpTask(
-        id=row["id"], task_id=row["task_id"], lead_domain=row["lead_domain"],
-        message_id=row["message_id"], title=row["title"], description=row["description"],
-        status=FollowUpStatus(row["status"]), created_at=row["created_at"],
+        id=row["id"],
+        task_id=row["task_id"],
+        lead_domain=row["lead_domain"],
+        message_id=row["message_id"],
+        title=row["title"],
+        description=row["description"],
+        status=FollowUpStatus(row["status"]),
+        created_at=row["created_at"],
         completed_at=row["completed_at"],
     )
 
@@ -916,10 +982,16 @@ class SQLiteEmailSendAttemptRepository:
                 ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
                 """,
                 (
-                    attempt.id, attempt.draft_id, attempt.recipient_email,
-                    attempt.subject, attempt.status.value,
-                    attempt.provider_message_id, attempt.error, attempt.created_at,
-                    attempt.request_key, attempt.body_hash,
+                    attempt.id,
+                    attempt.draft_id,
+                    attempt.recipient_email,
+                    attempt.subject,
+                    attempt.status.value,
+                    attempt.provider_message_id,
+                    attempt.error,
+                    attempt.created_at,
+                    attempt.request_key,
+                    attempt.body_hash,
                 ),
             )
 
@@ -931,12 +1003,16 @@ class SQLiteEmailSendAttemptRepository:
             ).fetchall()
         return [
             EmailSendAttempt(
-                id=row["id"], draft_id=row["draft_id"],
-                recipient_email=row["recipient_email"], subject=row["subject"],
+                id=row["id"],
+                draft_id=row["draft_id"],
+                recipient_email=row["recipient_email"],
+                subject=row["subject"],
                 status=EmailSendStatus(row["status"]),
                 provider_message_id=row["provider_message_id"],
-                error=row["error"], created_at=row["created_at"],
-                request_key=row["request_key"], body_hash=row["body_hash"],
+                error=row["error"],
+                created_at=row["created_at"],
+                request_key=row["request_key"],
+                body_hash=row["body_hash"],
             )
             for row in rows
         ]
@@ -968,10 +1044,14 @@ class SQLiteEmailSendAttemptRepository:
         if row is None:
             return None
         return EmailSendAttempt(
-            id=row["id"], draft_id=row["draft_id"],
-            recipient_email=row["recipient_email"], subject=row["subject"],
+            id=row["id"],
+            draft_id=row["draft_id"],
+            recipient_email=row["recipient_email"],
+            subject=row["subject"],
             status=EmailSendStatus(row["status"]),
-            provider_message_id=row["provider_message_id"], error=row["error"],
-            created_at=row["created_at"], request_key=row["request_key"],
+            provider_message_id=row["provider_message_id"],
+            error=row["error"],
+            created_at=row["created_at"],
+            request_key=row["request_key"],
             body_hash=row["body_hash"],
         )

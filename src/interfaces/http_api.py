@@ -8,6 +8,11 @@ from urllib.parse import unquote, urlsplit
 from src.application.acquisition_service import AcquisitionService
 from src.application.email_review_service import EmailReviewService
 from src.domain.audit_event import AuditEvent
+from src.domain.custom_research import (
+    BusinessOffering,
+    ResearchFieldDefinition,
+    ResearchFieldType,
+)
 from src.domain.email_send import EmailSendAttempt
 from src.domain.follow_up_task import FollowUpTask
 from src.domain.inbound_email import InboundEmail
@@ -147,9 +152,7 @@ class ApiApplication:
                 and segments[:2] == ["api", "tasks"]
                 and segments[3] == "follow-up-tasks"
             ):
-                return self._follow_up_task_status(
-                    segments[2], segments[4], self._parse_body(body)
-                )
+                return self._follow_up_task_status(segments[2], segments[4], self._parse_body(body))
             if method == "GET" and segments == ["api", "tasks"]:
                 return self._task_list()
             if method == "POST" and segments == ["api", "tasks"]:
@@ -168,9 +171,7 @@ class ApiApplication:
                 and segments[3] == "leads"
                 and segments[5] == "draft"
             ):
-                return self._create_draft(
-                    segments[2], segments[4], self._parse_body(body)
-                )
+                return self._create_draft(segments[2], segments[4], self._parse_body(body))
             if (
                 method == "POST"
                 and len(segments) == 4
@@ -185,9 +186,7 @@ class ApiApplication:
                 and segments[3] == "leads"
                 and segments[5] == "contact"
             ):
-                return self._update_contact(
-                    segments[2], segments[4], self._parse_body(body)
-                )
+                return self._update_contact(segments[2], segments[4], self._parse_body(body))
             if (
                 method == "POST"
                 and len(segments) == 6
@@ -344,7 +343,9 @@ class ApiApplication:
 
     def _send_draft(self, draft_id: str, body: dict) -> tuple[int, dict]:
         if not self._sending_enabled:
-            raise RuntimeError("SMTP sending is disabled; enable it explicitly for a controlled test")
+            raise RuntimeError(
+                "SMTP sending is disabled; enable it explicitly for a controlled test"
+            )
         if self._email_send is None:
             raise RuntimeError("email send service is not configured")
         policy = SendPolicy(
@@ -374,8 +375,11 @@ class ApiApplication:
             ),
         )
         attempt = self._email_send.send(
-            draft_id, policy, bool(body.get("confirmed", False)),
-            str(body.get("recipient_email", "")), str(body.get("subject", "")),
+            draft_id,
+            policy,
+            bool(body.get("confirmed", False)),
+            str(body.get("recipient_email", "")),
+            str(body.get("subject", "")),
             str(body.get("body", "")),
             str(body.get("idempotency_key", "")).strip(),
         )
@@ -449,8 +453,11 @@ class ApiApplication:
         if analysis is None:
             raise ValueError("reply analysis is required before drafting")
         assessed = next(
-            (item for item in self._leads.list_assessments(task_id)
-             if item.lead.domain == message.lead_domain),
+            (
+                item
+                for item in self._leads.list_assessments(task_id)
+                if item.lead.domain == message.lead_domain
+            ),
             None,
         )
         if assessed is None:
@@ -478,8 +485,7 @@ class ApiApplication:
             raise RuntimeError("follow-up task service is not configured")
         return 200, {
             "items": [
-                self._follow_up_task(item)
-                for item in self._follow_up_tasks.list_for_task(task_id)
+                self._follow_up_task(item) for item in self._follow_up_tasks.list_for_task(task_id)
             ]
         }
 
@@ -506,12 +512,35 @@ class ApiApplication:
             product=str(criteria_data.get("product", "")),
             countries=tuple(str(item) for item in criteria_data.get("countries", [])),
             industries=tuple(str(item) for item in criteria_data.get("industries", [])),
-            customer_types=tuple(
-                str(item) for item in criteria_data.get("customer_types", [])
-            ),
+            customer_types=tuple(str(item) for item in criteria_data.get("customer_types", [])),
             language=str(criteria_data.get("language", "auto")),
             daily_limit=int(criteria_data.get("daily_limit", 10)),
             keywords=tuple(str(item) for item in criteria_data.get("keywords", [])),
+            business_offerings=tuple(
+                BusinessOffering(
+                    name=str(item.get("name", "")),
+                    key=str(item.get("key", "")),
+                    description=str(item.get("description", "")),
+                    keywords=tuple(str(value) for value in item.get("keywords", [])),
+                )
+                for item in criteria_data.get("business_offerings", [])
+                if isinstance(item, dict)
+            ),
+            research_fields=tuple(
+                ResearchFieldDefinition(
+                    name=str(item.get("name", "")),
+                    key=str(item.get("key", "")),
+                    description=str(item.get("description", "")),
+                    keywords=tuple(str(value) for value in item.get("keywords", [])),
+                    field_type=ResearchFieldType(item.get("type", "text")),
+                    required=bool(item.get("required", False)),
+                    evidence_required=bool(item.get("evidence_required", True)),
+                    human_review=bool(item.get("human_review", True)),
+                    options=tuple(str(value) for value in item.get("options", [])),
+                )
+                for item in criteria_data.get("research_fields", [])
+                if isinstance(item, dict)
+            ),
         )
         sender_data = body.get("sender_profile", {})
         if not isinstance(sender_data, dict):
@@ -660,9 +689,11 @@ class ApiApplication:
             target = LeadStatus(str(body.get("status", "")))
         except ValueError as error:
             raise ValueError("invalid lead status") from error
-        return 200, self._assessed(self._acquisition.transition_lead(
-            task_id, domain, target, str(body.get("actor", "")), str(body.get("note", ""))
-        ))
+        return 200, self._assessed(
+            self._acquisition.transition_lead(
+                task_id, domain, target, str(body.get("actor", "")), str(body.get("note", ""))
+            )
+        )
 
     def _lead_audit_events(self, task_id: str, domain: str) -> tuple[int, dict]:
         self._require_task(task_id)
@@ -676,12 +707,14 @@ class ApiApplication:
             target = TaskStatus(str(body.get("status", "")))
         except ValueError as error:
             raise ValueError("invalid task status") from error
-        return 200, self._task(self._acquisition.transition_task(
-            task_id,
-            target,
-            str(body.get("actor", "")),
-            str(body.get("note", "")),
-        ))
+        return 200, self._task(
+            self._acquisition.transition_task(
+                task_id,
+                target,
+                str(body.get("actor", "")),
+                str(body.get("note", "")),
+            )
+        )
 
     def _task_audit_events(self, task_id: str) -> tuple[int, dict]:
         self._require_task(task_id)
@@ -764,6 +797,8 @@ class ApiApplication:
             "criteria": {
                 "product": task.criteria.product,
                 "language": task.criteria.language,
+                "business_offerings": [item.to_dict() for item in task.criteria.business_offerings],
+                "research_fields": [item.to_dict() for item in task.criteria.research_fields],
             },
             "sender_profile": {
                 "company_name": task.sender_profile.company_name,
@@ -805,6 +840,8 @@ class ApiApplication:
             "confidence": report.confidence,
             "evidence_url": report.evidence_url,
             "evidence_status": report.evidence_status.value,
+            "website_language": report.website_language,
+            "custom_fields": {key: value.to_dict() for key, value in report.custom_fields.items()},
         }
 
     @staticmethod

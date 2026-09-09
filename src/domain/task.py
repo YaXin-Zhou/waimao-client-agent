@@ -6,6 +6,11 @@ from dataclasses import dataclass, replace
 from enum import StrEnum
 from uuid import uuid4
 
+from src.domain.custom_research import (
+    BusinessOffering,
+    ResearchFieldDefinition,
+    validate_unique_keys,
+)
 from src.domain.sender_profile import SenderProfile
 
 
@@ -30,12 +35,16 @@ class AcquisitionCriteria:
     language: str = "auto"
     daily_limit: int = 10
     keywords: tuple[str, ...] = ()
+    business_offerings: tuple[BusinessOffering, ...] = ()
+    research_fields: tuple[ResearchFieldDefinition, ...] = ()
 
     def __post_init__(self) -> None:
         if not self.product.strip():
             raise ValueError("product is required")
         if self.daily_limit <= 0:
             raise ValueError("daily_limit must be positive")
+        validate_unique_keys(self.business_offerings)
+        validate_unique_keys(self.research_fields)
 
 
 @dataclass(frozen=True)

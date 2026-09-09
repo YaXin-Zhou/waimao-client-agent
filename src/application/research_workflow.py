@@ -65,7 +65,9 @@ class ResearchWorkflow:
         document = self._websites.fetch(source_url)
         if progress:
             progress(ResearchRunStep.ANALYZING)
-        research = research_company(self._ai, lead, document.url, document.text)
+        research = research_company(
+            self._ai, lead, document.url, document.text, task.criteria.research_fields
+        )
         if progress:
             progress(ResearchRunStep.SCORING)
         signals = build_research_signals(lead, research, task.criteria)

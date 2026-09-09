@@ -20,10 +20,23 @@ from src.infrastructure.sqlite_repositories import (  # noqa: E402
 )
 
 FIELDS = (
-    "company_name", "domain", "emails", "country", "quality", "flags",
-    "score", "priority", "score_breakdown", "business_summary", "customer_type",
-    "products", "research_country", "research_confidence", "evidence_url",
-    "evidence_status", "source_urls",
+    "company_name",
+    "domain",
+    "emails",
+    "country",
+    "quality",
+    "flags",
+    "score",
+    "priority",
+    "score_breakdown",
+    "business_summary",
+    "customer_type",
+    "products",
+    "research_country",
+    "research_confidence",
+    "evidence_url",
+    "evidence_status",
+    "source_urls",
 )
 
 
@@ -34,11 +47,14 @@ def export_task(task_id: str, output: Path) -> int:
     leads = SQLiteLeadRepository(DATABASE)
     research = SQLiteResearchRepository(DATABASE)
     output.parent.mkdir(parents=True, exist_ok=True)
+    task = tasks.get(task_id)
+    custom_fields = tuple(field.key for field in task.criteria.research_fields)
+    fields = FIELDS + custom_fields
     rows = []
     for assessed in leads.list_assessments(task_id):
         lead = assessed.lead
         report = research.get(task_id, lead.domain)
-        rows.append({
+        row = {
             "company_name": lead.company_name,
             "domain": lead.domain,
             "emails": "; ".join(lead.emails),
@@ -58,9 +74,13 @@ def export_task(task_id: str, output: Path) -> int:
             "evidence_url": report.evidence_url if report else "",
             "evidence_status": report.evidence_status.value if report else "",
             "source_urls": "; ".join(source[0] for source in lead.sources),
-        })
+        }
+        for field_key in custom_fields:
+            field = report.custom_fields.get(field_key) if report else None
+            row[field_key] = field.value if field and field.status != "unknown" else ""
+        rows.append(row)
     with output.open("w", encoding="utf-8-sig", newline="") as handle:
-        writer = csv.DictWriter(handle, fieldnames=FIELDS)
+        writer = csv.DictWriter(handle, fieldnames=fields)
         writer.writeheader()
         writer.writerows(rows)
     return len(rows)
