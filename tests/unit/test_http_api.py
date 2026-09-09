@@ -258,7 +258,11 @@ def test_api_reviews_custom_research_field_and_persists_status():
     status, payload = app.handle(
         "PATCH",
         f"/api/tasks/{task.id}/leads/alpine.example/research-fields/buyer_role",
-        {"status": "verified", "value": "Strategic Sourcing Manager"},
+        {
+            "status": "verified",
+            "value": "Strategic Sourcing Manager",
+            "actor": "reviewer-1",
+        },
     )
 
     assert status == 200
@@ -266,6 +270,25 @@ def test_api_reviews_custom_research_field_and_persists_status():
     assert payload["custom_fields"]["buyer_role"]["value"] == "Strategic Sourcing Manager"
     assert payload["custom_fields"]["buyer_role"]["confidence"] == 1.0
     assert app._research.report.custom_fields["buyer_role"].status == "verified"
+    assert app._audit.events[0].action == "research_field_review"
+    assert app._audit.events[0].actor == "reviewer-1"
+    assert app._audit.events[0].note == "buyer_role: verified"
+
+
+def test_api_rejects_research_field_review_without_actor_before_persisting_report():
+    app, task, _, audit = make_app()
+    before = app._research.get(task.id, "alpine.example").custom_fields["buyer_role"]
+
+    status, payload = app.handle(
+        "PATCH",
+        f"/api/tasks/{task.id}/leads/alpine.example/research-fields/buyer_role",
+        {"status": "verified", "value": "Strategic Sourcing Manager"},
+    )
+
+    assert status == 400
+    assert payload["error"] == "research field reviewer is required"
+    assert app._research.report.custom_fields["buyer_role"] == before
+    assert audit.events == []
 
 
 def test_api_updates_existing_task_criteria():

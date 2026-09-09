@@ -260,10 +260,10 @@ function App() {
       notify(action === 'approve' ? '草稿已批准，尚未发送' : action === 'request-revision' ? '草稿已退回修改' : '草稿已拒绝')
     } catch { notify('审核操作失败，请检查本地 API') } finally { setReviewLoading(false) }
   }
-  const reviewResearchField = async (fieldKey, value) => {
-    if (!remoteTaskId || !selected?.domain) return
+  const reviewResearchField = async (fieldKey, value, reviewer) => {
+    if (!remoteTaskId || !selected?.domain || !reviewer?.trim()) { notify('请先填写字段复核人'); return }
     try {
-      const response = await fetch(`/api/tasks/${remoteTaskId}/leads/${selected.domain}/research-fields/${fieldKey}`, { method: 'PATCH', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ status: 'verified', value }) })
+      const response = await fetch(`/api/tasks/${remoteTaskId}/leads/${selected.domain}/research-fields/${fieldKey}`, { method: 'PATCH', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ status: 'verified', value, actor: reviewer.trim() }) })
       const data = await response.json()
       if (!response.ok) throw new Error(data.error || 'research field review failed')
       setSelectedResearch(data)
@@ -694,9 +694,10 @@ function ResearchPanel({ lead, loading, onStart, onReview }) {
   const [sourceUrl, setSourceUrl] = useState(lead.website || '')
   const [maxAttempts, setMaxAttempts] = useState('2')
   const [requestKey, setRequestKey] = useState('')
+  const [reviewer, setReviewer] = useState('')
   const run = lead.researchRun
   const running = run?.status === 'running'
-  return <div className="review-controls research-panel"><CustomFieldResults research={lead.research} onReview={onReview}/><div className="section-title"><h3>官网背调队列</h3><span>{run ? `${researchStepLabel(run.step)} · ${run.attempts} 次尝试` : '尚未提交'}</span></div><label>来源网址<input value={sourceUrl} onChange={(event) => setSourceUrl(event.target.value)} /></label><div className="research-fields"><label>最大尝试次数<select value={maxAttempts} onChange={(event) => setMaxAttempts(event.target.value)}><option value="1">1 次</option><option value="2">2 次</option><option value="3">3 次</option></select></label><label>幂等键（可选）<input value={requestKey} onChange={(event) => setRequestKey(event.target.value)} placeholder="同一请求复用" /></label></div><button className="primary-button full" disabled={loading || running || !sourceUrl.trim()} onClick={() => onStart(sourceUrl.trim(), Number(maxAttempts), requestKey.trim())}>{loading ? '提交中…' : running ? '队列执行中…' : run?.status === 'failed' ? '重新提交背调' : '加入背调队列'} <Icon name="arrow" size={16}/></button>{run?.error && <p className="generator-hint">失败原因：{run.error}</p>}{['succeeded', 'review_required'].includes(run?.status) && <p className="research-success">运行已完成，研究报告已自动刷新。</p>}</div>
+  return <div className="review-controls research-panel"><CustomFieldResults research={lead.research} onReview={(key, value) => onReview(key, value, reviewer)}/><div className="section-title"><h3>官网背调队列</h3><span>{run ? `${researchStepLabel(run.step)} · ${run.attempts} 次尝试` : '尚未提交'}</span></div><label>字段复核人<input value={reviewer} onChange={(event) => setReviewer(event.target.value)} placeholder="填写姓名" /></label><label>来源网址<input value={sourceUrl} onChange={(event) => setSourceUrl(event.target.value)} /></label><div className="research-fields"><label>最大尝试次数<select value={maxAttempts} onChange={(event) => setMaxAttempts(event.target.value)}><option value="1">1 次</option><option value="2">2 次</option><option value="3">3 次</option></select></label><label>幂等键（可选）<input value={requestKey} onChange={(event) => setRequestKey(event.target.value)} placeholder="同一请求复用" /></label></div><button className="primary-button full" disabled={loading || running || !sourceUrl.trim()} onClick={() => onStart(sourceUrl.trim(), Number(maxAttempts), requestKey.trim())}>{loading ? '提交中…' : running ? '队列执行中…' : run?.status === 'failed' ? '重新提交背调' : '加入背调队列'} <Icon name="arrow" size={16}/></button>{run?.error && <p className="generator-hint">失败原因：{run.error}</p>}{['succeeded', 'review_required'].includes(run?.status) && <p className="research-success">运行已完成，研究报告已自动刷新。</p>}</div>
 }
 
 function researchStepLabel(step) { return { queued: '排队中', fetching: '抓取官网', analyzing: '分析内容', scoring: '计算评分', persisting: '保存报告', completed: '已完成', failed: '失败' }[step] || step }

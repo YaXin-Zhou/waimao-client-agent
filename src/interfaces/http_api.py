@@ -978,6 +978,9 @@ class ApiApplication:
     def _review_research_field(
         self, task_id: str, domain: str, field_key: str, body: dict
     ) -> tuple[int, dict]:
+        actor = str(body.get("actor", "")).strip()
+        if not actor:
+            raise ValueError("research field reviewer is required")
         report = self._research.get(task_id, domain)
         if report is None:
             raise KeyError(f"Research report not found: {domain}")
@@ -1001,7 +1004,31 @@ class ApiApplication:
         updated = replace(report, custom_fields=fields)
         if not hasattr(self._research, "save"):
             raise RuntimeError("research repository is read-only")
+        lead = None
+        if self._audit is not None:
+            lead = next(
+                (
+                    item
+                    for item in self._acquisition.list_leads(task_id)
+                    if item.lead.domain == domain
+                ),
+                None,
+            )
+            if lead is None:
+                raise KeyError(f"Lead not found: {domain}")
         self._research.save(task_id, domain, updated)
+        if self._audit is not None:
+            self._audit.save(
+                AuditEvent.status_change(
+                    entity_type="lead",
+                    entity_id=f"{task_id}:{domain}",
+                    action="research_field_review",
+                    actor=actor,
+                    from_status=lead.lead.status.value,
+                    to_status=lead.lead.status.value,
+                    note=f"{field_key}: {status}",
+                )
+            )
         return 200, self._research_result(updated)
 
     def _discover_public_contacts(self, task_id: str, domain: str) -> tuple[int, dict]:
