@@ -200,6 +200,7 @@ h1 { color: #132238; font-size: 29px; font-weight: 700; letter-spacing: -.8px; }
 .maintenance-tools-body { position: absolute; z-index: 3; top: calc(100% + 7px); right: 0; width: 240px; padding: 11px; border: 1px solid #dce7f0; border-radius: 7px; background: #fff; box-shadow: 0 12px 28px rgba(23, 53, 84, .14); }
 .maintenance-tools-body small { display: block; margin-bottom: 9px; color: #8796a6; line-height: 1.5; }
 .maintenance-tools-body .outline-button { width: 100%; justify-content: center; }
+.maintenance-tools-body .outline-button + .outline-button { margin-top: 7px; }
 .maintenance-inline { margin-top: 17px; padding-top: 13px; border-top: 1px solid #e9eef3; }
 .maintenance-inline summary { color: #7b8b9c; cursor: pointer; font-size: 12px; font-weight: 600; list-style: none; }
 .maintenance-inline summary::-webkit-details-marker { display: none; }
