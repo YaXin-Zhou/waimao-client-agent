@@ -35,8 +35,7 @@ def test_google_provider_extracts_public_urls_deduplicates_and_never_guesses_ema
 
 def test_google_provider_honors_daily_limit():
     html = "".join(
-        f'<a href="https://example-{index}.com"><h3>Example {index}</h3></a>'
-        for index in range(4)
+        f'<a href="https://example-{index}.com"><h3>Example {index}</h3></a>' for index in range(4)
     )
     provider = GoogleSearchProvider(opener=lambda request, timeout: FakeResponse(html))
 
@@ -64,3 +63,20 @@ def test_google_provider_does_not_treat_javascript_page_as_empty_results():
 
     with pytest.raises(SearchProviderError, match="JavaScript-only"):
         provider.search(AcquisitionCriteria(product="solar generator"))
+
+
+def test_google_provider_uses_configured_regional_host_and_filters_google_links():
+    captured = []
+
+    def open_search(request, timeout):
+        captured.append(request.full_url)
+        return FakeResponse(
+            '<a href="https://www.google.com.hk/preferences">Google</a>'
+            '<a href="/url?q=https://real.example/">Real company</a>'
+        )
+
+    provider = GoogleSearchProvider(opener=open_search, host="www.google.com.hk")
+    results = provider.search(AcquisitionCriteria(product="solar generator", daily_limit=1))
+
+    assert captured[0].startswith("https://www.google.com.hk/search?")
+    assert [item.website for item in results] == ["https://real.example/"]

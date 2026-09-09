@@ -84,6 +84,7 @@ audit_repository = SQLiteAuditEventRepository(DATABASE)
 search_provider = GoogleSearchProvider(
     timeout=float(config_values.get("SEARCH_TIMEOUT_SECONDS", "15")),
     max_results_per_query=int(config_values.get("SEARCH_RESULTS_PER_QUERY", "10")),
+    host=config_values.get("SEARCH_GOOGLE_HOST", "www.google.com.hk"),
 )
 try:
     deepseek_provider = DeepSeekProvider(DeepSeekConfig.from_env_file(ROOT / "config" / ".env"))

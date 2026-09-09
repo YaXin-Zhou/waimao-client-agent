@@ -57,21 +57,25 @@ class GoogleSearchProvider:
         opener: Callable[..., object] = urlopen,
         timeout: float = 15.0,
         max_results_per_query: int = 10,
+        host: str = "www.google.com.hk",
     ) -> None:
         if timeout <= 0:
             raise ValueError("timeout must be positive")
         if max_results_per_query <= 0:
             raise ValueError("max_results_per_query must be positive")
+        if not host.strip() or "/" in host:
+            raise ValueError("Google search host must be a hostname")
         self._opener = opener
         self._timeout = timeout
         self._max_results = max_results_per_query
+        self._host = host.strip()
 
     def search(self, criteria: AcquisitionCriteria) -> list[LeadRecord]:
         results: list[LeadRecord] = []
         seen_urls: set[str] = set()
         for query in build_search_queries(criteria):
             request = Request(
-                f"https://www.google.com/search?q={quote_plus(query)}&num={self._max_results}",
+                f"https://{self._host}/search?q={quote_plus(query)}&num={self._max_results}",
                 headers={"User-Agent": "Mozilla/5.0 (compatible; ClientResearch/1.0)"},
             )
             try:
@@ -79,12 +83,14 @@ class GoogleSearchProvider:
                 html = response.read().decode("utf-8", errors="replace")
             except Exception as error:  # network/HTTP errors must not become empty results
                 raise SearchProviderError(f"Google search failed for query: {query}") from error
-            if self._requires_browser(html):
+            parser = _GoogleResultParser()
+            parser.feed(html)
+            if self._requires_browser(html) and not any(
+                self._is_candidate(self._result_url(href)) for href, _title in parser.results
+            ):
                 raise SearchProviderError(
                     "Google returned a JavaScript-only or consent page; use the browser adapter"
                 )
-            parser = _GoogleResultParser()
-            parser.feed(html)
             for href, title in parser.results:
                 url = self._result_url(href)
                 if not self._is_candidate(url) or url in seen_urls:
@@ -112,9 +118,9 @@ class GoogleSearchProvider:
     @staticmethod
     def _is_candidate(url: str) -> bool:
         parsed = urlsplit(url)
-        return parsed.scheme in {"http", "https"} and bool(parsed.hostname) and not (
-            parsed.hostname or ""
-        ).endswith("google.com")
+        hostname = parsed.hostname or ""
+        is_google = hostname.endswith("google.com") or hostname.endswith("google.com.hk")
+        return parsed.scheme in {"http", "https"} and bool(hostname) and not is_google
 
     @staticmethod
     def _requires_browser(html: str) -> bool:
