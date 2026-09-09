@@ -9,6 +9,8 @@ from typing import Callable
 from urllib.parse import urljoin, urlparse
 from urllib.request import Request, urlopen
 
+from src.domain.lead import is_plausible_email
+
 
 @dataclass(frozen=True)
 class PublicEmail:
@@ -109,17 +111,29 @@ class WebsiteFetcher:
 
     @staticmethod
     def _extract_public_emails(html: str, source_url: str) -> tuple[PublicEmail, ...]:
+        decoded_html = unescape(html)
+        visible = WebsiteFetcher._to_text(html)
         candidates = re.findall(
             r"(?:mailto:)?([A-Z0-9._%+-]+@[A-Z0-9.-]+\.[A-Z]{2,})",
-            unescape(html),
+            visible,
             flags=re.IGNORECASE,
         )
-        visible = WebsiteFetcher._to_text(html)
+        candidates.extend(
+            re.findall(
+                r"mailto:([^\"'\s>?]+)",
+                decoded_html,
+                flags=re.IGNORECASE,
+            )
+        )
         result: list[PublicEmail] = []
         seen: set[str] = set()
         for address in candidates:
             normalized = address.strip().lower()
-            if normalized in seen or normalized.startswith(("example@", "noreply@", "no-reply@")):
+            if (
+                normalized in seen
+                or normalized.startswith(("noreply@", "no-reply@"))
+                or not is_plausible_email(normalized)
+            ):
                 continue
             position = visible.lower().find(normalized)
             excerpt = (

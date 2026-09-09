@@ -7,6 +7,7 @@
 - 开发基线：[docs/DEVELOPMENT_BASELINE.md](docs/DEVELOPMENT_BASELINE.md)
 - 目录规范：[docs/PROJECT_STRUCTURE.md](docs/PROJECT_STRUCTURE.md)
 - 本地运行：[docs/LOCAL_DEPLOYMENT.md](docs/LOCAL_DEPLOYMENT.md)
+- 真实数据核验：[docs/REAL_DATA_VALIDATION.md](docs/REAL_DATA_VALIDATION.md)
 - 领域上下文：[CONTEXT.md](CONTEXT.md)
 
 ## 开发纪律

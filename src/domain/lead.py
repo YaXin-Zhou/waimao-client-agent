@@ -78,6 +78,15 @@ class LeadScore:
 
 
 _COUNTRY_NAMES = {"DE": "Germany", "CN": "China", "US": "United States", "GB": "United Kingdom"}
+_PLACEHOLDER_EMAIL_DOMAINS = {
+    "example.com",
+    "example.org",
+    "example.net",
+    "domain.com",
+    "contoso.com",
+    "test.com",
+}
+_NON_EMAIL_FILE_TLDS = {"png", "jpg", "jpeg", "gif", "svg", "webp", "avif", "ico"}
 
 
 def _normalize_text(value: str) -> str:
@@ -99,7 +108,22 @@ def _normalize_email(email: str) -> str:
     for token in ("(dot)", "[dot]", " dot "):
         raw = raw.replace(token, ".")
     address = parseaddr(raw)[1]
-    return address if "@" in address and "." in address.rsplit("@", 1)[-1] else ""
+    return address if is_plausible_email(address) else ""
+
+
+def is_plausible_email(email: str) -> bool:
+    """Reject obvious asset filenames and placeholder addresses before persistence."""
+    address = parseaddr(email.strip().lower())[1]
+    if "@" not in address:
+        return False
+    local, domain = address.rsplit("@", 1)
+    if not local or "." not in domain:
+        return False
+    if domain in _PLACEHOLDER_EMAIL_DOMAINS:
+        return False
+    if domain.rsplit(".", 1)[-1] in _NON_EMAIL_FILE_TLDS:
+        return False
+    return True
 
 
 def _normalize_country(country: str) -> str:

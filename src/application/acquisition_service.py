@@ -228,10 +228,22 @@ class AcquisitionService:
         if assessed is None:
             raise KeyError(f"Lead not found: {domain}")
         website = f"https://{domain}"
-        document = website_reader.fetch(website)
-        public_emails = getattr(document, "public_emails", ())
-        if not public_emails:
-            return assessed
+        fetch_pages = getattr(website_reader, "fetch_contact_pages", None)
+        documents = (
+            fetch_pages(
+                website,
+                max_pages=self._website_page_limit,
+                allow_external_sources=True,
+                max_external_pages=self._external_source_limit,
+            )
+            if fetch_pages is not None
+            else (website_reader.fetch(website),)
+        )
+        public_emails = tuple(
+            email
+            for document in documents
+            for email in getattr(document, "public_emails", ())
+        )
         first_source = assessed.lead.sources[0] if assessed.lead.sources else ("", "")
         records = [
             LeadRecord(

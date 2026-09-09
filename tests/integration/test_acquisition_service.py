@@ -168,6 +168,31 @@ def test_service_discovers_public_contacts_and_preserves_source_evidence():
     )
 
 
+def test_service_removes_invalid_persisted_contact_when_rechecking_public_pages():
+    tasks = InMemoryTaskRepository()
+    leads = InMemoryLeadRepository()
+    service = AcquisitionService(tasks, leads)
+    task = service.create_task(
+        "Clean public contacts",
+        AcquisitionCriteria(product="portable power station", require_public_email=True),
+    )
+    service.assess_leads(
+        task.id,
+        [LeadRecord("Example", "https://example.test", "contoso@example.com")],
+        {},
+        {},
+    )
+
+    class Reader:
+        def fetch_contact_pages(self, url, max_pages, allow_external_sources, max_external_pages):
+            return (type("Document", (), {"public_emails": ()})(),)
+
+    result = service.discover_public_contacts(task.id, "example.test", Reader())
+
+    assert result.lead.emails == ()
+    assert "missing_public_email" in result.rejection_reasons
+
+
 def test_service_keeps_only_qualified_leads_marked_and_records_rejection_reasons():
     service = AcquisitionService(InMemoryTaskRepository(), InMemoryLeadRepository())
     task = service.create_task(

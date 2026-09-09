@@ -53,6 +53,22 @@ def test_fetcher_extracts_public_mailto_and_visible_emails_with_context():
     assert all("@alpine.example" in item.excerpt for item in document.public_emails)
 
 
+def test_fetcher_ignores_asset_filenames_and_placeholder_addresses():
+    fetcher = WebsiteFetcher(
+        opener=lambda url, timeout: (
+            b"<img src='hero@2x.png'><span>name@domain.com</span>"
+            b"<span>contoso@example.com</span>"
+            b"<a href='mailto:support@alpine.example'>Support</a>"
+        )
+    )
+
+    document = fetcher.fetch("https://alpine.example/")
+
+    assert [item.address for item in document.public_emails] == [
+        "support@alpine.example"
+    ]
+
+
 def test_fetcher_follows_bounded_same_domain_contact_pages():
     pages = {
         "https://alpine.example/": (
