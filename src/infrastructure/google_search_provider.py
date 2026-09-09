@@ -81,6 +81,7 @@ class GoogleSearchProvider:
             "europages.com",
             "scienceinsights.org",
             "nationalgeographic.org",
+            "ourworldindata.org",
             "investopedia.com",
             "techtarget.com",
             "baike.baidu.com",
