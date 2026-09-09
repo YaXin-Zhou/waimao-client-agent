@@ -19,6 +19,7 @@ from src.domain.custom_research import (
     ResearchFieldType,
     ResearchFieldValue,
 )
+from src.domain.discovery_run import DiscoveryRun
 from src.domain.email_send import EmailSendAttempt
 from src.domain.follow_up_task import FollowUpTask
 from src.domain.inbound_email import InboundEmail
@@ -52,6 +53,8 @@ class ApiApplication:
         research_execution=None,
         research_runs=None,
         research_queue=None,
+        discovery_queue=None,
+        discovery_runs=None,
         mailbox=None,
         mailbox_sync=None,
         inbound_emails=None,
@@ -74,6 +77,8 @@ class ApiApplication:
         self._research_execution = research_execution
         self._research_runs_repository = research_runs
         self._research_queue = research_queue
+        self._discovery_queue = discovery_queue
+        self._discovery_runs_repository = discovery_runs
         self._mailbox = mailbox
         self._mailbox_sync = mailbox_sync
         self._inbound_emails = inbound_emails
@@ -187,6 +192,13 @@ class ApiApplication:
                 and segments[3] == "discover"
             ):
                 return self._discover_leads(segments[2], self._parse_body(body))
+            if (
+                method == "GET"
+                and len(segments) == 4
+                and segments[:2] == ["api", "tasks"]
+                and segments[3] == "discovery-runs"
+            ):
+                return self._discovery_runs(segments[2])
             if (
                 method == "PATCH"
                 and len(segments) == 4
@@ -666,8 +678,22 @@ class ApiApplication:
         signals = body.get("signals_by_domain", {})
         if not isinstance(weights, dict) or not isinstance(signals, dict):
             raise ValueError("weights and signals_by_domain must be objects")
+        if self._discovery_queue is not None:
+            run = self._discovery_queue.submit(task_id, weights, signals)
+            return 202, {"run": self._discovery_run(run)}
         results = self._acquisition.discover_and_assess(task_id, weights, signals)
         return 200, self._discovery_payload(task_id, results)
+
+    def _discovery_runs(self, task_id: str) -> tuple[int, dict]:
+        self._require_task(task_id)
+        if self._discovery_runs_repository is None:
+            raise RuntimeError("discovery run repository is not configured")
+        return 200, {
+            "items": [
+                self._discovery_run(run)
+                for run in self._discovery_runs_repository.list_for_task(task_id)
+            ]
+        }
 
     def _discovery_payload(self, task_id: str, results) -> dict:
         return {
@@ -1179,6 +1205,20 @@ class ApiApplication:
             "attempts": run.attempts,
             "error": run.error,
             "timeout_seconds": run.timeout_seconds,
+        }
+
+    @staticmethod
+    def _discovery_run(run: DiscoveryRun) -> dict:
+        return {
+            "id": run.id,
+            "task_id": run.task_id,
+            "status": run.status.value,
+            "step": run.step.value,
+            "candidate_count": run.candidate_count,
+            "website_count": run.website_count,
+            "public_email_count": run.public_email_count,
+            "qualified_count": run.qualified_count,
+            "error": run.error,
         }
 
     @staticmethod

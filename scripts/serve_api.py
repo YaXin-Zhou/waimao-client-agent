@@ -14,6 +14,7 @@ ROOT = Path(__file__).resolve().parents[1]
 sys.path.insert(0, str(ROOT))
 
 from src.application.acquisition_service import AcquisitionService  # noqa: E402
+from src.application.discovery_queue import DiscoveryJobQueue  # noqa: E402
 from src.application.email_draft_service import EmailDraftService  # noqa: E402
 from src.application.email_send_service import EmailSendService  # noqa: E402
 from src.application.follow_up_task_service import FollowUpTaskService  # noqa: E402
@@ -37,6 +38,7 @@ from src.infrastructure.machine_translation_provider import (  # noqa: E402
 from src.infrastructure.playwright_search_provider import PlaywrightSearchProvider  # noqa: E402
 from src.infrastructure.sqlite_repositories import (  # noqa: E402
     SQLiteAuditEventRepository,
+    SQLiteDiscoveryRunRepository,
     SQLiteEmailDraftRepository,
     SQLiteEmailSendAttemptRepository,
     SQLiteFollowUpTaskRepository,
@@ -78,6 +80,7 @@ task_repository = SQLiteTaskRepository(DATABASE)
 lead_repository = SQLiteLeadRepository(DATABASE)
 research_repository = SQLiteResearchRepository(DATABASE)
 research_run_repository = SQLiteResearchRunRepository(DATABASE)
+discovery_run_repository = SQLiteDiscoveryRunRepository(DATABASE)
 inbound_email_repository = SQLiteInboundEmailRepository(DATABASE)
 reply_analysis_repository = SQLiteReplyAnalysisRepository(DATABASE)
 email_draft_repository = SQLiteEmailDraftRepository(DATABASE)
@@ -192,6 +195,12 @@ acquisition_service = AcquisitionService(
     ),
     website_workers=int(config_values.get("WEBSITE_FETCH_WORKERS", "4")),
 )
+discovery_queue = DiscoveryJobQueue(
+    acquisition_service,
+    discovery_run_repository,
+    max_workers=int(config_values.get("DISCOVERY_QUEUE_WORKERS", "1")),
+    max_pending=int(config_values.get("DISCOVERY_QUEUE_MAX_PENDING", "2")),
+)
 application = ApiApplication(
     task_repository,
     lead_repository,
@@ -207,6 +216,8 @@ application = ApiApplication(
     research_execution=research_execution,
     research_runs=research_run_repository,
     research_queue=research_queue,
+    discovery_queue=discovery_queue,
+    discovery_runs=discovery_run_repository,
     mailbox=mailbox,
     mailbox_sync=mailbox_sync,
     inbound_emails=inbound_email_repository,

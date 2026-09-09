@@ -476,15 +476,40 @@ class AcquisitionService:
         task_id: str,
         weights: dict[str, int],
         signals_by_domain: dict[str, dict[str, int]],
+        progress=None,
     ) -> list[AssessedLead]:
         task = self._tasks.get(task_id)
         if task is None:
             raise KeyError(f"Task not found: {task_id}")
         if self._search is None:
             raise RuntimeError("Search provider is not configured")
+        if progress:
+            progress("searching")
         records = self._search.search(task.criteria)
+        if progress:
+            progress(
+                "enriching",
+                candidate_count=len(records),
+                website_count=sum(bool(record.website) for record in records),
+            )
         records = self._enrich_search_records(task_id, records)
-        return self.assess_leads(task_id, records, weights, signals_by_domain)
+        if progress:
+            progress(
+                "assessing",
+                candidate_count=len(records),
+                website_count=len({record.website for record in records if record.website}),
+                public_email_count=sum(bool(record.email) for record in records),
+            )
+        results = self.assess_leads(task_id, records, weights, signals_by_domain)
+        if progress:
+            progress(
+                "completed",
+                candidate_count=len(results),
+                website_count=sum(bool(item.lead.domain) for item in results),
+                public_email_count=sum(bool(item.lead.emails) for item in results),
+                qualified_count=sum(item.qualified for item in results),
+            )
+        return results
 
     def _enrich_search_records(self, task_id: str, records: list[LeadRecord]) -> list[LeadRecord]:
         """从候选官网提取公开邮箱；失败时保留原始候选，不猜测联系方式。"""

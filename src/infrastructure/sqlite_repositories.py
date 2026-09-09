@@ -14,6 +14,7 @@ from src.domain.custom_research import (
     ResearchFieldType,
     ResearchFieldValue,
 )
+from src.domain.discovery_run import DiscoveryRun, DiscoveryRunStatus, DiscoveryRunStep
 from src.domain.email_draft import EmailDraft, EmailDraftKind, EmailDraftStatus
 from src.domain.email_send import EmailSendAttempt, EmailSendStatus
 from src.domain.follow_up_task import FollowUpStatus, FollowUpTask
@@ -76,6 +77,21 @@ def _connect(database: str | Path) -> sqlite3.Connection:
             weights_json TEXT NOT NULL DEFAULT '{}',
             max_attempts INTEGER NOT NULL DEFAULT 2,
             timeout_seconds INTEGER NOT NULL DEFAULT 120
+        )
+        """
+    )
+    connection.execute(
+        """
+        CREATE TABLE IF NOT EXISTS discovery_runs (
+            id TEXT PRIMARY KEY,
+            task_id TEXT NOT NULL,
+            status TEXT NOT NULL,
+            step TEXT NOT NULL,
+            candidate_count INTEGER NOT NULL DEFAULT 0,
+            website_count INTEGER NOT NULL DEFAULT 0,
+            public_email_count INTEGER NOT NULL DEFAULT 0,
+            qualified_count INTEGER NOT NULL DEFAULT 0,
+            error TEXT NOT NULL DEFAULT ''
         )
         """
     )
@@ -649,6 +665,57 @@ class SQLiteResearchRunRepository:
                 (ResearchRunStatus.RUNNING.value,),
             ).fetchall()
         return [run for row in rows if (run := self.get(row["id"])) is not None]
+
+
+class SQLiteDiscoveryRunRepository:
+    def __init__(self, database: str | Path):
+        self._database = database
+
+    def save(self, run: DiscoveryRun) -> None:
+        with _connect(self._database) as connection:
+            connection.execute(
+                """
+                INSERT INTO discovery_runs (
+                    id, task_id, status, step, candidate_count, website_count,
+                    public_email_count, qualified_count, error
+                ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)
+                ON CONFLICT(id) DO UPDATE SET
+                    task_id=excluded.task_id, status=excluded.status, step=excluded.step,
+                    candidate_count=excluded.candidate_count, website_count=excluded.website_count,
+                    public_email_count=excluded.public_email_count,
+                    qualified_count=excluded.qualified_count, error=excluded.error
+                """,
+                (
+                    run.id, run.task_id, run.status.value, run.step.value,
+                    run.candidate_count, run.website_count, run.public_email_count,
+                    run.qualified_count, run.error,
+                ),
+            )
+
+    def get(self, run_id: str) -> DiscoveryRun | None:
+        with _connect(self._database) as connection:
+            row = connection.execute(
+                "SELECT * FROM discovery_runs WHERE id = ?", (run_id,)
+            ).fetchone()
+        return self._from_row(row) if row else None
+
+    def list_for_task(self, task_id: str) -> list[DiscoveryRun]:
+        with _connect(self._database) as connection:
+            rows = connection.execute(
+                "SELECT * FROM discovery_runs WHERE task_id = ? ORDER BY rowid",
+                (task_id,),
+            ).fetchall()
+        return [self._from_row(row) for row in rows]
+
+    @staticmethod
+    def _from_row(row) -> DiscoveryRun:
+        return DiscoveryRun(
+            id=row["id"], task_id=row["task_id"],
+            status=DiscoveryRunStatus(row["status"]), step=DiscoveryRunStep(row["step"]),
+            candidate_count=row["candidate_count"], website_count=row["website_count"],
+            public_email_count=row["public_email_count"], qualified_count=row["qualified_count"],
+            error=row["error"],
+        )
 
 
 class SQLiteEmailDraftRepository:
