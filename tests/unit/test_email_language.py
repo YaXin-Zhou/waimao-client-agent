@@ -43,7 +43,10 @@ def test_unknown_market_falls_back_to_english_and_requires_review():
 def test_outreach_prompt_contains_resolved_language_and_metadata():
     provider = Provider()
     draft = EmailDraftService(provider).generate(
-        "task-1", CleanLead("Alpine", "alpine.example", ("sales@alpine.example",), "Germany", "complete"),
+        "task-1",
+        CleanLead(
+            "Alpine", "alpine.example", ("sales@alpine.example",), "Germany", "complete"
+        ),
         research(website_language="German"), "Introduce {product} to {company}", "power stations",
     )
     assert draft.language == "German"

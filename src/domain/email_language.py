@@ -2,9 +2,8 @@
 
 from __future__ import annotations
 
-from dataclasses import dataclass
 import re
-
+from dataclasses import dataclass
 
 SUPPORTED_LANGUAGES = {
     "English": "English",
@@ -61,7 +60,10 @@ def detect_reply_language(text: str) -> str:
         "German": sum(lowered.count(token) for token in (" der ", " die ", " und ", " danke ")),
         "French": sum(lowered.count(token) for token in (" le ", " les ", " nous ", " merci ")),
         "Italian": sum(lowered.count(token) for token in (" il ", " che ", " per ", " grazie ")),
-        "Portuguese": sum(lowered.count(token) for token in (" o ", " que ", " para ", " obrigado ")),
+        "Portuguese": sum(
+            lowered.count(token)
+            for token in (" o ", " que ", " para ", " obrigado ")
+        ),
     }
     language, score = max(scores.items(), key=lambda item: item[1], default=("English", 0))
     return language if score > 0 else "English"

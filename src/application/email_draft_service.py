@@ -16,7 +16,11 @@ class StructuredProvider(Protocol):
 
 
 class EmailDraftService:
-    def __init__(self, provider: StructuredProvider, country_languages: dict[str, str] | None = None):
+    def __init__(
+        self,
+        provider: StructuredProvider,
+        country_languages: dict[str, str] | None = None,
+    ):
         self._provider = provider
         self._country_languages = country_languages or {}
 
@@ -50,7 +54,8 @@ class EmailDraftService:
             self._country_languages,
         )
         prompt = (
-            f"Write a concise first-contact B2B email in {decision.language} to the recipient company. "
+            f"Write a concise first-contact B2B email in {decision.language} "
+            "to the recipient company. "
             "The recipient company is not the sender. Use [Our Company], [Your Name], "
             "or [Your Position] when sender details are not supplied. Use only the supplied facts. "
             "Do not invent prices, delivery times, certifications, partnerships, or buyer needs. "
