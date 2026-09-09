@@ -34,7 +34,7 @@ def test_task_and_assessments_survive_repository_recreation(tmp_path):
                     "sales@alpine.example",
                     "DE",
                     "https://alpine.example/contact",
-                    "Alpine Camp Supply public sales contact",
+                    "Alpine Camp Supply public sales contact for portable power stations",
                 )
             ],
         weights={"product_match": 30, "market_match": 20},

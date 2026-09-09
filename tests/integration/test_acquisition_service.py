@@ -26,7 +26,7 @@ class ContactFetcher:
         return SourceDocument(
             url,
             "Contact",
-            "Contact Alpine",
+            "Contact Alpine portable power station supplier",
             (PublicEmail("sales@alpine.example", url, "Contact sales@alpine.example"),),
         )
 
@@ -342,7 +342,9 @@ def test_service_keeps_only_qualified_leads_marked_and_records_rejection_reasons
                     "https://strong.example",
                     "sales@strong.example",
                     source_url="https://strong.example/contact",
-                    source_excerpt="Strong Supply public sales contact",
+                        source_excerpt=(
+                            "Strong Supply public sales contact for portable power station"
+                        ),
                 ),
             LeadRecord("No Email", "https://no-email.example", ""),
                 LeadRecord(
@@ -350,7 +352,7 @@ def test_service_keeps_only_qualified_leads_marked_and_records_rejection_reasons
                     "https://low-score.example",
                     "info@low-score.example",
                     source_url="https://low-score.example/contact",
-                    source_excerpt="Low Score public contact",
+                        source_excerpt="Low Score public contact for portable power station",
                 ),
         ],
         weights={"fit": 60},
@@ -442,7 +444,9 @@ def test_service_requalifies_legacy_assessments_when_reading_task_leads():
                                 "https://legacy.example",
                                 "sales@legacy.example",
                                 source_url="https://legacy.example/contact",
-                                source_excerpt="Legacy Supply public contact",
+                                    source_excerpt=(
+                                        "Legacy Supply public contact for portable power station"
+                                    ),
                             )
                         ]
                 )[0],

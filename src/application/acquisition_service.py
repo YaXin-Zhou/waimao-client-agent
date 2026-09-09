@@ -169,9 +169,8 @@ class AcquisitionService:
                 and not AcquisitionService._website_sources(item.lead)
             ):
                 reasons.append("missing_website_evidence")
-            if (
-                "product_match" in item.score.breakdown
-                and item.score.breakdown["product_match"] <= 0
+            if criteria.product.strip() and not AcquisitionService.has_product_evidence(
+                item.lead, criteria
             ):
                 reasons.append("missing_product_evidence")
             if item.score.total < criteria.minimum_qualification_score:
