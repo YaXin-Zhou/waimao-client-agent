@@ -48,6 +48,20 @@
 
 “最终合格客户”为 1 家是任务配额造成的，不代表其余 4 家没有邮箱。若需要一次输出 5 家，可把任务的“合格客户目标”改为 5，系统会重新按评分和规则选择。
 
+## 真实背调交叉核验
+
+对 `elmag.eu` 又执行了一次真实官网背调，运行记录为 `succeeded`，未生成或发送邮件。DeepSeek 报告输出了公司简介、客户类型、产品、国家和置信度，并保存了 5 条证据 URL。
+
+随后直接重新访问报告引用的 4 个官网页面，确认页面内容同时包含：
+
+- 公司名称 `ELMAG Entwicklungs und Handels GmbH`；
+- 成立年份 `1984`；
+- 员工规模相关信息 `70`；
+- `portable power station` / `power stations` 产品关键词；
+- 奥地利及 Tumeltsham 地址信息。
+
+因此本次报告中的关键字段通过了“模型输出 → 原始页面”的二次核验。邮箱 `office@elmag.at` 与官网主域 `elmag.eu` 不同，系统保留 `email_domain_mismatch` 标记，交付前仍建议人工确认；该标记不会被静默当作错误或自动删除。
+
 ## 发现并修复的问题
 
 真实页面核验时发现，部分电商页面会把图片资源名中的 `@2x.png`、`@2x.svg` 误识别为邮箱，页面还可能包含 `contoso@example.com` 等示例地址。现已在领域清洗层和官网采集层同时过滤：
@@ -73,4 +87,3 @@ pytest -q
 ruff check src/application/acquisition_service.py src/domain/lead.py src/infrastructure/website_fetcher.py tests/unit/test_website_fetcher.py tests/integration/test_acquisition_service.py
 Invoke-RestMethod http://127.0.0.1:8001/api/ready
 ```
-
