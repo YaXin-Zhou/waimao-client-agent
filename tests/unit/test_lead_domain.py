@@ -3,7 +3,7 @@ from pathlib import Path
 
 import pytest
 
-from src.domain.lead import LeadRecord, LeadStatus, clean_leads, score_lead
+from src.domain.lead import LeadRecord, LeadStatus, clean_leads, evidence_level, score_lead
 
 
 def test_sample_dataset_produces_clean_records_for_sales_review():
@@ -48,6 +48,51 @@ def test_clean_leads_preserves_source_evidence_when_merging_records():
         ("https://search.example/acme", "Search result snippet"),
         ("https://acme.example/contact", "Official contact page"),
     )
+
+
+def test_evidence_level_distinguishes_search_and_website_provenance():
+    no_source = clean_leads([LeadRecord("No source")])[0]
+    search_only = clean_leads(
+        [
+            LeadRecord(
+                "Search result",
+                "https://search.example",
+                source_url="https://www.google.com/search?q=x",
+                source_excerpt="result",
+            )
+        ]
+    )[0]
+    single = clean_leads(
+        [
+            LeadRecord(
+                "Single source",
+                "https://single.example",
+                source_url="https://single.example/about",
+                source_excerpt="About",
+            )
+        ]
+    )[0]
+    multiple = clean_leads(
+        [
+            LeadRecord(
+                "Multiple sources",
+                "https://multi.example",
+                source_url="https://multi.example/about",
+                source_excerpt="About",
+            ),
+            LeadRecord(
+                "Multiple sources",
+                "https://multi.example/contact",
+                source_url="https://multi.example/contact",
+                source_excerpt="Contact",
+            ),
+        ]
+    )[0]
+
+    assert evidence_level(no_source) == "none"
+    assert evidence_level(search_only) == "search_only"
+    assert evidence_level(single) == "single_source"
+    assert evidence_level(multiple) == "multi_source"
 
 
 def test_clean_leads_normalizes_and_merges_same_company_by_domain():

@@ -193,6 +193,10 @@ h1 { color: #132238; font-size: 29px; font-weight: 700; letter-spacing: -.8px; }
 .discovery-notice span { flex: 1; }
 .discovery-notice small { color: #b47829; white-space: nowrap; }
 .funnel-note { margin: 10px 0 0; color: #8494a5; line-height: 1.5; }
+.evidence-level { margin-left: auto; padding: 4px 7px; border-radius: 999px; color: #5e7184; background: #edf3f7; font-size: 10px; white-space: nowrap; }
+.evidence-level-multi_source { color: #237a63; background: #e7f5ef; }
+.evidence-level-single_source { color: #8b6728; background: #fff5dd; }
+.evidence-level-search_only, .evidence-level-none { color: #9a5960; background: #fff0f1; }
 .funnel-stages { display: flex; align-items: center; gap: 11px; margin-top: 10px; overflow-x: auto; }
 .funnel-stages > span { position: relative; min-width: 62px; text-align: center; }
 .funnel-stages b, .funnel-stages small { display: block; }

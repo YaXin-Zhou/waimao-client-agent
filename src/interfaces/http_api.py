@@ -19,7 +19,7 @@ from src.domain.custom_research import (
 from src.domain.email_send import EmailSendAttempt
 from src.domain.follow_up_task import FollowUpTask
 from src.domain.inbound_email import InboundEmail
-from src.domain.lead import LeadRecord, LeadStatus, is_search_source
+from src.domain.lead import LeadRecord, LeadStatus, evidence_level, is_search_source
 from src.domain.reply_analysis import ReplyAnalysis
 from src.domain.research_run import ResearchRun
 from src.domain.send_safety import SendPolicy
@@ -1057,6 +1057,7 @@ class ApiApplication:
             "status": lead.status.value,
             "flags": list(lead.flags),
             "sources": [list(source) for source in lead.sources],
+            "evidence_level": evidence_level(lead),
         }
 
     @staticmethod

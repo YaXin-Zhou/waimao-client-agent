@@ -150,6 +150,20 @@ def is_search_source(source_url: str) -> bool:
     return host == "google.com.hk" or host.endswith("google.com") or host.endswith("bing.com")
 
 
+def evidence_level(lead: CleanLead) -> str:
+    """Classify persisted provenance without claiming that a model conclusion is fact."""
+    website_sources = {
+        url.strip() for url, _excerpt in lead.sources if url.strip() and not is_search_source(url)
+    }
+    if len(website_sources) >= 2:
+        return "multi_source"
+    if website_sources:
+        return "single_source"
+    if lead.sources:
+        return "search_only"
+    return "none"
+
+
 def _normalize_country(country: str) -> str:
     value = _normalize_text(country)
     return _COUNTRY_NAMES.get(value.upper(), value)
