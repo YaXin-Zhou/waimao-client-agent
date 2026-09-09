@@ -169,6 +169,27 @@ def _normalize_country(country: str) -> str:
     return _COUNTRY_NAMES.get(value.upper(), value)
 
 
+def _identity_tokens(value: str) -> set[str]:
+    ignored = {
+        "about",
+        "company",
+        "contact",
+        "group",
+        "holdings",
+        "official",
+        "online",
+        "solutions",
+        "store",
+        "the",
+        "www",
+    }
+    return {
+        token
+        for token in re.findall(r"[a-z0-9]+", value.lower())
+        if len(token) >= 4 and token not in ignored
+    }
+
+
 def clean_leads(records: list[LeadRecord]) -> list[CleanLead]:
     """规范化并按域名合并潜客记录，保留确定性顺序和质量标记。"""
     groups: dict[str, list[LeadRecord]] = {}
@@ -209,8 +230,8 @@ def clean_leads(records: list[LeadRecord]) -> list[CleanLead]:
                         item[1].rsplit("@", 1)[-1] != domain,
                         item[0],
                     ),
-                )
             )
+        )
         flags: list[str] = []
         if not domain:
             flags.append("missing_website")
@@ -222,6 +243,23 @@ def clean_leads(records: list[LeadRecord]) -> list[CleanLead]:
             flags.append("email_domain_mismatch")
         if len(countries) > 1:
             flags.append("conflicting_country")
+        website_text = " ".join(
+            excerpt.lower() for url, excerpt in sources if not is_search_source(url)
+        )
+        identity_tokens = _identity_tokens(company_name)
+        if (
+            domain
+            and website_text
+            and identity_tokens
+            and not any(
+                re.search(
+                    rf"(?<![a-z0-9]){re.escape(token)}(?![a-z0-9])",
+                    website_text,
+                )
+                for token in identity_tokens
+            )
+        ):
+            flags.append("company_identity_unconfirmed")
         country = countries[0] if countries else ""
         quality = (
             "complete"

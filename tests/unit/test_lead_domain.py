@@ -150,6 +150,40 @@ def test_clean_leads_prefers_same_domain_email_for_primary_contact():
     assert "email_domain_mismatch" in cleaned[0].flags
 
 
+def test_clean_leads_flags_company_name_missing_from_website_evidence():
+    cleaned = clean_leads(
+        [
+            LeadRecord(
+                "Unrelated Trading Co",
+                "https://acme.example",
+                "sales@acme.example",
+                source_url="https://acme.example/contact",
+                source_excerpt="ACME official contact page.",
+            )
+        ]
+    )
+
+    assert "company_identity_unconfirmed" in cleaned[0].flags
+    assert cleaned[0].quality == "needs_review"
+
+
+def test_clean_leads_accepts_brand_token_in_website_evidence():
+    cleaned = clean_leads(
+        [
+            LeadRecord(
+                "Alpine Outdoor",
+                "https://alpine.example",
+                "sales@alpine.example",
+                source_url="https://alpine.example/about",
+                source_excerpt="Alpine Outdoor company profile.",
+            )
+        ]
+    )
+
+    assert "company_identity_unconfirmed" not in cleaned[0].flags
+    assert cleaned[0].quality == "complete"
+
+
 def test_clean_leads_drops_asset_and_placeholder_only_source_excerpts():
     cleaned = clean_leads(
         [

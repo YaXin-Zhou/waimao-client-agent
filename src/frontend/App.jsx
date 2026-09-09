@@ -565,7 +565,7 @@ function fallbackRejectionReasons(lead) {
 }
 
 function rejectionReasonLabel(reason) {
-  return { missing_website: '缺少官网', missing_public_email: '没有官网公开邮箱', missing_product_evidence: '缺少官网产品证据', score_below_threshold: '评分低于门槛', conflicting_country: '国家来源冲突', qualified_quota_exceeded: '超过合格客户配额', email_domain_mismatch: '邮箱域名与官网不同' }[reason] || reason
+  return { missing_website: '缺少官网', missing_public_email: '没有官网公开邮箱', missing_product_evidence: '缺少官网产品证据', score_below_threshold: '评分低于门槛', conflicting_country: '国家来源冲突', qualified_quota_exceeded: '超过合格客户配额', email_domain_mismatch: '邮箱域名与官网不同', company_identity_unconfirmed: '官网未确认公司名' }[reason] || reason
 }
 
 function customerTypeLabel(value) {
