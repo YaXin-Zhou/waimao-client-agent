@@ -4,6 +4,7 @@ from __future__ import annotations
 
 from urllib.parse import urlsplit
 
+from src.domain.task import effective_candidate_limit
 from src.infrastructure.google_search_provider import SearchProviderError
 
 
@@ -14,10 +15,10 @@ class FallbackSearchProvider:
         )
 
     def search(self, criteria):
-        target = int(
-            getattr(criteria, "candidate_limit", None)
-            or getattr(criteria, "daily_limit", None)
-            or 0
+        target = (
+            effective_candidate_limit(criteria)
+            if hasattr(criteria, "candidate_limit") or hasattr(criteria, "daily_limit")
+            else 0
         )
         errors = []
         collected = []

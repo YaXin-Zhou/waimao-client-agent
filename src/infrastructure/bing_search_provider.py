@@ -11,7 +11,7 @@ from urllib.request import Request, urlopen
 
 from src.application.search_queries import build_search_queries
 from src.domain.lead import LeadRecord, canonical_website_domain
-from src.domain.task import AcquisitionCriteria
+from src.domain.task import AcquisitionCriteria, effective_candidate_limit
 from src.infrastructure.google_search_provider import GoogleSearchProvider, SearchProviderError
 
 
@@ -75,7 +75,7 @@ class BingSearchProvider:
         self._host = host.strip()
 
     def search(self, criteria: AcquisitionCriteria) -> list[LeadRecord]:
-        candidate_limit = criteria.candidate_limit or criteria.daily_limit
+        candidate_limit = effective_candidate_limit(criteria)
         records: list[LeadRecord] = []
         seen_domains: set[str] = set()
         for query in build_search_queries(criteria):

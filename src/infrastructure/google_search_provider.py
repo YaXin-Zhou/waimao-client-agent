@@ -13,7 +13,7 @@ from urllib.request import Request, urlopen
 
 from src.application.search_queries import build_search_queries
 from src.domain.lead import LeadRecord, canonical_website_domain
-from src.domain.task import AcquisitionCriteria
+from src.domain.task import AcquisitionCriteria, effective_candidate_limit
 
 
 class SearchProviderError(RuntimeError):
@@ -112,7 +112,7 @@ class GoogleSearchProvider:
     def search(self, criteria: AcquisitionCriteria) -> list[LeadRecord]:
         results: list[LeadRecord] = []
         seen_domains: set[str] = set()
-        candidate_limit = criteria.candidate_limit or criteria.daily_limit
+        candidate_limit = effective_candidate_limit(criteria)
         for query in build_search_queries(criteria):
             for page_start in range(0, candidate_limit, self._max_results):
                 request = Request(

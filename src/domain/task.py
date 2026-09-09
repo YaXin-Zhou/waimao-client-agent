@@ -66,6 +66,19 @@ def configured_research_terms(criteria: AcquisitionCriteria) -> tuple[str, ...]:
     return tuple(dict.fromkeys(value.strip() for value in values if value.strip()))
 
 
+def effective_candidate_limit(criteria: AcquisitionCriteria) -> int:
+    """Return the search pool size without confusing it with the send quota.
+
+    A default pool of at least 100 gives the qualification stage enough room
+    to discard inaccessible, irrelevant, or unverifiable companies before it
+    tries to deliver the daily qualified-lead target. An explicit smaller
+    limit remains available for controlled tests or deliberate user choice.
+    """
+    if criteria.candidate_limit is not None:
+        return criteria.candidate_limit
+    return max(100, criteria.daily_limit)
+
+
 @dataclass(frozen=True)
 class AcquisitionTask:
     id: str

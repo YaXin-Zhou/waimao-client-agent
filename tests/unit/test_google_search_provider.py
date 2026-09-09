@@ -52,13 +52,45 @@ def test_google_provider_deduplicates_multiple_pages_from_one_domain():
     ]
 
 
-def test_google_provider_honors_daily_limit():
+def test_google_provider_uses_default_candidate_pool_of_at_least_100():
     html = "".join(
         f'<a href="https://example-{index}.com"><h3>Example {index}</h3></a>' for index in range(4)
     )
     provider = GoogleSearchProvider(opener=lambda request, timeout: FakeResponse(html))
 
     results = provider.search(AcquisitionCriteria(product="solar generator", daily_limit=2))
+
+    assert len(results) == 4
+
+
+def test_google_provider_uses_daily_limit_when_it_exceeds_default_pool():
+    html = "".join(
+        f'<a href="https://large-{index}.com"><h3>Large {index}</h3></a>'
+        for index in range(120)
+    )
+    provider = GoogleSearchProvider(opener=lambda request, timeout: FakeResponse(html))
+
+    results = provider.search(
+        AcquisitionCriteria(product="solar generator", daily_limit=120, qualified_lead_limit=1)
+    )
+
+    assert len(results) == 120
+
+
+def test_google_provider_honors_explicit_candidate_limit():
+    html = "".join(
+        f'<a href="https://example-{index}.com"><h3>Example {index}</h3></a>' for index in range(4)
+    )
+    provider = GoogleSearchProvider(opener=lambda request, timeout: FakeResponse(html))
+
+    results = provider.search(
+        AcquisitionCriteria(
+            product="solar generator",
+            daily_limit=2,
+            qualified_lead_limit=2,
+            candidate_limit=2,
+        )
+    )
 
     assert len(results) == 2
 
