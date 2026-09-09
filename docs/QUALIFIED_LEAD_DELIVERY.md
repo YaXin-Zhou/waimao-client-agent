@@ -33,6 +33,7 @@
 候选记录仍然全部写入 SQLite，便于追溯。每条未入选记录会保存 `rejection_reasons`，例如：
 
 - `missing_public_email`
+- `missing_product_evidence`
 - `score_below_threshold`
 - `missing_website`
 - `conflicting_country`

@@ -144,6 +144,11 @@ class AcquisitionService:
                 reasons.append("missing_website")
             if criteria.require_public_email and not item.lead.emails:
                 reasons.append("missing_public_email")
+            if (
+                "product_match" in item.score.breakdown
+                and item.score.breakdown["product_match"] <= 0
+            ):
+                reasons.append("missing_product_evidence")
             if item.score.total < criteria.minimum_qualification_score:
                 reasons.append("score_below_threshold")
             if "conflicting_country" in item.lead.flags:

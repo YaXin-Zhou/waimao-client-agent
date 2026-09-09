@@ -310,6 +310,30 @@ def test_service_keeps_only_qualified_leads_marked_and_records_rejection_reasons
     assert "score_below_threshold" in low_score.rejection_reasons
 
 
+def test_service_explains_missing_product_evidence_separately():
+    service = AcquisitionService(InMemoryTaskRepository(), InMemoryLeadRepository())
+    task = service.create_task(
+        "Product evidence reason",
+        AcquisitionCriteria(
+            product="portable power station",
+            minimum_qualification_score=0,
+            require_public_email=False,
+            candidate_limit=1,
+            qualified_lead_limit=1,
+        ),
+    )
+
+    result = service.assess_leads(
+        task.id,
+        [LeadRecord("Unrelated", "https://unrelated.example")],
+        {"product_match": 30},
+        {},
+    )[0]
+
+    assert not result.qualified
+    assert "missing_product_evidence" in result.rejection_reasons
+
+
 def test_service_requalifies_legacy_assessments_when_reading_task_leads():
     tasks = InMemoryTaskRepository()
     leads = InMemoryLeadRepository()
