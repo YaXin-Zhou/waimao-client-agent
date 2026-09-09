@@ -507,6 +507,29 @@ def test_api_lead_list_sanitizes_legacy_source_evidence():
     ]
 
 
+def test_api_lead_detail_uses_the_same_sanitized_sources_as_the_list():
+    app, task, _, _ = make_app()
+    result = app._leads.results[0]
+    app._leads.results[0] = replace(
+        result,
+        lead=replace(
+            result.lead,
+            sources=(
+                ("https://alpine.example", "Public sales contact"),
+                ("https://alpine.example", "hero-banner.png"),
+                ("https://alpine.example", "contoso@example.com"),
+            ),
+        ),
+    )
+
+    status, payload = app.handle("GET", f"/api/tasks/{task.id}/leads/alpine.example")
+
+    assert status == 200
+    assert payload["lead"]["sources"] == [
+        ["https://alpine.example", "Public sales contact"]
+    ]
+
+
 def test_api_updates_contact_only_with_source_evidence_and_keeps_score():
     app, task, _, _ = make_app()
 

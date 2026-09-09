@@ -732,7 +732,7 @@ class ApiApplication:
             raise RuntimeError("research execution service is not configured")
         self._require_task(task_id)
         assessed = next(
-            (item for item in self._leads.list_assessments(task_id) if item.lead.domain == domain),
+            (item for item in self._acquisition.list_leads(task_id) if item.lead.domain == domain),
             None,
         )
         if assessed is None:
@@ -968,7 +968,7 @@ class ApiApplication:
     def _lead_detail(self, task_id: str, domain: str) -> tuple[int, dict]:
         self._require_task(task_id)
         assessed = next(
-            (item for item in self._leads.list_assessments(task_id) if item.lead.domain == domain),
+            (item for item in self._acquisition.list_leads(task_id) if item.lead.domain == domain),
             None,
         )
         if assessed is None:
