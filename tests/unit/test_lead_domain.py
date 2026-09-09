@@ -84,6 +84,14 @@ def test_clean_leads_marks_missing_evidence_for_manual_review():
     assert "missing_website" in cleaned[0].flags
 
 
+def test_clean_leads_marks_public_email_on_a_different_domain():
+    cleaned = clean_leads(
+        [LeadRecord("ELMAG", "https://elmag.eu", "office@elmag.at", "Austria")]
+    )
+
+    assert "email_domain_mismatch" in cleaned[0].flags
+
+
 def test_clean_leads_normalizes_explicitly_obfuscated_public_email():
     cleaned = clean_leads(
         [

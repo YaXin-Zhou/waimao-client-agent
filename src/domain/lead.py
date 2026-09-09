@@ -143,6 +143,10 @@ def clean_leads(records: list[LeadRecord]) -> list[CleanLead]:
             flags.append("missing_website")
         if not emails:
             flags.append("invalid_email")
+        if domain and any(
+            email.rsplit("@", 1)[-1] != domain for email in emails if "@" in email
+        ):
+            flags.append("email_domain_mismatch")
         if len(countries) > 1:
             flags.append("conflicting_country")
         country = countries[0] if countries else ""
