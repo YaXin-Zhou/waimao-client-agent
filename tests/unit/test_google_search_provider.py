@@ -31,6 +31,7 @@ def test_google_provider_extracts_public_urls_deduplicates_and_never_guesses_ema
     ]
     assert results[0].email == ""
     assert results[0].source_excerpt == "Alpine Energy"
+    assert "google.com.hk/search" in results[0].source_url
 
 
 def test_google_provider_deduplicates_multiple_pages_from_one_domain():

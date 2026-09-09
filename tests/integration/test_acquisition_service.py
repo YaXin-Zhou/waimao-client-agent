@@ -337,9 +337,21 @@ def test_service_keeps_only_qualified_leads_marked_and_records_rejection_reasons
     results = service.assess_leads(
         task.id,
         [
-            LeadRecord("Strong Supply", "https://strong.example", "sales@strong.example"),
+                LeadRecord(
+                    "Strong Supply",
+                    "https://strong.example",
+                    "sales@strong.example",
+                    source_url="https://strong.example/contact",
+                    source_excerpt="Strong Supply public sales contact",
+                ),
             LeadRecord("No Email", "https://no-email.example", ""),
-            LeadRecord("Low Score", "https://low-score.example", "info@low-score.example"),
+                LeadRecord(
+                    "Low Score",
+                    "https://low-score.example",
+                    "info@low-score.example",
+                    source_url="https://low-score.example/contact",
+                    source_excerpt="Low Score public contact",
+                ),
         ],
         weights={"fit": 60},
         signals_by_domain={
@@ -380,6 +392,37 @@ def test_service_explains_missing_product_evidence_separately():
     assert "missing_product_evidence" in result.rejection_reasons
 
 
+def test_service_keeps_conflicting_identity_records_out_of_qualified_results():
+    service = AcquisitionService(InMemoryTaskRepository(), InMemoryLeadRepository())
+    task = service.create_task(
+        "Identity gate",
+        AcquisitionCriteria(
+            product="portable power station",
+            minimum_qualification_score=0,
+            require_public_email=True,
+        ),
+    )
+
+    result = service.assess_leads(
+        task.id,
+        [
+            LeadRecord(
+                "ELMAG",
+                "https://elmag.eu",
+                "office@elmag.at",
+                "Austria",
+                "https://elmag.eu/en/home/company",
+                "ELMAG company profile and public contact.",
+            )
+        ],
+        weights={},
+        signals_by_domain={},
+    )[0]
+
+    assert not result.qualified
+    assert "email_domain_mismatch" in result.rejection_reasons
+
+
 def test_service_requalifies_legacy_assessments_when_reading_task_leads():
     tasks = InMemoryTaskRepository()
     leads = InMemoryLeadRepository()
@@ -393,7 +436,15 @@ def test_service_requalifies_legacy_assessments_when_reading_task_leads():
         [
             AssessedLead(
                 clean_leads(
-                    [LeadRecord("Legacy Supply", "https://legacy.example", "sales@legacy.example")]
+                        [
+                            LeadRecord(
+                                "Legacy Supply",
+                                "https://legacy.example",
+                                "sales@legacy.example",
+                                source_url="https://legacy.example/contact",
+                                source_excerpt="Legacy Supply public contact",
+                            )
+                        ]
                 )[0],
                 LeadScore(50, "B", {}),
             )

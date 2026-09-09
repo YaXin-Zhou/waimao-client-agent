@@ -164,6 +164,12 @@ class AcquisitionService:
             if criteria.require_public_email and not item.lead.emails:
                 reasons.append("missing_public_email")
             if (
+                criteria.require_public_email
+                and item.lead.emails
+                and not AcquisitionService._website_sources(item.lead)
+            ):
+                reasons.append("missing_website_evidence")
+            if (
                 "product_match" in item.score.breakdown
                 and item.score.breakdown["product_match"] <= 0
             ):
@@ -172,6 +178,10 @@ class AcquisitionService:
                 reasons.append("score_below_threshold")
             if "conflicting_country" in item.lead.flags:
                 reasons.append("conflicting_country")
+            if "email_domain_mismatch" in item.lead.flags:
+                reasons.append("email_domain_mismatch")
+            if "company_identity_unconfirmed" in item.lead.flags:
+                reasons.append("company_identity_unconfirmed")
             evaluated.append(
                 replace(
                     item,

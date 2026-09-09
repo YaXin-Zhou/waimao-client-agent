@@ -27,7 +27,16 @@ def test_task_and_assessments_survive_repository_recreation(tmp_path):
     )
     service.assess_leads(
         task.id,
-        [LeadRecord("Alpine Camp Supply", "https://alpine.example", "sales@alpine.example", "DE")],
+            [
+                LeadRecord(
+                    "Alpine Camp Supply",
+                    "https://alpine.example",
+                    "sales@alpine.example",
+                    "DE",
+                    "https://alpine.example/contact",
+                    "Alpine Camp Supply public sales contact",
+                )
+            ],
         weights={"product_match": 30, "market_match": 20},
         signals_by_domain={"alpine.example": {"product_match": 30, "market_match": 20}},
     )

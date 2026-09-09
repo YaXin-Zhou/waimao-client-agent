@@ -81,6 +81,7 @@ class GoogleSearchProvider:
                     f"&num={self._max_results}&start={page_start}",
                     headers={"User-Agent": "Mozilla/5.0 (compatible; ClientResearch/1.0)"},
                 )
+                search_url = request.full_url
                 try:
                     response = self._opener(request, timeout=self._timeout)
                     html = response.read().decode("utf-8", errors="replace")
@@ -107,7 +108,7 @@ class GoogleSearchProvider:
                         LeadRecord(
                             company_name=title,
                             website=url,
-                            source_url=url,
+                            source_url=search_url,
                             source_excerpt=title,
                         )
                     )
