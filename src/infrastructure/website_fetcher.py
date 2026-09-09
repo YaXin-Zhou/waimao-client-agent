@@ -93,7 +93,48 @@ class WebsiteFetcher:
                 documents.append(self.fetch(link))
             except Exception:
                 continue
+        if len(documents) < max_pages:
+            self._append_sitemap_pages(
+                documents,
+                seen,
+                home.url,
+                max_pages,
+                priority_terms,
+            )
         return tuple(documents)
+
+    def _append_sitemap_pages(
+        self,
+        documents: list[SourceDocument],
+        seen: set[str],
+        home_url: str,
+        max_pages: int,
+        priority_terms: tuple[str, ...],
+    ) -> None:
+        """Use a same-domain sitemap only when linked pages did not fill the budget."""
+        sitemap_url = urljoin(home_url, "/sitemap.xml")
+        try:
+            sitemap = self.fetch(sitemap_url)
+        except Exception:
+            return
+        sitemap_urls = sorted(
+            self._extract_sitemap_urls(sitemap.text),
+            key=lambda item: self._link_priority(item, priority_terms),
+            reverse=True,
+        )
+        home_host = (urlparse(home_url).hostname or "").lower().removeprefix("www.")
+        for link in sitemap_urls:
+            if len(documents) >= max_pages:
+                return
+            page_key = self._page_key(link)
+            link_host = (urlparse(link).hostname or "").lower().removeprefix("www.")
+            if page_key in seen or link_host != home_host:
+                continue
+            seen.add(page_key)
+            try:
+                documents.append(self.fetch(link))
+            except Exception:
+                continue
 
     @staticmethod
     def _page_key(url: str) -> str:
@@ -119,6 +160,15 @@ class WebsiteFetcher:
         if any(term in path for term in ("company", "about", "history")):
             return 10
         return 0
+
+    @staticmethod
+    def _extract_sitemap_urls(text: str) -> tuple[str, ...]:
+        return tuple(
+            dict.fromkeys(
+                match.rstrip("/.,;)")
+                for match in re.findall(r"https?://[^\s<>\"']+", text)
+            )
+        )
 
     @staticmethod
     def _open(url: str, timeout: int) -> bytes:

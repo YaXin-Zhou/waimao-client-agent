@@ -164,3 +164,24 @@ def test_fetch_contact_pages_prioritizes_product_evidence_links():
         "https://alpine.example/",
         "https://alpine.example/products",
     ]
+
+
+def test_fetch_contact_pages_uses_same_domain_sitemap_when_navigation_is_empty():
+    pages = {
+        "https://alpine.example/": b"<html><body>JavaScript navigation</body></html>",
+        "https://alpine.example/sitemap.xml": (
+            b"<urlset><url><loc>https://alpine.example/about</loc></url>"
+            b"<url><loc>https://alpine.example/portable-power-stations</loc></url></urlset>"
+        ),
+        "https://alpine.example/about": b"Company",
+        "https://alpine.example/portable-power-stations": b"Portable power stations",
+    }
+
+    documents = WebsiteFetcher(opener=lambda url, timeout: pages[url]).fetch_contact_pages(
+        "https://alpine.example/", max_pages=2, priority_terms=("portable power station",)
+    )
+
+    assert [document.url for document in documents] == [
+        "https://alpine.example/",
+        "https://alpine.example/portable-power-stations",
+    ]
