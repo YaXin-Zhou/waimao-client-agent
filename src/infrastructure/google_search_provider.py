@@ -75,38 +75,46 @@ class GoogleSearchProvider:
         seen_urls: set[str] = set()
         candidate_limit = criteria.candidate_limit or criteria.daily_limit
         for query in build_search_queries(criteria):
-            request = Request(
-                f"https://{self._host}/search?q={quote_plus(query)}&num={self._max_results}",
-                headers={"User-Agent": "Mozilla/5.0 (compatible; ClientResearch/1.0)"},
-            )
-            try:
-                response = self._opener(request, timeout=self._timeout)
-                html = response.read().decode("utf-8", errors="replace")
-            except Exception as error:  # network/HTTP errors must not become empty results
-                raise SearchProviderError(f"Google search failed for query: {query}") from error
-            parser = _GoogleResultParser()
-            parser.feed(html)
-            if self._requires_browser(html) and not any(
-                self._is_candidate(self._result_url(href)) for href, _title in parser.results
-            ):
-                raise SearchProviderError(
-                    "Google returned a JavaScript-only or consent page; use the browser adapter"
+            for page_start in range(0, candidate_limit, self._max_results):
+                request = Request(
+                    f"https://{self._host}/search?q={quote_plus(query)}"
+                    f"&num={self._max_results}&start={page_start}",
+                    headers={"User-Agent": "Mozilla/5.0 (compatible; ClientResearch/1.0)"},
                 )
-            for href, title in parser.results:
-                url = self._result_url(href)
-                if not self._is_candidate(url) or url in seen_urls:
-                    continue
-                seen_urls.add(url)
-                results.append(
-                    LeadRecord(
-                        company_name=title,
-                        website=url,
-                        source_url=url,
-                        source_excerpt=f"Google result for: {query}",
+                try:
+                    response = self._opener(request, timeout=self._timeout)
+                    html = response.read().decode("utf-8", errors="replace")
+                except Exception as error:  # network/HTTP errors must not become empty results
+                    raise SearchProviderError(
+                        f"Google search failed for query: {query}"
+                    ) from error
+                parser = _GoogleResultParser()
+                parser.feed(html)
+                if self._requires_browser(html) and not any(
+                    self._is_candidate(self._result_url(href)) for href, _title in parser.results
+                ):
+                    raise SearchProviderError(
+                        "Google returned a JavaScript-only or consent page; use the browser adapter"
                     )
-                )
-                if len(results) >= candidate_limit:
-                    return results
+                added_on_page = 0
+                for href, title in parser.results:
+                    url = self._result_url(href)
+                    if not self._is_candidate(url) or url in seen_urls:
+                        continue
+                    seen_urls.add(url)
+                    results.append(
+                        LeadRecord(
+                            company_name=title,
+                            website=url,
+                            source_url=url,
+                            source_excerpt=f"Google result for: {query}",
+                        )
+                    )
+                    added_on_page += 1
+                    if len(results) >= candidate_limit:
+                        return results
+                if added_on_page == 0:
+                    break
         return results
 
     @staticmethod
