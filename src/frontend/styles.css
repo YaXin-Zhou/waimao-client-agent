@@ -188,6 +188,11 @@ h1 { color: #132238; font-size: 29px; font-weight: 700; letter-spacing: -.8px; }
 .discovery-funnel > div:first-child { display: flex; align-items: center; justify-content: space-between; gap: 12px; }
 .discovery-funnel strong { color: #41566d; font-size: 12px; }
 .discovery-funnel > div:first-child span { color: #bf7627; }
+.discovery-notice { display: flex; align-items: center; gap: 10px; margin: -4px 0 16px; padding: 11px 13px; border: 1px solid #f0d2a9; border-radius: 6px; color: #76562c; background: #fffaf1; font-size: 11px; }
+.discovery-notice strong { color: #9a641f; }
+.discovery-notice span { flex: 1; }
+.discovery-notice small { color: #b47829; white-space: nowrap; }
+.funnel-note { margin: 10px 0 0; color: #8494a5; line-height: 1.5; }
 .funnel-stages { display: flex; align-items: center; gap: 11px; margin-top: 10px; overflow-x: auto; }
 .funnel-stages > span { position: relative; min-width: 62px; text-align: center; }
 .funnel-stages b, .funnel-stages small { display: block; }

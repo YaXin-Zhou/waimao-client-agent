@@ -43,6 +43,7 @@ function App() {
   const [researchLoading, setResearchLoading] = useState(false)
   const [discoverLoading, setDiscoverLoading] = useState(false)
   const [discoverySummary, setDiscoverySummary] = useState(null)
+  const [discoveryError, setDiscoveryError] = useState(null)
   const [mailboxStatus, setMailboxStatus] = useState(null)
   const [mailThreads, setMailThreads] = useState([])
   const [replyAnalyses, setReplyAnalyses] = useState([])
@@ -329,10 +330,16 @@ function App() {
   const discoverLeads = async () => {
     if (!remoteTaskId || discoverLoading) return
     setDiscoverLoading(true)
+    setDiscoveryError(null)
     try {
       const response = await fetch(`/api/tasks/${remoteTaskId}/discover`, { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({}) })
       const payload = await response.json()
-      if (!response.ok) throw new Error(payload.error || 'lead discovery failed')
+      if (!response.ok) {
+        const error = new Error(payload.error || 'lead discovery failed')
+        error.code = payload.code
+        error.retryable = payload.retryable
+        throw error
+      }
       const loaded = (payload.items || []).map(mapRemoteLead)
       setRemoteLeads(loaded)
       setSelected(loaded.find((lead) => lead.qualified) || null)
@@ -341,7 +348,10 @@ function App() {
       setDiscoverySummary(summary)
       const funnel = summary?.funnel || {}
       notify(`搜索完成：${summary?.qualified_count || 0}/${summary?.target_qualified_count || 0} 家合格，候选 ${summary?.candidate_count || loaded.length} 家 · 官网 ${funnel.website_count || 0} · 公开邮箱 ${funnel.public_email_count || 0}${summary?.shortfall ? ` · 还缺 ${summary.shortfall} 家` : ''}`)
-    } catch (error) { notify(error.message || '搜索失败，请检查外网或搜索适配器') } finally { setDiscoverLoading(false) }
+    } catch (error) {
+      setDiscoveryError({ code: error.code || 'discovery_failed', message: error.message, retryable: error.retryable !== false })
+      notify(error.code === 'search_provider_unavailable' ? '搜索入口暂时不可用，未生成客户记录' : error.message || '搜索失败，请检查搜索入口')
+    } finally { setDiscoverLoading(false) }
   }
   const importBrowserResults = async (records) => {
     if (!remoteTaskId || browserImportLoading) return
@@ -358,11 +368,15 @@ function App() {
       setSelected(loaded.find((lead) => lead.qualified) || null)
       setApiState(loaded.length ? 'connected' : 'empty')
       setShowBrowserImport(false)
+      setDiscoveryError(null)
       const summary = payload.summary
       setDiscoverySummary(summary)
       const funnel = summary?.funnel || {}
       notify(`浏览器结果已导入：${summary?.qualified_count || 0}/${summary?.target_qualified_count || 0} 家合格，候选 ${summary?.candidate_count || loaded.length} 家 · 官网 ${funnel.website_count || 0} · 公开邮箱 ${funnel.public_email_count || 0}`)
-    } catch (error) { notify(error.message || '导入失败，请检查结果格式') } finally { setBrowserImportLoading(false) }
+    } catch (error) {
+      setDiscoveryError({ code: 'browser_import_failed', message: error.message, retryable: false })
+      notify(error.message || '导入失败，请检查结果格式')
+    } finally { setBrowserImportLoading(false) }
   }
   const syncMailbox = async () => {
     if (!remoteTaskId) return
@@ -502,7 +516,7 @@ function App() {
         <div className="page-heading"><div><h1>客户智能工作台</h1><p>从公开证据到可审核的下一步</p></div><button className="primary-button" onClick={() => setShowTask(true)}><Icon name="plus" size={19}/>新建获客任务</button></div>
         <div className={`data-notice ${apiState}`}><span />{apiState === 'loading' ? '正在读取本地任务数据…' : apiState === 'connected' ? '已连接本地 API · 当前显示持久化客户档案' : apiState === 'empty' ? 'API 已连接 · 当前没有可显示的真实客户档案' : 'API 连接失败 · 为避免混淆，已隐藏演示数据'}</div>
         <div className="task-context"><label>当前获客任务<select value={remoteTaskId} onChange={selectTask} disabled={!remoteTasks.length}><option value="">暂无可选任务</option>{remoteTasks.map((task) => <option key={task.id} value={task.id}>{task.name}</option>)}</select></label>{remoteTaskConfig && <><span>任务条件：{remoteTaskConfig.criteria?.product || '未配置产品'} · {remoteTaskConfig.criteria?.countries?.join('、') || '未配置市场'} · 目标 {remoteTaskConfig.criteria?.qualified_lead_limit || 10} 家合格客户 · 业务 {remoteTaskConfig.criteria?.business_offerings?.length || 0} 项 · 背调字段 {remoteTaskConfig.criteria?.research_fields?.length || 0} 项</span><button type="button" className="text-button task-edit-button" onClick={() => setShowRuleEditor(true)}>编辑研究规则</button><button type="button" className="outline-button task-discover-button" disabled={discoverLoading} onClick={discoverLeads}>{discoverLoading ? '搜索中…' : '开始搜索客户'}</button><button type="button" className="outline-button task-discover-button" onClick={() => setShowBrowserImport(true)}>导入浏览器结果</button></>}</div>
-        {discoverySummary && <DiscoveryFunnel summary={discoverySummary}/>}
+        {discoveryError && <DiscoveryNotice error={discoveryError}/>} {discoverySummary && <DiscoveryFunnel summary={discoverySummary}/>}
         <section className="metric-row"><Metric icon="clipboard" label="待审核" value="—" note="统计接口尚未接入"/><Metric icon="users" label="高匹配客户" value="—" note="统计接口尚未接入"/><Metric icon="researching" label="本周新增" value="—" note="统计接口尚未接入"/></section>
         <ReplyCenter mailboxStatus={mailboxStatus} threads={mailThreads} analyses={replyAnalyses} followUpTasks={followUpTasks} loading={replyLoading} onTest={testMailbox} onSync={syncMailbox} onAnalyze={analyzeReplies} onGenerateDraft={generateReplyDraft} onFollowUpStatus={updateFollowUpStatus}/>
         <section className="workspace-grid">
@@ -557,6 +571,8 @@ function customerTypeLabel(value) {
 
 function DiscoveryFunnel({ summary }) {
   const funnel = summary.funnel || {}
+  const websiteCount = funnel.website_count || 0
+  const publicEmailCount = funnel.public_email_count || 0
   const stages = [
     ['候选', summary.candidate_count || 0],
     ['官网', funnel.website_count || 0],
@@ -564,7 +580,17 @@ function DiscoveryFunnel({ summary }) {
     ['产品证据', funnel.product_evidence_count || 0],
     ['合格', summary.qualified_count || 0],
   ]
-  return <div className="discovery-funnel"><div><strong>本次搜索数据漏斗</strong><span>缺口 {summary.shortfall || 0} 家</span></div><div className="funnel-stages">{stages.map(([label, value], index) => <span key={label}><b>{value}</b><small>{label}</small>{index < stages.length - 1 && <i>→</i>}</span>)}</div></div>
+  const note = !summary.candidate_count
+    ? '本次没有形成候选客户记录。'
+    : websiteCount > publicEmailCount
+      ? `已抓到 ${websiteCount} 家官网，其中 ${websiteCount - publicEmailCount} 家暂未发现公开邮箱；结果保留为待补充，不会补造邮箱。`
+      : '官网、公开邮箱和产品证据均已进入筛选流程。'
+  return <div className="discovery-funnel"><div><strong>本次搜索数据漏斗</strong><span>缺口 {summary.shortfall || 0} 家</span></div><div className="funnel-stages">{stages.map(([label, value], index) => <span key={label}><b>{value}</b><small>{label}</small>{index < stages.length - 1 && <i>→</i>}</span>)}</div><p className="funnel-note">{note}</p></div>
+}
+
+function DiscoveryNotice({ error }) {
+  const unavailable = error.code === 'search_provider_unavailable'
+  return <div className="discovery-notice" role="status"><strong>{unavailable ? '搜索入口暂时不可用' : '搜索未完成'}</strong><span>{unavailable ? '本次未生成客户记录；可以稍后重试，或导入真实搜索结果。' : error.message || '未生成客户记录，请检查搜索条件。'}</span>{error.retryable && <small>可稍后重试</small>}</div>
 }
 
 function Metric({ icon, label, value, note }) { return <div className="metric"><span className={`metric-icon ${icon}`}><Icon name={icon === 'researching' ? 'users' : icon} size={20}/></span><div><span>{label}</span><strong>{value}<Icon name="arrow" size={16}/></strong><small>{note}</small></div></div> }
