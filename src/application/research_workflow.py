@@ -28,6 +28,10 @@ class ResearchWriter(Protocol):
 class LeadScoreWriter(Protocol):
     def update_score(self, task_id: str, domain: str, score: LeadScore) -> None: ...
 
+    def update_research_evidence(
+        self, task_id: str, domain: str, sources: tuple[tuple[str, str], ...]
+    ) -> None: ...
+
 
 @dataclass(frozen=True)
 class ResearchAssessment:
@@ -125,5 +129,21 @@ class ResearchWorkflow:
             progress(ResearchRunStep.PERSISTING)
         self._reports.save(task_id, lead.domain, research)
         if self._lead_scores is not None:
+            update_evidence = getattr(self._lead_scores, "update_research_evidence", None)
+            if callable(update_evidence):
+                evidence_sources = tuple(
+                    (
+                        document.url,
+                        " ".join(document.text.split())[:2000],
+                    )
+                    for document in documents
+                    if document.url and document.text.strip()
+                )
+                if evidence_sources:
+                    update_evidence(
+                        task_id,
+                        lead.domain,
+                        tuple(dict.fromkeys(lead.sources + evidence_sources)),
+                    )
             self._lead_scores.update_score(task_id, lead.domain, score)
         return ResearchAssessment(research=research, score=score)

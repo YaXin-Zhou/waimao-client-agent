@@ -25,6 +25,10 @@ class LeadRepository(Protocol):
 
     def list_assessments(self, task_id: str) -> list[AssessedLead]: ...
 
+    def update_research_evidence(
+        self, task_id: str, domain: str, sources: tuple[tuple[str, str], ...]
+    ) -> None: ...
+
 
 class SearchProvider(Protocol):
     def search(self, criteria: object) -> list[LeadRecord]: ...

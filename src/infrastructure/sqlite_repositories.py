@@ -4,6 +4,7 @@ from __future__ import annotations
 
 import json
 import sqlite3
+from dataclasses import replace
 from pathlib import Path
 
 from src.application.acquisition_service import AssessedLead
@@ -481,6 +482,22 @@ class SQLiteLeadRepository:
                     domain,
                 ),
             )
+
+    def update_research_evidence(
+        self, task_id: str, domain: str, sources: tuple[tuple[str, str], ...]
+    ) -> None:
+        items = self.list_assessments(task_id)
+        if not any(item.lead.domain == domain for item in items):
+            raise KeyError(f"Lead not found: {domain}")
+        self.save_assessments(
+            task_id,
+            [
+                replace(item, lead=replace(item.lead, sources=sources))
+                if item.lead.domain == domain
+                else item
+                for item in items
+            ],
+        )
 
 
 class SQLiteResearchRepository:

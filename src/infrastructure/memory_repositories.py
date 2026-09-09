@@ -36,3 +36,14 @@ class InMemoryLeadRepository:
             replace(item, score=score) if item.lead.domain == domain else item
             for item in items
         ]
+
+    def update_research_evidence(
+        self, task_id: str, domain: str, sources: tuple[tuple[str, str], ...]
+    ) -> None:
+        items = self._items.get(task_id, [])
+        self._items[task_id] = [
+            replace(item, lead=replace(item.lead, sources=sources))
+            if item.lead.domain == domain
+            else item
+            for item in items
+        ]

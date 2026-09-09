@@ -65,6 +65,7 @@ def test_research_score_is_written_back_to_memory_leads():
                     ("sales@alpine.example",),
                     "Germany",
                     "complete",
+                    sources=(("https://www.google.com/search?q=alpine", "Search result"),),
                 ),
                 LeadScore(0, "D", {}),
             )
@@ -75,6 +76,13 @@ def test_research_score_is_written_back_to_memory_leads():
 
     assert result.score.total == 70
     assert leads.list_assessments(task.id)[0].score.total == 70
+    assert leads.list_assessments(task.id)[0].lead.sources == (
+        ("https://www.google.com/search?q=alpine", "Search result"),
+        (
+            "https://alpine.example/about",
+            "Alpine distributes portable power stations in Germany.",
+        ),
+    )
 
 
 def test_research_score_is_written_back_to_sqlite_leads(tmp_path):
@@ -95,6 +103,7 @@ def test_research_score_is_written_back_to_sqlite_leads(tmp_path):
                     ("sales@alpine.example",),
                     "Germany",
                     "complete",
+                    sources=(("https://www.google.com/search?q=alpine", "Search result"),),
                 ),
                 LeadScore(0, "D", {}),
             )
@@ -105,3 +114,6 @@ def test_research_score_is_written_back_to_sqlite_leads(tmp_path):
 
     assert result.research.evidence_status is EvidenceStatus.SUFFICIENT
     assert leads.list_assessments(task.id)[0].score.total == 70
+    assert leads.list_assessments(task.id)[0].lead.sources[1][0] == (
+        "https://alpine.example/about"
+    )
