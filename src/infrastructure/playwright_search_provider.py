@@ -88,7 +88,9 @@ class PlaywrightSearchProvider:
                         added_on_page = 0
                         for row in rows:
                             result_url = self._resolve_result_url(page, row.get("href", ""))
-                            if not GoogleSearchProvider._is_candidate(result_url):
+                            if not GoogleSearchProvider._is_candidate(
+                                result_url, str(row.get("text", ""))
+                            ):
                                 continue
                             domain = canonical_website_domain(result_url)
                             if not domain or domain in seen_domains:

@@ -82,6 +82,10 @@ class GoogleSearchProvider:
             "nationalgeographic.org",
             "investopedia.com",
             "techtarget.com",
+            "baike.baidu.com",
+            "wallstreetmojo.com",
+            "globalsources.com",
+            "ibm.com",
         }
     )
 
@@ -134,7 +138,11 @@ class GoogleSearchProvider:
                 for href, title in parser.results:
                     url = self._result_url(href)
                     domain = canonical_website_domain(url)
-                    if not self._is_candidate(url) or not domain or domain in seen_domains:
+                    if (
+                        not self._is_candidate(url, title)
+                        or not domain
+                        or domain in seen_domains
+                    ):
                         continue
                     seen_domains.add(domain)
                     results.append(
@@ -160,7 +168,7 @@ class GoogleSearchProvider:
         return href
 
     @staticmethod
-    def _is_candidate(url: str) -> bool:
+    def _is_candidate(url: str, title: str = "") -> bool:
         parsed = urlsplit(url)
         hostname = parsed.hostname or ""
         is_google = hostname.endswith("google.com") or hostname.endswith("google.com.hk")
@@ -191,6 +199,20 @@ class GoogleSearchProvider:
             normalized_path.startswith(f"/{prefix}")
             for prefix in ("/how-", "/what-is-", "/why-")
         )
+        normalized_title = title.casefold()
+        is_explanatory_title = any(
+            marker in normalized_title
+            for marker in (
+                "what is",
+                "how to",
+                "how is",
+                "definition",
+                "guide",
+                "tutorial",
+                "explained",
+                "wikipedia",
+            )
+        )
         is_public_institution = hostname.endswith((".gov", ".edu")) or ".gov." in hostname
         return (
             parsed.scheme in {"http", "https"}
@@ -200,6 +222,7 @@ class GoogleSearchProvider:
             and not is_non_company_path
             and not is_explanatory_path
             and not is_public_institution
+            and not is_explanatory_title
         )
 
     @staticmethod

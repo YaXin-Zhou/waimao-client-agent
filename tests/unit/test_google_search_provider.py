@@ -84,6 +84,9 @@ def test_google_provider_excludes_informational_paths_and_public_institutions():
     assert GoogleSearchProvider._is_candidate(
         "https://www.example-manufacturer.com/products/plastic-parts"
     )
+    assert not GoogleSearchProvider._is_candidate(
+        "https://www.example.com/plastic", "What is plastic injection molding?"
+    )
 
 
 def test_google_provider_surfaces_network_errors():

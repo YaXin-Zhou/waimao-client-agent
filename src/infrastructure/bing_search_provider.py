@@ -101,7 +101,7 @@ class BingSearchProvider:
                     resolved = self._resolve_result_url(href)
                     parsed = urlsplit(resolved)
                     if (
-                        not GoogleSearchProvider._is_candidate(resolved)
+                        not GoogleSearchProvider._is_candidate(resolved, title)
                         or not parsed.hostname
                     ):
                         continue
