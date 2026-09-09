@@ -19,7 +19,7 @@ from src.domain.custom_research import (
 from src.domain.email_send import EmailSendAttempt
 from src.domain.follow_up_task import FollowUpTask
 from src.domain.inbound_email import InboundEmail
-from src.domain.lead import LeadRecord, LeadStatus
+from src.domain.lead import LeadRecord, LeadStatus, is_search_source
 from src.domain.reply_analysis import ReplyAnalysis
 from src.domain.research_run import ResearchRun
 from src.domain.send_safety import SendPolicy
@@ -656,6 +656,21 @@ class ApiApplication:
             raise KeyError(f"Task not found: {task_id}")
         qualified_count = sum(1 for item in results if item.qualified)
         target = task.criteria.qualified_lead_limit
+        rejection_counts: dict[str, int] = {}
+        for item in results:
+            for reason in item.rejection_reasons:
+                rejection_counts[reason] = rejection_counts.get(reason, 0) + 1
+        funnel = {
+            "website_count": sum(bool(item.lead.domain) for item in results),
+            "public_email_count": sum(bool(item.lead.emails) for item in results),
+            "website_evidence_count": sum(
+                any(not is_search_source(url) for url, _excerpt in item.lead.sources)
+                for item in results
+            ),
+            "product_evidence_count": sum(
+                item.score.breakdown.get("product_match", 0) > 0 for item in results
+            ),
+        }
         return {
             "items": [self._assessed(item) for item in results],
             "summary": {
@@ -664,6 +679,8 @@ class ApiApplication:
                 "target_qualified_count": target,
                 "shortfall": max(0, target - qualified_count),
                 "candidate_limit": task.criteria.candidate_limit or task.criteria.daily_limit,
+                "funnel": funnel,
+                "rejection_counts": rejection_counts,
             },
         }
 

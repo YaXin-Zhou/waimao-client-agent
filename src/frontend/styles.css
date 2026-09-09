@@ -184,6 +184,16 @@ h1 { color: #132238; font-size: 29px; font-weight: 700; letter-spacing: -.8px; }
 .task-context label { display: flex; align-items: center; gap: 8px; color: #41566d; font-weight: 600; white-space: nowrap; }
 .task-context select { min-width: 230px; padding: 7px 28px 7px 9px; border: 1px solid #d6e1eb; border-radius: 5px; outline: 0; color: #263a51; background: #fbfcfd; font-size: 11px; }
 .task-context select:focus { border-color: #62b4f3; box-shadow: 0 0 0 3px rgba(98, 180, 243, .13); }
+.discovery-funnel { margin: -4px 0 16px; padding: 11px 13px; border: 1px solid #dce8f2; border-radius: 6px; color: #718196; background: #fff; font-size: 11px; }
+.discovery-funnel > div:first-child { display: flex; align-items: center; justify-content: space-between; gap: 12px; }
+.discovery-funnel strong { color: #41566d; font-size: 12px; }
+.discovery-funnel > div:first-child span { color: #bf7627; }
+.funnel-stages { display: flex; align-items: center; gap: 11px; margin-top: 10px; overflow-x: auto; }
+.funnel-stages > span { position: relative; min-width: 62px; text-align: center; }
+.funnel-stages b, .funnel-stages small { display: block; }
+.funnel-stages b { color: #1687e4; font-size: 17px; line-height: 1.1; }
+.funnel-stages small { margin-top: 3px; color: #8494a5; font-size: 10px; white-space: nowrap; }
+.funnel-stages i { position: absolute; top: 2px; right: -13px; color: #b2c1cf; font-style: normal; }
 .draft-actions { display: none; }
 .lead-timeline { margin: 0 18px 20px; padding: 14px; border: 1px solid #e3eaf1; border-radius: 7px; background: #fff; }
 .lead-timeline .section-title span { color: #94a2b1; font-size: 10px; }

@@ -537,6 +537,12 @@ def test_api_discovers_and_assesses_using_configured_search_provider():
     assert payload["summary"]["candidate_count"] == 1
     assert payload["summary"]["qualified_count"] == 1
     assert payload["summary"]["shortfall"] == task.criteria.qualified_lead_limit - 1
+    assert payload["summary"]["funnel"] == {
+        "website_count": 1,
+        "public_email_count": 1,
+        "website_evidence_count": 1,
+        "product_evidence_count": 1,
+    }
 
 
 def test_api_imports_browser_discovery_results_through_same_assessment_pipeline():
