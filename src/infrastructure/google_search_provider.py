@@ -52,6 +52,23 @@ class _GoogleResultParser(HTMLParser):
 class GoogleSearchProvider:
     """通过 Google 的公开 HTML 结果页获取有限数量候选官网。"""
 
+    _NON_COMPANY_RESULT_HOSTS = frozenset(
+        {
+            "linkedin.com",
+            "indeed.com",
+            "ziprecruiter.com",
+            "naukri.com",
+            "jobsdb.com",
+            "experteer.com",
+            "bebee.com",
+            "facebook.com",
+            "instagram.com",
+            "youtube.com",
+            "zoominfo.com",
+            "exactdata.com",
+        }
+    )
+
     def __init__(
         self,
         opener: Callable[..., object] = urlopen,
@@ -131,7 +148,17 @@ class GoogleSearchProvider:
         parsed = urlsplit(url)
         hostname = parsed.hostname or ""
         is_google = hostname.endswith("google.com") or hostname.endswith("google.com.hk")
-        return parsed.scheme in {"http", "https"} and bool(hostname) and not is_google
+        normalized_host = hostname.lower().removeprefix("www.")
+        is_non_company_result = any(
+            normalized_host == host or normalized_host.endswith(f".{host}")
+            for host in GoogleSearchProvider._NON_COMPANY_RESULT_HOSTS
+        )
+        return (
+            parsed.scheme in {"http", "https"}
+            and bool(hostname)
+            and not is_google
+            and not is_non_company_result
+        )
 
     @staticmethod
     def _requires_browser(html: str) -> bool:

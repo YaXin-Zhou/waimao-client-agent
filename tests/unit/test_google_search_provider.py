@@ -63,6 +63,13 @@ def test_google_provider_honors_daily_limit():
     assert len(results) == 2
 
 
+def test_google_provider_excludes_job_boards_and_company_directories():
+    assert not GoogleSearchProvider._is_candidate("https://www.indeed.com/viewjob?id=1")
+    assert not GoogleSearchProvider._is_candidate("https://www.linkedin.com/company/example")
+    assert not GoogleSearchProvider._is_candidate("https://www.zoominfo.com/c/example")
+    assert GoogleSearchProvider._is_candidate("https://www.example-manufacturer.com/contact")
+
+
 def test_google_provider_surfaces_network_errors():
     def fail(request, timeout):
         raise TimeoutError("proxy timeout")
