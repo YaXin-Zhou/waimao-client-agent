@@ -721,6 +721,22 @@ def test_api_rejects_non_browser_discovery_imports():
     assert payload["error"] == "browser discovery import requires source_mode=browser"
 
 
+def test_api_rejects_browser_import_without_search_source_url():
+    app, task, _, _ = make_app()
+
+    status, payload = app.handle(
+        "POST",
+        f"/api/tasks/{task.id}/discover/import",
+        {
+            "source_mode": "browser",
+            "records": [{"company_name": "Missing provenance", "website": "https://example.com"}],
+        },
+    )
+
+    assert status == 400
+    assert "source_url" in payload["error"]
+
+
 def test_api_discovers_public_contacts_without_model_and_keeps_evidence():
     app, task, _, _ = make_app()
     app._website_reader = ContactReader()

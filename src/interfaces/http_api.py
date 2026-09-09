@@ -750,6 +750,13 @@ class ApiApplication:
         records = body.get("records", [])
         if not isinstance(records, list):
             raise ValueError("records must be an array")
+        for index, record in enumerate(records):
+            if not isinstance(record, dict) or not is_search_source(
+                str(record.get("source_url", "")).strip()
+            ):
+                raise ValueError(
+                    f"browser result {index + 1} must include a Google or Bing source_url"
+                )
         payload = {
             "records": records,
             "weights": body.get("weights", DEFAULT_QUALIFICATION_WEIGHTS),

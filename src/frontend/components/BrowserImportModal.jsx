@@ -15,11 +15,13 @@ export default function BrowserImportModal({ onClose, onImport, loading }) {
         if (!website) throw new Error(`第 ${index + 1} 条缺少 website`)
         const companyName = String(item.company_name || item.title || '').trim()
         if (!companyName) throw new Error(`第 ${index + 1} 条缺少 company_name 或 title`)
+        const sourceUrl = String(item.source_url || '').trim()
+        if (!sourceUrl) throw new Error(`第 ${index + 1} 条缺少 source_url（Google/Bing 结果页）`)
         return {
           company_name: companyName,
           website,
           country: String(item.country || '').trim(),
-          source_url: String(item.source_url || '').trim() || website,
+          source_url: sourceUrl,
           source_excerpt: String(item.source_excerpt || item.excerpt || '').trim(),
         }
       })
