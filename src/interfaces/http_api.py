@@ -418,6 +418,7 @@ class ApiApplication:
         return 200, {
             "analyzed": result.analyzed,
             "reused": result.reused,
+            "skipped_system_notifications": result.skipped_system_notifications,
             "items": [self._reply_analysis_item(item) for item in result.items],
         }
 

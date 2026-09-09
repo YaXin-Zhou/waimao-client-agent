@@ -11,6 +11,7 @@ from src.application.reply_analysis import classify_inbound
 class ReplyAnalysisBatchResult:
     analyzed: int
     reused: int
+    skipped_system_notifications: int
     items: tuple
 
 
@@ -23,9 +24,11 @@ class ReplyAnalysisService:
     def analyze_task(self, task_id: str) -> ReplyAnalysisBatchResult:
         analyzed = 0
         reused = 0
+        skipped_system_notifications = 0
         items = []
         for message in self._messages.list_for_task(task_id):
             if message.is_system_notification:
+                skipped_system_notifications += 1
                 continue
             existing = self._analyses.get_by_message_id(message.message_id)
             if existing is not None:
@@ -38,7 +41,9 @@ class ReplyAnalysisService:
                 self._follow_up_tasks.create_for_analysis(analysis)
             analyzed += 1
             items.append(analysis)
-        return ReplyAnalysisBatchResult(analyzed, reused, tuple(items))
+        return ReplyAnalysisBatchResult(
+            analyzed, reused, skipped_system_notifications, tuple(items)
+        )
 
     def list_for_task(self, task_id: str):
         return self._analyses.list_for_task(task_id)

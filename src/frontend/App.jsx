@@ -293,7 +293,8 @@ function App() {
       setReplyAnalyses(payload.items || [])
       const followUpResponse = await fetch(`/api/tasks/${remoteTaskId}/follow-up-tasks`)
       if (followUpResponse.ok) setFollowUpTasks((await followUpResponse.json()).items || [])
-      notify(`回复分析完成：${payload.analyzed} 条新分析，${payload.reused} 条复用`)
+      const skipped = payload.skipped_system_notifications ? `，跳过 ${payload.skipped_system_notifications} 条系统通知` : ''
+      notify(`回复分析完成：${payload.analyzed} 条新分析，${payload.reused} 条复用${skipped}`)
     } catch (error) { notify(error.message || '回复分析失败') } finally { setReplyLoading(false) }
   }
   const updateFollowUpStatus = async (followUpId, status) => {

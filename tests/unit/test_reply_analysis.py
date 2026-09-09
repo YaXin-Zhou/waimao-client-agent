@@ -68,4 +68,5 @@ def test_analysis_service_skips_system_notifications():
 
     assert result.analyzed == 0
     assert result.reused == 0
+    assert result.skipped_system_notifications == 1
     assert result.items == ()
