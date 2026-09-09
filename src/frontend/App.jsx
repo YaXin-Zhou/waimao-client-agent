@@ -420,7 +420,7 @@ function App() {
       const summary = payload.summary
       setDiscoverySummary(summary)
       const funnel = summary?.funnel || {}
-      notify(`浏览器结果已导入：${summary?.qualified_count || 0}/${summary?.target_qualified_count || 0} 家合格，候选 ${summary?.candidate_count || loaded.length} 家 · 官网 ${funnel.website_count || 0} · 公开邮箱 ${funnel.public_email_count || 0}`)
+      notify(`浏览器结果已导入：${summary?.qualified_count || 0}/${summary?.target_qualified_count || 0} 家合格，候选 ${summary?.candidate_count || loaded.length} 家 · 官网 ${funnel.website_count || 0} · 公开邮箱 ${funnel.public_email_count || 0}${summary?.imported_duplicate_count ? ` · 去重 ${summary.imported_duplicate_count} 条` : ''}`)
     } catch (error) {
       setDiscoveryError({ code: 'browser_import_failed', message: error.message, retryable: false })
       notify(error.message || '导入失败，请检查结果格式')

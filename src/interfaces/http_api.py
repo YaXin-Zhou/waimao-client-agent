@@ -762,7 +762,18 @@ class ApiApplication:
             "weights": body.get("weights", DEFAULT_QUALIFICATION_WEIGHTS),
             "signals_by_domain": body.get("signals_by_domain", {}),
         }
-        return self._assess_leads(task_id, payload)
+        status, result = self._assess_leads(task_id, payload)
+        domains = {
+            canonical_website_domain(str(record.get("website", "")))
+            or str(record.get("company_name", "")).strip().casefold()
+            for record in records
+            if canonical_website_domain(str(record.get("website", "")))
+            or str(record.get("company_name", "")).strip()
+        }
+        result["summary"]["imported_record_count"] = len(records)
+        result["summary"]["imported_unique_domain_count"] = len(domains)
+        result["summary"]["imported_duplicate_count"] = max(0, len(records) - len(domains))
+        return status, result
 
     def _research_lead(self, task_id: str, domain: str, body: dict) -> tuple[int, dict]:
         if self._research_execution is None:

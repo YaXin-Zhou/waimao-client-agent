@@ -706,6 +706,9 @@ def test_api_imports_browser_discovery_results_through_same_assessment_pipeline(
     assert payload["items"][0]["lead"]["sources"] == [
         ["https://www.google.com.hk/search?q=solar+generator", "Visible Google result excerpt"]
     ]
+    assert payload["summary"]["imported_record_count"] == 1
+    assert payload["summary"]["imported_unique_domain_count"] == 1
+    assert payload["summary"]["imported_duplicate_count"] == 0
 
 
 def test_api_rejects_non_browser_discovery_imports():
