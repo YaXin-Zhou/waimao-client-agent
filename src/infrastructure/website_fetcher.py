@@ -104,7 +104,48 @@ class WebsiteFetcher:
                 max_pages,
                 priority_terms,
             )
+        self._append_fallback_pages(documents, seen, home.url, max_pages)
         return tuple(documents)
+
+    def _append_fallback_pages(
+        self,
+        documents: list[SourceDocument],
+        seen: set[str],
+        home_url: str,
+        max_pages: int,
+    ) -> None:
+        """Fill unused crawl budget with conventional contact/company paths."""
+        for link in self._fallback_page_urls(home_url):
+            if len(documents) >= max_pages:
+                return
+            page_key = self._page_key(link)
+            if page_key in seen:
+                continue
+            seen.add(page_key)
+            try:
+                documents.append(self.fetch(link))
+            except Exception:
+                continue
+
+    @staticmethod
+    def _fallback_page_urls(home_url: str) -> tuple[str, ...]:
+        """Probe a small set of conventional pages when navigation is script-rendered."""
+        parsed = urlparse(home_url)
+        if not parsed.hostname:
+            return ()
+        paths = (
+            "/contact",
+            "/contact-us",
+            "/imprint",
+            "/impressum",
+            "/about",
+            "/company",
+            "/products",
+        )
+        return tuple(
+            parsed._replace(path=path, params="", query="", fragment="").geturl()
+            for path in paths
+        )
 
     def _append_sitemap_pages(
         self,

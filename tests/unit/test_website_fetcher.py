@@ -275,3 +275,26 @@ def test_fetch_contact_pages_reads_bounded_sitemap_indexes():
         "https://alpine.example/contact",
     ]
     assert documents[1].public_emails[0].address == "sales@alpine.example"
+
+
+def test_fetch_contact_pages_probes_bounded_conventional_paths_for_script_navigation():
+    pages = {
+        "https://alpine.example/": b"<script>renderNavigation()</script>",
+        "https://alpine.example/contact": b"Contact sales@alpine.example",
+        "https://alpine.example/contact-us": b"Contact us",
+        "https://alpine.example/imprint": b"Legal information",
+        "https://alpine.example/impressum": b"Impressum",
+        "https://alpine.example/about": b"Company overview",
+        "https://alpine.example/company": b"Company",
+        "https://alpine.example/products": b"Portable power stations",
+    }
+
+    documents = WebsiteFetcher(opener=lambda url, timeout: pages[url]).fetch_contact_pages(
+        "https://alpine.example/", max_pages=2
+    )
+
+    assert [document.url for document in documents] == [
+        "https://alpine.example/",
+        "https://alpine.example/contact",
+    ]
+    assert documents[1].public_emails[0].address == "sales@alpine.example"
