@@ -466,6 +466,7 @@ class SQLiteResearchRepository:
             "evidence_url": report.evidence_url,
             "evidence_status": report.evidence_status.value,
             "website_language": report.website_language,
+            "evidence_urls": report.evidence_urls or (report.evidence_url,),
             "custom_fields": {key: value.to_dict() for key, value in report.custom_fields.items()},
         }
         with _connect(self._database) as connection:
@@ -497,6 +498,7 @@ class SQLiteResearchRepository:
             evidence_url=data["evidence_url"],
             evidence_status=EvidenceStatus(data["evidence_status"]),
             website_language=data.get("website_language", "unknown"),
+            evidence_urls=tuple(data.get("evidence_urls", [data["evidence_url"]])),
             custom_fields={
                 key: ResearchFieldValue(
                     value=str(value.get("value", "")),

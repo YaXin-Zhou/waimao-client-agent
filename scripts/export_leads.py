@@ -36,6 +36,7 @@ FIELDS = (
     "research_confidence",
     "evidence_url",
     "evidence_status",
+    "evidence_urls",
     "source_urls",
 )
 
@@ -73,6 +74,9 @@ def export_task(task_id: str, output: Path) -> int:
             "research_confidence": report.confidence if report else "",
             "evidence_url": report.evidence_url if report else "",
             "evidence_status": report.evidence_status.value if report else "",
+            "evidence_urls": "; ".join(report.evidence_urls or (report.evidence_url,))
+            if report
+            else "",
             "source_urls": "; ".join(source[0] for source in lead.sources),
         }
         for field_key in custom_fields:

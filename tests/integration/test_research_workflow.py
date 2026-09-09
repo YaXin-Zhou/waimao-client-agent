@@ -20,6 +20,17 @@ class FakeFetcher:
         )
 
 
+class MultiSourceFetcher(FakeFetcher):
+    def __init__(self):
+        self.urls = []
+
+    def fetch(self, url):
+        self.urls.append(url)
+        return SourceDocument(
+            url, "Source", f"Alpine source confirms portable power stations: {url}"
+        )
+
+
 class FakeProvider:
     def generate_json(self, prompt):
         return {
@@ -64,3 +75,34 @@ def test_workflow_connects_fetch_research_score_and_persistence():
     assert assessment.research.evidence_status is EvidenceStatus.SUFFICIENT
     assert assessment.score.total == 70
     assert repository.items[(task.id, "alpine.example")] == assessment.research
+
+
+def test_workflow_fetches_lead_sources_and_preserves_the_successful_source_set():
+    task = AcquisitionTask.create(
+        "Germany power leads",
+        AcquisitionCriteria(product="portable power station", countries=("Germany",)),
+    )
+    repository = FakeResearchRepository()
+    fetcher = MultiSourceFetcher()
+    lead = CleanLead(
+        "Alpine",
+        "alpine.example",
+        ("sales@alpine.example",),
+        "Germany",
+        "complete",
+        sources=(
+            ("https://alpine.example/about", "about"),
+            ("https://alpine.example/team", "team"),
+        ),
+    )
+    workflow = ResearchWorkflow(FakeTaskRepository(task), fetcher, FakeProvider(), repository)
+
+    assessment = workflow.run(
+        task.id,
+        lead,
+        "https://alpine.example/about",
+        weights={"product_match": 30, "market_match": 20},
+    )
+
+    assert fetcher.urls == ["https://alpine.example/about", "https://alpine.example/team"]
+    assert assessment.research.evidence_urls == tuple(fetcher.urls)

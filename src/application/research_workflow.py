@@ -62,11 +62,30 @@ class ResearchWorkflow:
             raise KeyError(f"Task not found: {task_id}")
         if progress:
             progress(ResearchRunStep.FETCHING)
-        document = self._websites.fetch(source_url)
+        source_urls = tuple(
+            dict.fromkeys([source_url] + [url for url, _excerpt in lead.sources if url])
+        )
+        documents = []
+        for url in source_urls:
+            try:
+                documents.append(self._websites.fetch(url))
+            except (ConnectionError, OSError, TimeoutError):
+                if url == source_url:
+                    raise
         if progress:
             progress(ResearchRunStep.ANALYZING)
+        if not documents:
+            raise ValueError("no research source could be fetched")
+        combined_text = "\n\n".join(
+            f"SOURCE URL: {document.url}\n{document.text}" for document in documents
+        )
         research = research_company(
-            self._ai, lead, document.url, document.text, task.criteria.research_fields
+            self._ai,
+            lead,
+            documents[0].url,
+            combined_text,
+            task.criteria.research_fields,
+            tuple(document.url for document in documents),
         )
         if progress:
             progress(ResearchRunStep.SCORING)

@@ -1,6 +1,7 @@
 import pytest
 
 from src.application.research_service import research_company
+from src.domain.custom_research import ResearchFieldDefinition
 from src.domain.lead import CleanLead
 from src.domain.research import CustomerType, EvidenceStatus
 
@@ -94,3 +95,38 @@ def test_research_company_maps_online_shop_language_to_retailer():
     )
 
     assert result.customer_type is CustomerType.RETAILER
+
+
+def test_research_company_keeps_only_allowed_multi_source_urls_for_custom_fields():
+    provider = FakeStructuredProvider(
+        {
+            "business_summary": "Manufacturer of precision parts.",
+            "customer_type": "manufacturer",
+            "products": ["precision parts"],
+            "country": "Germany",
+            "confidence": 0.8,
+            "custom_fields": {
+                "buyer_role": {
+                    "value": "Sourcing Manager",
+                    "status": "verified",
+                    "confidence": 0.8,
+                    "sources": ["https://alpine.example/team", "https://untrusted.example"],
+                    "checked_at": "2026-09-09",
+                }
+            },
+        }
+    )
+    field = ResearchFieldDefinition("Buyer role", "buyer_role", keywords=("sourcing",))
+
+    result = research_company(
+        provider,
+        CleanLead("Alpine", "alpine.example", (), "Germany", "needs_review"),
+        "https://alpine.example/about",
+        "About Alpine. The team includes a Sourcing Manager.",
+        (field,),
+        ("https://alpine.example/about", "https://alpine.example/team"),
+    )
+
+    assert result.evidence_urls == ("https://alpine.example/about", "https://alpine.example/team")
+    assert result.custom_fields["buyer_role"].sources == ("https://alpine.example/team",)
+    assert "https://untrusted.example" not in provider.prompt

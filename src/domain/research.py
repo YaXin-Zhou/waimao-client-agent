@@ -35,7 +35,10 @@ class ResearchResult:
     evidence_status: EvidenceStatus
     website_language: str = "unknown"
     custom_fields: dict[str, ResearchFieldValue] | None = None
+    evidence_urls: tuple[str, ...] = ()
 
     def __post_init__(self) -> None:
         if self.custom_fields is None:
             object.__setattr__(self, "custom_fields", {})
+        if not self.evidence_urls and self.evidence_url.strip():
+            object.__setattr__(self, "evidence_urls", (self.evidence_url,))

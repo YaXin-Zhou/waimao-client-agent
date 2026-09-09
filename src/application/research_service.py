@@ -31,6 +31,7 @@ def research_company(
     source_url: str,
     website_text: str,
     field_definitions: tuple[ResearchFieldDefinition, ...] = (),
+    source_urls: tuple[str, ...] = (),
 ) -> ResearchResult:
     if not source_url.strip() or not website_text.strip():
         raise ValueError("source_url and website_text are required")
@@ -48,14 +49,19 @@ def research_company(
             "or conflicting), confidence, sources (array of URLs), and checked_at. "
             "Use unknown and empty sources when the supplied text does not support a fact."
         )
+    normalized_sources = tuple(
+        dict.fromkeys(url.strip() for url in source_urls if url.strip())
+    ) or (source_url.strip(),)
+    source_catalog = "\n".join(f"- {url}" for url in normalized_sources)
     prompt = (
         "Analyze the company using only the supplied source text. Do not invent facts. "
+        "For every custom field, cite only URLs from the supplied source list.\n"
         "Return JSON with exactly these fields: business_summary (string), customer_type "
         "(one of distributor, wholesaler, retailer, manufacturer, consumer, "
         "service_provider, unknown), products (array of strings), country (string or unknown), "
         "confidence (number 0 to 1), website_language (English, Spanish, Russian, "
         f"German, French, Italian, Portuguese, Chinese, or unknown).{custom_instruction}\n"
-        f"Company name: {lead.company_name}\nSource URL: {source_url}\n"
+        f"Company name: {lead.company_name}\nSource list:\n{source_catalog}\n"
         f"Source text:\n{website_text}"
     )
     data = provider.generate_json(prompt)
@@ -81,7 +87,9 @@ def research_company(
             value=str(raw.get("value", "")),
             status=str(raw.get("status", "unknown")),
             confidence=float(raw.get("confidence", 0)),
-            sources=tuple(str(item) for item in raw.get("sources", [])),
+            sources=tuple(
+                str(item) for item in raw.get("sources", []) if str(item) in normalized_sources
+            ),
             checked_at=str(raw.get("checked_at", "")),
         )
     return ResearchResult(
@@ -99,4 +107,5 @@ def research_company(
         ),
         website_language=str(data.get("website_language", "unknown")),
         custom_fields=custom_fields,
+        evidence_urls=normalized_sources,
     )

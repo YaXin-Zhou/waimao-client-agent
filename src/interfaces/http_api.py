@@ -841,6 +841,7 @@ class ApiApplication:
             "evidence_url": report.evidence_url,
             "evidence_status": report.evidence_status.value,
             "website_language": report.website_language,
+            "evidence_urls": report.evidence_urls or (report.evidence_url,),
             "custom_fields": {key: value.to_dict() for key, value in report.custom_fields.items()},
         }
 
