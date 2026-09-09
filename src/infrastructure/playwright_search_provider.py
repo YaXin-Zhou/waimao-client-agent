@@ -12,7 +12,7 @@ from urllib.parse import quote_plus, urlsplit
 
 from src.application.search_queries import build_search_queries
 from src.domain.lead import LeadRecord, canonical_website_domain
-from src.domain.task import AcquisitionCriteria
+from src.domain.task import AcquisitionCriteria, effective_candidate_limit
 from src.infrastructure.google_search_provider import GoogleSearchProvider, SearchProviderError
 
 
@@ -45,7 +45,7 @@ class PlaywrightSearchProvider:
         except ImportError as error:
             raise SearchProviderError("Playwright is not installed for browser fallback") from error
 
-        candidate_limit = criteria.candidate_limit or criteria.daily_limit
+        candidate_limit = effective_candidate_limit(criteria)
         records: list[LeadRecord] = []
         seen_domains: set[str] = set()
         with sync_playwright() as playwright:

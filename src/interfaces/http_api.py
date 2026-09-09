@@ -35,7 +35,7 @@ from src.domain.reply_analysis import ReplyAnalysis
 from src.domain.research_run import ResearchRun
 from src.domain.send_safety import SendPolicy
 from src.domain.sender_profile import SenderProfile
-from src.domain.task import AcquisitionCriteria, TaskStatus
+from src.domain.task import AcquisitionCriteria, TaskStatus, effective_candidate_limit
 from src.infrastructure.google_search_provider import SearchProviderError
 
 
@@ -742,7 +742,7 @@ class ApiApplication:
             "qualified_count": qualified_count,
             "target_qualified_count": target,
             "shortfall": max(0, target - qualified_count),
-            "candidate_limit": task.criteria.candidate_limit or task.criteria.daily_limit,
+            "candidate_limit": effective_candidate_limit(task.criteria),
             "funnel": funnel,
             "rejection_counts": rejection_counts,
         }

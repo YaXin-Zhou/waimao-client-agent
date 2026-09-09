@@ -19,7 +19,12 @@ def test_browser_provider_normalizes_visible_results_and_deduplicates_urls():
 
     provider = BrowserSearchProvider(search_page)
     results = provider.search(
-        AcquisitionCriteria(product="portable solar generator", daily_limit=2)
+        AcquisitionCriteria(
+            product="portable solar generator",
+            daily_limit=2,
+            qualified_lead_limit=2,
+            candidate_limit=2,
+        )
     )
 
     assert len(results) == 2
@@ -38,7 +43,14 @@ def test_browser_provider_deduplicates_different_pages_from_one_domain():
         ]
     )
 
-    results = provider.search(AcquisitionCriteria(product="solar generator", daily_limit=2))
+    results = provider.search(
+        AcquisitionCriteria(
+            product="solar generator",
+            daily_limit=2,
+            qualified_lead_limit=2,
+            candidate_limit=2,
+        )
+    )
 
     assert [item.website for item in results] == [
         "https://alpine.example/about",
@@ -59,6 +71,8 @@ def test_browser_provider_uses_all_configured_queries_until_limit():
             product="solar generator",
             keywords=("solar generator", "portable power station"),
             daily_limit=2,
+            qualified_lead_limit=2,
+            candidate_limit=2,
         )
     )
 
