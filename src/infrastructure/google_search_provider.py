@@ -86,6 +86,7 @@ class GoogleSearchProvider:
             "wallstreetmojo.com",
             "globalsources.com",
             "ibm.com",
+            "translate.goog",
         }
     )
 
@@ -199,6 +200,10 @@ class GoogleSearchProvider:
             normalized_path.startswith(f"/{prefix}")
             for prefix in ("/how-", "/what-is-", "/why-")
         )
+        is_nested_explanatory_path = any(
+            marker in normalized_path
+            for marker in ("/how-", "/what-is-", "/why-")
+        )
         normalized_title = title.casefold()
         is_explanatory_title = any(
             marker in normalized_title
@@ -221,6 +226,7 @@ class GoogleSearchProvider:
             and not is_non_company_result
             and not is_non_company_path
             and not is_explanatory_path
+            and not is_nested_explanatory_path
             and not is_public_institution
             and not is_explanatory_title
         )

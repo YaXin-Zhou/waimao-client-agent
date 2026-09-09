@@ -81,6 +81,12 @@ def test_google_provider_excludes_informational_paths_and_public_institutions():
     assert not GoogleSearchProvider._is_candidate(
         "https://scienceinsights.org/how-is-plastic-recycled"
     )
+    assert not GoogleSearchProvider._is_candidate(
+        "https://www-langer--group-eu.translate.goog/Injection-molding-series-production"
+    )
+    assert not GoogleSearchProvider._is_candidate(
+        "https://example.com/collections/what-is-elastomers"
+    )
     assert GoogleSearchProvider._is_candidate(
         "https://www.example-manufacturer.com/products/plastic-parts"
     )
