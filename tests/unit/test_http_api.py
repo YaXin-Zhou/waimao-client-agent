@@ -676,6 +676,8 @@ def test_api_returns_retryable_search_error_without_creating_results():
     assert payload == {
         "error": "Google consent or unusual-traffic page",
         "code": "search_provider_unavailable",
+        "category": "access_restricted",
+        "user_message": "搜索来源暂时受限，请稍后重试。",
         "retryable": True,
     }
 

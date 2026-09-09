@@ -12,6 +12,7 @@ from src.application.acquisition_service import (
     AcquisitionService,
 )
 from src.application.email_review_service import EmailReviewService
+from src.application.search_health import classify_search_error
 from src.domain.audit_event import AuditEvent
 from src.domain.custom_research import (
     BusinessOffering,
@@ -335,10 +336,11 @@ class ApiApplication:
         except KeyError as error:
             return 404, {"error": str(error).strip("'")}
         except SearchProviderError as error:
+            health = classify_search_error(str(error))
             return 503, {
                 "error": str(error),
                 "code": "search_provider_unavailable",
-                "retryable": True,
+                **health,
             }
         except RuntimeError as error:
             return 503, {"error": str(error)}
@@ -1230,6 +1232,7 @@ class ApiApplication:
 
     @staticmethod
     def _discovery_run(run: DiscoveryRun) -> dict:
+        health = classify_search_error(run.error) if run.error else {}
         return {
             "id": run.id,
             "task_id": run.task_id,
@@ -1240,6 +1243,7 @@ class ApiApplication:
             "public_email_count": run.public_email_count,
             "qualified_count": run.qualified_count,
             "error": run.error,
+            **health,
         }
 
     @staticmethod
