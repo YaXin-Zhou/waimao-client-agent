@@ -32,6 +32,8 @@ waimaogongzuoliu/
 │   ├── adr/                   # 需要记录取舍的架构决策
 │   └── runbooks/              # 部署、备份、故障恢复和操作手册
 ├── scripts/                   # 可重复执行的开发、测试、迁移和运维脚本
+├── integrations/              # WorkBuddy 等外部平台的适配和分发材料
+│   └── workbuddy/              # 内部使用的本地 Skill 与参考文档
 ├── data/                      # 本地运行数据；真实数据默认不入库
 │   ├── fixtures/              # 脱敏测试样例，可提交
 │   ├── runtime/               # 数据库、队列等运行产物，不提交
@@ -39,6 +41,23 @@ waimaogongzuoliu/
 │   └── exports/               # 导出表格，不提交
 └── logs/                      # 本地日志，不提交
 ```
+
+## 1.1 当前目录盘点
+
+以下目录属于正常的运行或构建产物，不属于源码：
+
+```text
+data/runtime/   # 当前 SQLite 运行库
+data/backups/   # 可恢复的数据库备份
+data/exports/   # 用户导出的客户表格
+logs/           # 本地运行日志
+dist/           # 前端构建产物
+node_modules/   # 前端依赖安装目录
+.pytest_cache/  # pytest 缓存
+.ruff_cache/    # ruff 缓存
+```
+
+这些目录已经由 `.gitignore` 排除。备份和导出中可能包含真实数据，不能在未确认的情况下删除；缓存和构建目录可由开发者在确认不需要时单独清理。
 
 ## 2. 源码分层规则
 
