@@ -296,17 +296,16 @@ def clean_leads(records: list[LeadRecord]) -> list[CleanLead]:
             excerpt.lower() for url, excerpt in sources if not is_search_source(url)
         )
         identity_tokens = _identity_tokens(company_name)
+        company_name_match = bool(
+            _normalize_text(company_name).lower() in website_text
+        )
+        domain_alignment = bool(identity_tokens & _identity_tokens(domain))
         if (
             domain
             and website_text
             and identity_tokens
-            and not any(
-                re.search(
-                    rf"(?<![a-z0-9]){re.escape(token)}(?![a-z0-9])",
-                    website_text,
-                )
-                for token in identity_tokens
-            )
+            and not company_name_match
+            and not domain_alignment
         ):
             flags.append("company_identity_unconfirmed")
         country = countries[0] if countries else ""

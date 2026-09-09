@@ -225,6 +225,23 @@ def test_clean_leads_accepts_brand_token_in_website_evidence():
     assert cleaned[0].quality == "complete"
 
 
+def test_clean_leads_rejects_generic_company_words_without_domain_alignment():
+    cleaned = clean_leads(
+        [
+            LeadRecord(
+                "Power Solutions",
+                "https://acme.example",
+                "sales@acme.example",
+                source_url="https://acme.example/about",
+                source_excerpt="Power systems for industrial teams.",
+            )
+        ]
+    )
+
+    assert "company_identity_unconfirmed" in cleaned[0].flags
+    assert cleaned[0].quality == "needs_review"
+
+
 def test_clean_leads_drops_asset_and_placeholder_only_source_excerpts():
     cleaned = clean_leads(
         [
