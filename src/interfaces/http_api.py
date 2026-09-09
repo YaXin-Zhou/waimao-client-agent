@@ -158,6 +158,13 @@ class ApiApplication:
             if method == "POST" and segments == ["api", "tasks"]:
                 return self._create_task(self._parse_body(body))
             if (
+                method == "PATCH"
+                and len(segments) == 4
+                and segments[:2] == ["api", "tasks"]
+                and segments[3] == "criteria"
+            ):
+                return self._update_criteria(segments[2], self._parse_body(body))
+            if (
                 method == "POST"
                 and len(segments) == 4
                 and segments[:2] == ["api", "tasks"]
@@ -683,6 +690,62 @@ class ApiApplication:
             position=str(body.get("position", "")),
         )
         return 200, self._task(self._acquisition.update_sender_profile(task_id, profile))
+
+    def _update_criteria(self, task_id: str, body: dict) -> tuple[int, dict]:
+        task = self._tasks.get(task_id)
+        if task is None:
+            raise KeyError(f"Task not found: {task_id}")
+        criteria_data = body.get("criteria", body)
+        if not isinstance(criteria_data, dict):
+            raise ValueError("criteria must be an object")
+        current = task.criteria
+        merged = {
+            "product": current.product,
+            "countries": current.countries,
+            "industries": current.industries,
+            "customer_types": current.customer_types,
+            "language": current.language,
+            "daily_limit": current.daily_limit,
+            "keywords": current.keywords,
+            "business_offerings": current.business_offerings,
+            "research_fields": current.research_fields,
+        }
+        merged.update(criteria_data)
+        criteria = AcquisitionCriteria(
+            product=str(merged.get("product", "")),
+            countries=tuple(str(item) for item in merged.get("countries", [])),
+            industries=tuple(str(item) for item in merged.get("industries", [])),
+            customer_types=tuple(str(item) for item in merged.get("customer_types", [])),
+            language=str(merged.get("language", "auto")),
+            daily_limit=int(merged.get("daily_limit", 10)),
+            keywords=tuple(str(item) for item in merged.get("keywords", [])),
+            business_offerings=tuple(
+                BusinessOffering(
+                    name=str(item.get("name", "")),
+                    key=str(item.get("key", "")),
+                    description=str(item.get("description", "")),
+                    keywords=tuple(str(value) for value in item.get("keywords", [])),
+                )
+                for item in merged.get("business_offerings", [])
+                if isinstance(item, dict)
+            ),
+            research_fields=tuple(
+                ResearchFieldDefinition(
+                    name=str(item.get("name", "")),
+                    key=str(item.get("key", "")),
+                    description=str(item.get("description", "")),
+                    keywords=tuple(str(value) for value in item.get("keywords", [])),
+                    field_type=ResearchFieldType(item.get("type", "text")),
+                    required=bool(item.get("required", False)),
+                    evidence_required=bool(item.get("evidence_required", True)),
+                    human_review=bool(item.get("human_review", True)),
+                    options=tuple(str(value) for value in item.get("options", [])),
+                )
+                for item in merged.get("research_fields", [])
+                if isinstance(item, dict)
+            ),
+        )
+        return 200, self._task(self._acquisition.update_criteria(task_id, criteria))
 
     def _transition_lead(self, task_id: str, domain: str, body: dict) -> tuple[int, dict]:
         try:

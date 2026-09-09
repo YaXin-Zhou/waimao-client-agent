@@ -1,6 +1,7 @@
 import pytest
 
 from src.application.acquisition_service import AcquisitionService
+from src.domain.custom_research import BusinessOffering, ResearchFieldDefinition
 from src.domain.lead import LeadRecord
 from src.domain.task import AcquisitionCriteria
 from src.infrastructure.memory_repositories import InMemoryLeadRepository, InMemoryTaskRepository
@@ -82,3 +83,18 @@ def test_service_discovers_candidates_through_replaceable_provider():
 
     assert results[0].lead.company_name == "Alpine Camp Supply"
     assert results[0].score.total == 30
+
+
+def test_service_updates_configurable_criteria_without_recreating_task():
+    service = AcquisitionService(InMemoryTaskRepository(), InMemoryLeadRepository())
+    task = service.create_task("EU outdoor leads", AcquisitionCriteria(product="old service"))
+    criteria = AcquisitionCriteria(
+        product="new service",
+        business_offerings=(BusinessOffering("CNC", "cnc_service", keywords=("CNC",)),),
+        research_fields=(ResearchFieldDefinition("Buyer role", "buyer_role"),),
+    )
+
+    updated = service.update_criteria(task.id, criteria)
+
+    assert updated.id == task.id
+    assert service._tasks.get(task.id).criteria.business_offerings[0].key == "cnc_service"

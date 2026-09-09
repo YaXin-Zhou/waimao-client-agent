@@ -64,7 +64,11 @@ def _config_values(path: Path) -> dict[str, str]:
 
 config_values = _config_values(ROOT / "config" / ".env")
 language_policy_path = ROOT / "config" / "language_policy.json"
-language_policy = json.loads(language_policy_path.read_text(encoding="utf-8")) if language_policy_path.exists() else {}
+language_policy = (
+    json.loads(language_policy_path.read_text(encoding="utf-8"))
+    if language_policy_path.exists()
+    else {}
+)
 task_repository = SQLiteTaskRepository(DATABASE)
 lead_repository = SQLiteLeadRepository(DATABASE)
 research_repository = SQLiteResearchRepository(DATABASE)
@@ -75,15 +79,14 @@ email_draft_repository = SQLiteEmailDraftRepository(DATABASE)
 email_send_attempt_repository = SQLiteEmailSendAttemptRepository(DATABASE)
 follow_up_task_repository = SQLiteFollowUpTaskRepository(DATABASE)
 try:
-    deepseek_provider = DeepSeekProvider(
-        DeepSeekConfig.from_env_file(ROOT / "config" / ".env")
-    )
+    deepseek_provider = DeepSeekProvider(DeepSeekConfig.from_env_file(ROOT / "config" / ".env"))
 except (FileNotFoundError, ValueError):
     deepseek_provider = None
 try:
     email_draft_service = (
         EmailDraftService(deepseek_provider, language_policy.get("country_languages", {}))
-        if deepseek_provider else None
+        if deepseek_provider
+        else None
     )
 except (FileNotFoundError, ValueError):
     email_draft_service = None
@@ -92,9 +95,7 @@ research_execution = (
         task_repository,
         ResearchWorkflow(
             task_repository,
-            WebsiteFetcher(
-                timeout=int(config_values.get("WEBSITE_FETCH_TIMEOUT_SECONDS", "15"))
-            ),
+            WebsiteFetcher(timeout=int(config_values.get("WEBSITE_FETCH_TIMEOUT_SECONDS", "15"))),
             deepseek_provider,
             research_repository,
             lead_repository,
@@ -125,9 +126,7 @@ imap_config = AliImapConfig(
 )
 mailbox = AliImapMailbox(imap_config) if imap_config.configured else None
 audit_repository = SQLiteAuditEventRepository(DATABASE)
-mailbox_sync = MailboxSyncService(
-    lead_repository, inbound_email_repository, audit=audit_repository
-)
+mailbox_sync = MailboxSyncService(lead_repository, inbound_email_repository, audit=audit_repository)
 follow_up_task_service = FollowUpTaskService(follow_up_task_repository)
 reply_analysis_service = ReplyAnalysisService(
     inbound_email_repository, reply_analysis_repository, follow_up_task_service
@@ -176,13 +175,18 @@ class Handler(BaseHTTPRequestHandler):
     def _handle(self, method, body=None):
         started = time.perf_counter()
         status, payload = application.handle(method, self.path, body)
-        LOGGER.info(json.dumps({
-            "event": "http_request",
-            "method": method,
-            "path": self.path.split("?", 1)[0],
-            "status": status,
-            "duration_ms": round((time.perf_counter() - started) * 1000, 2),
-        }, ensure_ascii=False))
+        LOGGER.info(
+            json.dumps(
+                {
+                    "event": "http_request",
+                    "method": method,
+                    "path": self.path.split("?", 1)[0],
+                    "status": status,
+                    "duration_ms": round((time.perf_counter() - started) * 1000, 2),
+                },
+                ensure_ascii=False,
+            )
+        )
         self._respond(status, payload)
 
     def _respond(self, status, payload):
@@ -200,6 +204,11 @@ class Handler(BaseHTTPRequestHandler):
         length = int(self.headers.get("Content-Length", 0))
         body = self.rfile.read(length).decode("utf-8")
         self._handle("POST", body)
+
+    def do_PATCH(self):
+        length = int(self.headers.get("Content-Length", 0))
+        body = self.rfile.read(length).decode("utf-8")
+        self._handle("PATCH", body)
 
     def log_message(self, *_args):
         return

@@ -30,9 +30,9 @@ function FieldInput({ label, value, onChange, placeholder }) {
   return <label className="criteria-input">{label}<input value={value} onChange={(event) => onChange(event.target.value)} placeholder={placeholder} /></label>
 }
 
-export default function TaskCriteriaBuilder() {
-  const [offerings, setOfferings] = useState([])
-  const [fields, setFields] = useState([])
+export default function TaskCriteriaBuilder({ initialCriteria = {} }) {
+  const [offerings, setOfferings] = useState(() => (initialCriteria.business_offerings || []).map((item) => ({ ...item, keywords: (item.keywords || []).join(', ') })))
+  const [fields, setFields] = useState(() => (initialCriteria.research_fields || []).map((item) => ({ ...item, type: item.type || 'text', keywords: (item.keywords || []).join(', '), options: (item.options || []).join(', ') })))
   const offeringsRef = useRef(null)
   const fieldsRef = useRef(null)
   const update = (setter, index, key, value) => setter((items) => items.map((item, itemIndex) => itemIndex === index ? { ...item, [key]: value } : item))

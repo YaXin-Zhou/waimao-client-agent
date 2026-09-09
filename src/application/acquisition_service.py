@@ -94,17 +94,19 @@ class AcquisitionService:
             source_url=source_url,
             source_excerpt=source_excerpt,
         )
-        updated = clean_leads([
-            LeadRecord(
-                record.company_name,
-                record.website,
-                assessed.lead.emails[0] if assessed.lead.emails else "",
-                record.country,
-                assessed.lead.sources[0][0] if assessed.lead.sources else "",
-                assessed.lead.sources[0][1] if assessed.lead.sources else "",
-            ),
-            record,
-        ])[0]
+        updated = clean_leads(
+            [
+                LeadRecord(
+                    record.company_name,
+                    record.website,
+                    assessed.lead.emails[0] if assessed.lead.emails else "",
+                    record.country,
+                    assessed.lead.sources[0][0] if assessed.lead.sources else "",
+                    assessed.lead.sources[0][1] if assessed.lead.sources else "",
+                ),
+                record,
+            ]
+        )[0]
         result = AssessedLead(replace(updated, status=assessed.lead.status), assessed.score)
         self._leads.save_assessments(
             task_id,
@@ -127,24 +129,32 @@ class AcquisitionService:
             [item if item.lead.domain != domain else updated for item in self.list_leads(task_id)],
         )
         if self._audit is not None:
-            self._audit.save(AuditEvent.status_change(
-                entity_type="lead",
-                entity_id=f"{task_id}:{domain}",
-                action="transition",
-                actor=actor,
-                from_status=assessed.lead.status.value,
-                to_status=target.value,
-                note=note,
-            ))
+            self._audit.save(
+                AuditEvent.status_change(
+                    entity_type="lead",
+                    entity_id=f"{task_id}:{domain}",
+                    action="transition",
+                    actor=actor,
+                    from_status=assessed.lead.status.value,
+                    to_status=target.value,
+                    note=note,
+                )
+            )
         return updated
 
-    def update_sender_profile(
-        self, task_id: str, sender_profile: SenderProfile
-    ) -> AcquisitionTask:
+    def update_sender_profile(self, task_id: str, sender_profile: SenderProfile) -> AcquisitionTask:
         task = self._tasks.get(task_id)
         if task is None:
             raise KeyError(f"Task not found: {task_id}")
         updated = replace(task, sender_profile=sender_profile)
+        self._tasks.save(updated)
+        return updated
+
+    def update_criteria(self, task_id: str, criteria: AcquisitionCriteria) -> AcquisitionTask:
+        task = self._tasks.get(task_id)
+        if task is None:
+            raise KeyError(f"Task not found: {task_id}")
+        updated = replace(task, criteria=criteria)
         self._tasks.save(updated)
         return updated
 
@@ -156,15 +166,17 @@ class AcquisitionService:
             raise KeyError(f"Task not found: {task_id}")
         updated = task.transition_to(target)
         if self._audit is not None:
-            self._audit.save(AuditEvent.status_change(
-                entity_type="acquisition_task",
-                entity_id=task.id,
-                action="transition",
-                actor=actor,
-                from_status=task.status.value,
-                to_status=updated.status.value,
-                note=note,
-            ))
+            self._audit.save(
+                AuditEvent.status_change(
+                    entity_type="acquisition_task",
+                    entity_id=task.id,
+                    action="transition",
+                    actor=actor,
+                    from_status=task.status.value,
+                    to_status=updated.status.value,
+                    note=note,
+                )
+            )
         self._tasks.save(updated)
         return updated
 

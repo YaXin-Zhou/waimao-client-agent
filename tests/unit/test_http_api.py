@@ -1,13 +1,13 @@
 import json
 
-from src.application.acquisition_service import AssessedLead
+from src.application.acquisition_service import AcquisitionService, AssessedLead
 from src.application.reply_analysis import classify_inbound
 from src.application.reply_analysis_service import ReplyAnalysisService
 from src.application.reply_draft_service import ReplyDraftService
 from src.domain.audit_event import AuditEvent
 from src.domain.email_draft import EmailDraft
-from src.domain.lead import CleanLead, LeadScore
 from src.domain.inbound_email import InboundEmail
+from src.domain.lead import CleanLead, LeadScore
 from src.domain.research import CustomerType, EvidenceStatus, ResearchResult
 from src.domain.research_run import ResearchRun
 from src.domain.task import AcquisitionCriteria, AcquisitionTask, TaskStatus
@@ -43,8 +43,13 @@ class Leads:
 class Research:
     def get(self, task_id, domain):
         return ResearchResult(
-            "Alpine Energy", "Online distributor", CustomerType.DISTRIBUTOR,
-            ("power station",), "Germany", .9, "https://alpine.example/about",
+            "Alpine Energy",
+            "Online distributor",
+            CustomerType.DISTRIBUTOR,
+            ("power station",),
+            "Germany",
+            0.9,
+            "https://alpine.example/about",
             EvidenceStatus.SUFFICIENT,
         )
 
@@ -83,7 +88,16 @@ class AuditEvents:
 
 
 class DraftGenerator:
-    def generate(self, task_id, lead, research, template, product, sender_profile=None, requested_language="auto"):
+    def generate(
+        self,
+        task_id,
+        lead,
+        research,
+        template,
+        product,
+        sender_profile=None,
+        requested_language="auto",
+    ):
         return EmailDraft.create(
             task_id,
             lead.domain,
@@ -118,7 +132,10 @@ class ReplyAnalyses:
 
 class ReplyDraftProvider:
     def generate_json(self, prompt):
-        return {"subject": "Re: Your price request", "body": "Thank you. We will prepare the requested information."}
+        return {
+            "subject": "Re: Your price request",
+            "body": "Thank you. We will prepare the requested information.",
+        }
 
 
 class Translation:
@@ -144,9 +161,7 @@ class ResearchExecution:
         self.result = result
         self.calls = []
 
-    def execute(
-        self, task_id, lead, source_url, weights, max_attempts=2, timeout_seconds=120
-    ):
+    def execute(self, task_id, lead, source_url, weights, max_attempts=2, timeout_seconds=120):
         self.calls.append(
             (task_id, lead.domain, source_url, weights, max_attempts, timeout_seconds)
         )
@@ -177,6 +192,45 @@ def test_api_returns_leads_and_research_detail():
     assert payload["lead"]["website"] == "https://alpine.example"
     assert payload["research"]["evidence_status"] == "sufficient"
     assert payload["draft"]["recipient_email"] == "sales@alpine.example"
+
+
+def test_api_updates_existing_task_criteria():
+    task = AcquisitionTask.create("Configurable", AcquisitionCriteria(product="old service"))
+    tasks = Tasks(task)
+    leads = Leads([])
+    app = ApiApplication(
+        tasks, leads, Research(), Drafts(None), acquisition=AcquisitionService(tasks, leads)
+    )
+
+    status, payload = app.handle(
+        "PATCH",
+        f"/api/tasks/{task.id}/criteria",
+        json.dumps(
+            {
+                "criteria": {
+                    "product": "CNC precision parts",
+                    "business_offerings": [
+                        {
+                            "name": "CNC machining",
+                            "key": "cnc_parts",
+                            "keywords": ["CNC"],
+                        }
+                    ],
+                    "research_fields": [
+                        {
+                            "name": "Buyer role",
+                            "key": "buyer_role",
+                        }
+                    ],
+                }
+            }
+        ),
+    )
+
+    assert status == 200
+    assert payload["criteria"]["product"] == "CNC precision parts"
+    assert payload["criteria"]["business_offerings"][0]["key"] == "cnc_parts"
+    assert payload["criteria"]["research_fields"][0]["key"] == "buyer_role"
 
 
 def test_api_returns_tasks_without_hardcoded_task_id():
@@ -218,11 +272,15 @@ def test_api_exposes_research_run_list_and_research_result():
         research_runs=runs,
     )
 
-    status, payload = app.handle("POST", f"/api/tasks/{task.id}/leads/alpine.example/research", {
-        "source_url": "https://alpine.example/about",
-        "weights": {"product": 40},
-        "max_attempts": 3,
-    })
+    status, payload = app.handle(
+        "POST",
+        f"/api/tasks/{task.id}/leads/alpine.example/research",
+        {
+            "source_url": "https://alpine.example/about",
+            "weights": {"product": 40},
+            "max_attempts": 3,
+        },
+    )
     assert status == 200
     assert payload["run"]["status"] == "succeeded"
     assert payload["research"]["evidence_status"] == "sufficient"
@@ -347,18 +405,18 @@ def test_api_assesses_external_records_with_request_configuration():
         "POST",
         f"/api/tasks/{task.id}/assess",
         {
-            "records": [{
-                "company_name": " Alpine Energy ",
-                "website": "https://www.alpine.example/contact",
-                "email": "Sales@alpine.example",
-                "country": "DE",
-                "source_url": "https://alpine.example/contact",
-                "source_excerpt": "Distributor contact",
-            }],
+            "records": [
+                {
+                    "company_name": " Alpine Energy ",
+                    "website": "https://www.alpine.example/contact",
+                    "email": "Sales@alpine.example",
+                    "country": "DE",
+                    "source_url": "https://alpine.example/contact",
+                    "source_excerpt": "Distributor contact",
+                }
+            ],
             "weights": {"product_fit": 40, "country_fit": 30},
-            "signals_by_domain": {
-                "alpine.example": {"product_fit": 35, "country_fit": 30}
-            },
+            "signals_by_domain": {"alpine.example": {"product_fit": 35, "country_fit": 30}},
         },
     )
 
@@ -442,14 +500,26 @@ def test_api_generates_and_persists_reviewable_draft():
 def test_api_generates_reply_draft_from_analyzed_customer_message():
     app, task, _, _ = make_app()
     message = InboundEmail.create(
-        "9", "<customer-reply@example>", "", (), "buyer@alpine.example",
-        ("sales@alpine.example",), "Re: quote", "Please send your price.",
-        "2026-09-09T10:00:00+00:00", task.id, "alpine.example",
+        "9",
+        "<customer-reply@example>",
+        "",
+        (),
+        "buyer@alpine.example",
+        ("sales@alpine.example",),
+        "Re: quote",
+        "Please send your price.",
+        "2026-09-09T10:00:00+00:00",
+        task.id,
+        "alpine.example",
     )
     analysis = classify_inbound(message)
     app = ApiApplication(
-        app._tasks, app._leads, app._research, app._drafts,
-        acquisition=app._acquisition, audit=app._audit,
+        app._tasks,
+        app._leads,
+        app._research,
+        app._drafts,
+        acquisition=app._acquisition,
+        audit=app._audit,
         inbound_emails=InboundMessages(message),
         reply_analysis=ReplyAnalysisService(InboundMessages(message), ReplyAnalyses(analysis)),
         reply_drafts=ReplyDraftService(ReplyDraftProvider()),
