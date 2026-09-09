@@ -57,8 +57,8 @@ def test_sync_deduplicates_and_associates_customer_domain():
     first = service.sync("task-1", Inbox([message]))
     second = service.sync("task-1", Inbox([message]))
 
-    assert (len(first.fetched), first.inserted, first.skipped_duplicates) == (1, 1, 0)
-    assert (len(second.fetched), second.inserted, second.skipped_duplicates) == (1, 0, 1)
+    assert (first.fetched, first.inserted, first.skipped_duplicates) == (1, 1, 0)
+    assert (second.fetched, second.inserted, second.skipped_duplicates) == (1, 0, 1)
     assert repository.items[message.message_id].lead_domain == "alpine.example"
     assert len(audit.events) == 2
     assert isinstance(audit.events[0], AuditEvent)

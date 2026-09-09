@@ -54,7 +54,7 @@ class MailboxSyncService:
             self._repository.save(associated)
             inserted += 1
             bounces += int(associated.is_bounce)
-        result = MailboxSyncResult(fetched, inserted, duplicates, bounces)
+        result = MailboxSyncResult(len(fetched), inserted, duplicates, bounces)
         if self._audit:
             self._audit.save(
                 AuditEvent.status_change(

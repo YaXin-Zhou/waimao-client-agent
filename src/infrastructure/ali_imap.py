@@ -35,7 +35,7 @@ class AliImapMailbox:
             raise RuntimeError("Ali IMAP is not configured")
         connection = self._connection_factory(self._config.host, self._config.port)
         try:
-            connection.login(self._config.username, self._config.password)
+            self._login(connection)
             status, _ = connection.select(self._config.mailbox, readonly=True)
             if status != "OK":
                 raise RuntimeError("Ali IMAP mailbox cannot be opened read-only")
@@ -62,7 +62,7 @@ class AliImapMailbox:
             raise RuntimeError("Ali IMAP is not configured")
         connection = self._connection_factory(self._config.host, self._config.port)
         try:
-            connection.login(self._config.username, self._config.password)
+            self._login(connection)
             status, _ = connection.select(self._config.mailbox, readonly=True)
             if status != "OK":
                 raise RuntimeError("Ali IMAP mailbox cannot be opened read-only")
@@ -71,6 +71,14 @@ class AliImapMailbox:
                 connection.logout()
             except Exception:
                 pass
+
+    def _login(self, connection) -> None:
+        try:
+            connection.login(self._config.username, self._config.password)
+        except imaplib.IMAP4.error as error:
+            raise RuntimeError(
+                "Ali IMAP login failed; check the client password and account permissions"
+            ) from error
 
 
 def parse_email(uid: str, raw: bytes) -> InboundEmail:
