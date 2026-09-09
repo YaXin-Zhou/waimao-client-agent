@@ -130,3 +130,52 @@ def test_research_company_keeps_only_allowed_multi_source_urls_for_custom_fields
     assert result.evidence_urls == ("https://alpine.example/about", "https://alpine.example/team")
     assert result.custom_fields["buyer_role"].sources == ("https://alpine.example/team",)
     assert "https://untrusted.example" not in provider.prompt
+
+
+def test_research_company_marks_conflicting_source_candidates_for_review():
+    provider = FakeStructuredProvider(
+        {
+            "business_summary": "Manufacturer of precision parts.",
+            "customer_type": "manufacturer",
+            "products": ["precision parts"],
+            "country": "Germany",
+            "confidence": 0.8,
+            "custom_fields": {
+                "buyer_role": {
+                    "value": "Sourcing Manager",
+                    "status": "verified",
+                    "confidence": 0.8,
+                    "candidates": [
+                        {"value": "Sourcing Manager", "source": "https://alpine.example/team"},
+                        {
+                            "value": "Purchasing Director",
+                            "source": "https://alpine.example/contact",
+                        },
+                    ],
+                }
+            },
+        }
+    )
+    field = ResearchFieldDefinition("Buyer role", "buyer_role")
+
+    result = research_company(
+        provider,
+        CleanLead("Alpine", "alpine.example", (), "Germany", "needs_review"),
+        "https://alpine.example/about",
+        "About Alpine. The team and contact pages provide buyer information.",
+        (field,),
+        (
+            "https://alpine.example/about",
+            "https://alpine.example/team",
+            "https://alpine.example/contact",
+        ),
+    )
+
+    value = result.custom_fields["buyer_role"]
+    assert value.status == "conflicting"
+    assert value.confidence == 0
+    assert value.value == "Sourcing Manager / Purchasing Director"
+    assert value.sources == (
+        "https://alpine.example/team",
+        "https://alpine.example/contact",
+    )

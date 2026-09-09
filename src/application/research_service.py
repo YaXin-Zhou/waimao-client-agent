@@ -25,6 +25,40 @@ def _customer_type(value: object) -> CustomerType:
     return CustomerType.UNKNOWN
 
 
+def _custom_field_value(
+    raw: dict,
+    allowed_sources: tuple[str, ...],
+) -> ResearchFieldValue:
+    """Normalize one model field and force review when cited values disagree."""
+    allowed = set(allowed_sources)
+    candidates = raw.get("candidates", [])
+    if isinstance(candidates, list):
+        parsed = [
+            item
+            for item in candidates
+            if isinstance(item, dict)
+            and str(item.get("value", "")).strip()
+            and str(item.get("source", "")) in allowed
+        ]
+        values = list(dict.fromkeys(str(item["value"]).strip() for item in parsed))
+        if len(values) > 1:
+            return ResearchFieldValue(
+                value=" / ".join(values),
+                status="conflicting",
+                confidence=0.0,
+                sources=tuple(dict.fromkeys(str(item["source"]) for item in parsed)),
+                checked_at=str(raw.get("checked_at", "")),
+            )
+
+    return ResearchFieldValue(
+        value=str(raw.get("value", "")),
+        status=str(raw.get("status", "unknown")),
+        confidence=float(raw.get("confidence", 0)),
+        sources=tuple(str(item) for item in raw.get("sources", []) if str(item) in allowed),
+        checked_at=str(raw.get("checked_at", "")),
+    )
+
+
 def research_company(
     provider: StructuredProvider,
     lead: CleanLead,
@@ -47,6 +81,8 @@ def research_company(
             f" Also return custom_fields as an object with exactly these keys: {fields}. "
             "Each value must be an object with value, status (verified, reported, unknown, "
             "or conflicting), confidence, sources (array of URLs), and checked_at. "
+            "When allowed sources disagree, also return candidates as an array of objects "
+            "with value and source; do not silently choose one value. "
             "Use unknown and empty sources when the supplied text does not support a fact."
         )
     normalized_sources = tuple(
@@ -83,15 +119,7 @@ def research_company(
         raw = raw_custom_fields.get(field.key, {})
         if not isinstance(raw, dict):
             raise ValueError(f"research custom field must be an object: {field.key}")
-        custom_fields[field.key] = ResearchFieldValue(
-            value=str(raw.get("value", "")),
-            status=str(raw.get("status", "unknown")),
-            confidence=float(raw.get("confidence", 0)),
-            sources=tuple(
-                str(item) for item in raw.get("sources", []) if str(item) in normalized_sources
-            ),
-            checked_at=str(raw.get("checked_at", "")),
-        )
+        custom_fields[field.key] = _custom_field_value(raw, normalized_sources)
     return ResearchResult(
         company_name=lead.company_name,
         business_summary=str(data["business_summary"]),
