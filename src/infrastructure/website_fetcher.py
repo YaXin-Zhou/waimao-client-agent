@@ -7,7 +7,7 @@ import re
 from dataclasses import dataclass
 from html import unescape
 from typing import Callable
-from urllib.parse import urljoin, urlparse
+from urllib.parse import parse_qsl, urlencode, urljoin, urlparse
 from urllib.request import Request, urlopen
 
 from src.domain.lead import is_plausible_email
@@ -260,7 +260,16 @@ class WebsiteFetcher:
     def _page_key(url: str) -> str:
         parsed = urlparse(url)
         hostname = (parsed.hostname or "").lower().removeprefix("www.")
-        return parsed._replace(netloc=hostname).geturl().rstrip("/")
+        tracking_keys = {"fbclid", "gclid", "dclid", "msclkid", "ref", "referrer"}
+        query = urlencode(
+            [
+                (key, value)
+                for key, value in parse_qsl(parsed.query, keep_blank_values=True)
+                if not key.lower().startswith("utm_") and key.lower() not in tracking_keys
+            ],
+            doseq=True,
+        )
+        return parsed._replace(netloc=hostname, query=query, fragment="").geturl().rstrip("/")
 
     @staticmethod
     def _host_key(url: str) -> str:

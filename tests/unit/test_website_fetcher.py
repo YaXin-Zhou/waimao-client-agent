@@ -255,6 +255,34 @@ def test_fetch_contact_pages_treats_www_variant_as_same_domain():
     ]
 
 
+def test_fetch_contact_pages_deduplicates_tracking_variants_of_one_page():
+    pages = {
+        "https://alpine.example/": (
+            b"<a href='/contact?utm_source=nav'>Contact</a>"
+            b"<a href='/contact?ref=footer'>Contact again</a>"
+            b"<a href='/products'>Products</a>"
+        ),
+        "https://alpine.example/contact?utm_source=nav": b"Contact sales@alpine.example",
+        "https://alpine.example/products": b"Portable power station",
+    }
+    fetched = []
+
+    def opener(url, _timeout):
+        fetched.append(url)
+        return pages[url].encode() if isinstance(pages[url], str) else pages[url]
+
+    documents = WebsiteFetcher(opener=opener).fetch_contact_pages(
+        "https://alpine.example/", max_pages=3
+    )
+
+    assert [document.url for document in documents] == [
+        "https://alpine.example/",
+        "https://alpine.example/contact?utm_source=nav",
+        "https://alpine.example/products",
+    ]
+    assert fetched.count("https://alpine.example/contact?utm_source=nav") == 1
+
+
 def test_fetch_contact_pages_prioritizes_product_evidence_links():
     pages = {
         "https://alpine.example/": (
