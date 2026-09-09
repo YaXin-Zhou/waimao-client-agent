@@ -646,6 +646,7 @@ def test_api_discovers_and_assesses_using_configured_search_provider():
     assert payload["summary"]["funnel"] == {
         "website_count": 1,
         "public_email_count": 1,
+        "public_email_address_count": 1,
         "website_evidence_count": 0,
         "evidence_source_count": 0,
         "external_source_count": 0,

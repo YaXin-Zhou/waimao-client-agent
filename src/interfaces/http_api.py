@@ -716,6 +716,7 @@ class ApiApplication:
         funnel = {
             "website_count": sum(bool(item.lead.domain) for item in results),
             "public_email_count": sum(bool(item.lead.emails) for item in results),
+            "public_email_address_count": sum(len(item.lead.emails) for item in results),
             "website_evidence_count": sum(
                 any(not is_search_source(url) for url, _excerpt in item.lead.sources)
                 for item in results

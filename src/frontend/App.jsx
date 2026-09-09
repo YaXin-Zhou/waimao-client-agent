@@ -644,6 +644,7 @@ function DiscoveryFunnel({ summary }) {
   const funnel = summary.funnel || {}
   const websiteCount = funnel.website_count || 0
   const publicEmailCount = funnel.public_email_count || 0
+  const publicEmailAddressCount = funnel.public_email_address_count || 0
   const stages = [
     ['候选', summary.candidate_count || 0],
     ['官网', funnel.website_count || 0],
@@ -657,7 +658,7 @@ function DiscoveryFunnel({ summary }) {
     : websiteCount > publicEmailCount
       ? `已抓到 ${websiteCount} 家官网，其中 ${websiteCount - publicEmailCount} 家暂未发现公开邮箱；结果保留为待补充，不会补造邮箱。`
       : '官网、公开邮箱和产品证据均已进入筛选流程。'
-  return <div className="discovery-funnel"><div><strong>本次搜索数据漏斗</strong><span>缺口 {summary.shortfall || 0} 家</span></div><div className="funnel-stages">{stages.map(([label, value], index) => <span key={label}><b>{value}</b><small>{label}</small>{index < stages.length - 1 && <i>→</i>}</span>)}</div><p className="funnel-note">{note}</p></div>
+  return <div className="discovery-funnel"><div><strong>本次搜索数据漏斗</strong><span>缺口 {summary.shortfall || 0} 家</span></div><div className="funnel-stages">{stages.map(([label, value], index) => <span key={label}><b>{value}</b><small>{label}</small>{index < stages.length - 1 && <i>→</i>}</span>)}</div><p className="funnel-note">{note}{publicEmailAddressCount > publicEmailCount ? ` 当前 ${publicEmailCount} 家公司共发现 ${publicEmailAddressCount} 个公开邮箱地址。` : ''}</p></div>
 }
 
 function DiscoveryNotice({ error }) {
