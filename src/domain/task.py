@@ -33,8 +33,8 @@ class AcquisitionCriteria:
     industries: tuple[str, ...] = ()
     customer_types: tuple[str, ...] = ()
     language: str = "auto"
-    daily_limit: int = 10
-    qualified_lead_limit: int = 10
+    daily_limit: int = 30
+    qualified_lead_limit: int = 30
     minimum_qualification_score: int = 40
     require_public_email: bool = True
     # 搜索候选上限；未配置时沿用 daily_limit，接口层可显式扩大候选池。

@@ -579,15 +579,15 @@ class ApiApplication:
             industries=tuple(str(item) for item in criteria_data.get("industries", [])),
             customer_types=tuple(str(item) for item in criteria_data.get("customer_types", [])),
             language=str(criteria_data.get("language", "auto")),
-            daily_limit=int(criteria_data.get("daily_limit", 10)),
+            daily_limit=int(criteria_data.get("daily_limit", 30)),
             qualified_lead_limit=int(
-                criteria_data.get("qualified_lead_limit", criteria_data.get("daily_limit", 10))
+                criteria_data.get("qualified_lead_limit", criteria_data.get("daily_limit", 30))
             ),
             minimum_qualification_score=int(criteria_data.get("minimum_qualification_score", 40)),
             require_public_email=bool(criteria_data.get("require_public_email", True)),
             candidate_limit=int(
                 criteria_data.get(
-                    "candidate_limit", max(50, int(criteria_data.get("daily_limit", 10)))
+                    "candidate_limit", max(100, int(criteria_data.get("daily_limit", 30)))
                 )
             ),
             keywords=tuple(str(item) for item in criteria_data.get("keywords", [])),
@@ -847,6 +847,10 @@ class ApiApplication:
             "customer_types": current.customer_types,
             "language": current.language,
             "daily_limit": current.daily_limit,
+            "qualified_lead_limit": current.qualified_lead_limit,
+            "minimum_qualification_score": current.minimum_qualification_score,
+            "require_public_email": current.require_public_email,
+            "candidate_limit": current.candidate_limit or max(100, current.daily_limit),
             "keywords": current.keywords,
             "business_offerings": current.business_offerings,
             "research_fields": current.research_fields,
@@ -858,14 +862,14 @@ class ApiApplication:
             industries=tuple(str(item) for item in merged.get("industries", [])),
             customer_types=tuple(str(item) for item in merged.get("customer_types", [])),
             language=str(merged.get("language", "auto")),
-            daily_limit=int(merged.get("daily_limit", 10)),
+            daily_limit=int(merged.get("daily_limit", 30)),
             qualified_lead_limit=int(
-                merged.get("qualified_lead_limit", merged.get("daily_limit", 10))
+                merged.get("qualified_lead_limit", merged.get("daily_limit", 30))
             ),
             minimum_qualification_score=int(merged.get("minimum_qualification_score", 40)),
             require_public_email=bool(merged.get("require_public_email", True)),
             candidate_limit=int(
-                merged.get("candidate_limit", max(50, int(merged.get("daily_limit", 10))))
+                merged.get("candidate_limit", max(100, int(merged.get("daily_limit", 30))))
             ),
             keywords=tuple(str(item) for item in merged.get("keywords", [])),
             business_offerings=tuple(

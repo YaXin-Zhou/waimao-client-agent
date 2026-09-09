@@ -11,11 +11,11 @@
 
 | 配置 | 默认值 | 作用 |
 | --- | ---: | --- |
-| `qualified_lead_limit` | 10 | 最终交付的合格客户数量 |
-| `candidate_limit` | 接口默认至少 50 | 搜索阶段最多采集的候选数量 |
+| `qualified_lead_limit` | 30 | 最终交付的合格客户数量 |
+| `candidate_limit` | 接口默认至少 100 | 搜索阶段最多采集的候选数量 |
 | `minimum_qualification_score` | 40 | 进入交付名单的最低评分 |
 | `require_public_email` | true | 是否要求官网公开邮箱 |
-| `daily_limit` | 10 | 发送安全策略使用的每日邮件上限，不能与搜索候选数混用 |
+| `daily_limit` | 30 | 发送安全策略使用的每日邮件上限，不能与搜索候选数混用 |
 
 ## 硬性过滤规则
 

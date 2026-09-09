@@ -9,9 +9,9 @@ export default function RuleEditorModal({ task, onClose, onSave }) {
       countries: form.get('countries').split(',').map((item) => item.trim()).filter(Boolean),
       customer_types: form.get('customer_types').split(',').map((item) => item.trim()).filter(Boolean),
       language: 'English',
-      daily_limit: task.criteria?.daily_limit || 10,
-      qualified_lead_limit: Number(form.get('qualified_lead_limit') || 10),
-      candidate_limit: Number(form.get('candidate_limit') || 50),
+      daily_limit: task.criteria?.daily_limit || 30,
+      qualified_lead_limit: Number(form.get('qualified_lead_limit') || 30),
+      candidate_limit: Number(form.get('candidate_limit') || 100),
       minimum_qualification_score: Number(form.get('minimum_qualification_score') || 40),
       require_public_email: form.get('require_public_email') === 'on',
       keywords: form.get('keywords').split(',').map((item) => item.trim()).filter(Boolean),
@@ -29,8 +29,8 @@ export default function RuleEditorModal({ task, onClose, onSave }) {
     <label>目标市场（逗号分隔，可选）<input name="countries" defaultValue={(task.criteria?.countries || []).join(', ')} placeholder="例如：Germany, Mexico" /></label>
     <label>客户类型（逗号分隔，可选）<input name="customer_types" defaultValue={(task.criteria?.customer_types || []).join(', ')} placeholder="例如：distributor, manufacturer" /></label>
     <div className="modal-grid qualification-config">
-      <label>最终合格客户数<input name="qualified_lead_limit" type="number" min="1" defaultValue={task.criteria?.qualified_lead_limit || 10} /></label>
-      <label>候选搜索上限<input name="candidate_limit" type="number" min="1" defaultValue={task.criteria?.candidate_limit || 50} /></label>
+      <label>最终合格客户数<input name="qualified_lead_limit" type="number" min="1" defaultValue={task.criteria?.qualified_lead_limit || 30} /></label>
+      <label>候选搜索上限<input name="candidate_limit" type="number" min="1" defaultValue={task.criteria?.candidate_limit || 100} /></label>
       <label>最低匹配分<input name="minimum_qualification_score" type="number" min="0" max="100" defaultValue={task.criteria?.minimum_qualification_score ?? 40} /></label>
     </div>
     <label className="criteria-toggle"><input name="require_public_email" type="checkbox" defaultChecked={task.criteria?.require_public_email ?? true} />最终结果必须有官网公开邮箱</label>
