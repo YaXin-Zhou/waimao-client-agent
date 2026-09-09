@@ -739,13 +739,25 @@ class ApiApplication:
                 for item in results
             ),
         }
+        candidate_count = len(results)
+
+        def coverage(count: int) -> float | None:
+            return round(count / candidate_count, 4) if candidate_count else None
+
         return {
-            "candidate_count": len(results),
+            "candidate_count": candidate_count,
             "qualified_count": qualified_count,
             "target_qualified_count": target,
             "shortfall": max(0, target - qualified_count),
             "candidate_limit": effective_candidate_limit(task.criteria),
             "funnel": funnel,
+            "coverage_rates": {
+                "website": coverage(funnel["website_count"]),
+                "public_email_company": coverage(funnel["public_email_count"]),
+                "product_evidence": coverage(funnel["product_evidence_count"]),
+                "multi_source_evidence": coverage(funnel["multi_source_evidence_count"]),
+                "qualified": coverage(qualified_count),
+            },
             "rejection_counts": rejection_counts,
         }
 
