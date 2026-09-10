@@ -112,7 +112,8 @@ class ApiApplication:
                 task_id = parse_qs(urlsplit(path).query).get("task_id", [""])[0]
                 return self._database_overview(task_id)
             if method == "GET" and segments == ["api", "database", "export"]:
-                return self._database_export()
+                task_id = parse_qs(urlsplit(path).query).get("task_id", [""])[0]
+                return self._database_export(task_id)
             if method == "GET" and segments == ["api", "mailbox", "status"]:
                 return self._mailbox_status()
             if method == "GET" and segments == ["api", "settings", "status"]:
@@ -890,9 +891,9 @@ class ApiApplication:
                         domains.add(message.lead_domain)
         return domains
 
-    def _database_export(self) -> tuple[int, dict]:
+    def _database_export(self, task_id: str = "") -> tuple[int, dict]:
         """将本机客户资料导出为真实 XLSX；只导出已保存信息，不补造字段。"""
-        overview_status, overview = self._database_overview()
+        overview_status, overview = self._database_overview(task_id)
         if overview_status != 200:
             return overview_status, overview
         from openpyxl import Workbook

@@ -333,7 +333,8 @@ function App() {
   const exportDatabase = async () => {
     setDatabaseExportLoading(true)
     try {
-      const response = await fetch('/api/database/export')
+      const suffix = remoteTaskId ? `?task_id=${encodeURIComponent(remoteTaskId)}` : ''
+      const response = await fetch(`/api/database/export${suffix}`)
       const payload = await response.json()
       if (!response.ok) throw new Error(payload.error || '导出失败')
       const bytes = Uint8Array.from(atob(payload.content_base64), (character) => character.charCodeAt(0))
