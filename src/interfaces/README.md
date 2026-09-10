@@ -11,7 +11,7 @@ HTTP API、后台任务入口和命令行入口。入口层负责协议转换，
 python scripts/serve_api.py
 ```
 
-默认监听 `127.0.0.1:8001`，可通过 `WAIMAO_API_PORT` 修改端口。
+默认监听 `127.0.0.1:8002`，可通过 `WAIMAO_API_PORT` 修改端口。
 
 ## 当前接口
 

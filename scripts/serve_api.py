@@ -291,6 +291,6 @@ class Handler(BaseHTTPRequestHandler):
 
 
 if __name__ == "__main__":
-    port = int(os.environ.get("WAIMAO_API_PORT", "8001"))
+    port = int(os.environ.get("WAIMAO_API_PORT", "8002"))
     host = os.environ.get("WAIMAO_API_HOST", "127.0.0.1")
     ThreadingHTTPServer((host, port), Handler).serve_forever()

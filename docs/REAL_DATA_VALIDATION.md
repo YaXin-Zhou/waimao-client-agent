@@ -6,7 +6,7 @@
 
 ## 核验范围
 
-- 本地 API：`http://127.0.0.1:8001`
+- 本地 API：`http://127.0.0.1:8002`
 - 本地 SQLite：`data/runtime/acquisition.db`
 - 搜索方式：Google 可见浏览器结果导入
 - 任务：`真实官网合格客户链路 smoke`
@@ -120,7 +120,7 @@
 ```powershell
 pytest -q
 ruff check src/application/acquisition_service.py src/domain/lead.py src/infrastructure/website_fetcher.py tests/unit/test_website_fetcher.py tests/integration/test_acquisition_service.py
-Invoke-RestMethod http://127.0.0.1:8001/api/ready
+Invoke-RestMethod http://127.0.0.1:8002/api/ready
 ```
 
 ## 2026-09-09 真实候选池扩展测试

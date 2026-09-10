@@ -9,7 +9,7 @@
   │
   ├── http://127.0.0.1:5174/     React + Vite 工作台
   │
-  └── http://127.0.0.1:8001/     Python 本地 API
+  └── http://127.0.0.1:8002/     Python 本地 API
                                   │
                                   └── data/runtime/acquisition.db
 ```
@@ -35,7 +35,7 @@ npm run dev
 ## 运行检查
 
 ```powershell
-Invoke-RestMethod http://127.0.0.1:8001/api/ready
+Invoke-RestMethod http://127.0.0.1:8002/api/ready
 ```
 
 返回 `status=ready` 后，才开始搜索或背调。真实客户资料、来源证据、筛选结果和邮件草稿保存在 `data/runtime/acquisition.db`。
