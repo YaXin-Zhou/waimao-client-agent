@@ -155,7 +155,8 @@ function App() {
     if (activeNav !== '本地数据库') return undefined
     let cancelled = false
     setDatabaseLoading(true)
-    const suffix = remoteTaskId ? `?task_id=${encodeURIComponent(remoteTaskId)}` : ''
+    const activeTaskId = remoteTaskId || remoteTaskConfig?.id || ''
+    const suffix = activeTaskId ? `?task_id=${encodeURIComponent(activeTaskId)}` : ''
     fetch(`/api/database/overview${suffix}`)
       .then((response) => response.ok ? response.json() : Promise.reject(new Error('database overview failed')))
       .then((data) => { if (!cancelled) setDatabaseOverview(data) })
@@ -333,7 +334,8 @@ function App() {
   const exportDatabase = async () => {
     setDatabaseExportLoading(true)
     try {
-      const suffix = remoteTaskId ? `?task_id=${encodeURIComponent(remoteTaskId)}` : ''
+      const activeTaskId = remoteTaskId || remoteTaskConfig?.id || ''
+      const suffix = activeTaskId ? `?task_id=${encodeURIComponent(activeTaskId)}` : ''
       const response = await fetch(`/api/database/export${suffix}`)
       const payload = await response.json()
       if (!response.ok) throw new Error(payload.error || '导出失败')
