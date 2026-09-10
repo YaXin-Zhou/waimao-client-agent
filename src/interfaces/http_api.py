@@ -5,6 +5,7 @@ from __future__ import annotations
 import base64
 import io
 import json
+import sys
 from pathlib import Path
 from concurrent.futures import ThreadPoolExecutor
 from dataclasses import replace
@@ -118,6 +119,8 @@ class ApiApplication:
                 return self._mailbox_status()
             if method == "GET" and segments == ["api", "settings", "status"]:
                 return self._settings_status()
+            if method == "POST" and segments == ["api", "settings", "config"]:
+                return self._save_settings(self._parse_body(body))
             if method == "POST" and segments == ["api", "mailbox", "test"]:
                 return self._test_mailbox()
             if (
@@ -552,7 +555,7 @@ class ApiApplication:
 
     def _settings_status(self) -> tuple[int, dict]:
         """Expose integration readiness without returning credentials or account values."""
-        config_path = Path(__file__).resolve().parents[2] / "config" / ".env"
+        config_path = self._config_path()
         values = {}
         if config_path.exists():
             for raw_line in config_path.read_text(encoding="utf-8").splitlines():
@@ -561,11 +564,57 @@ class ApiApplication:
                     key, value = line.split("=", 1)
                     values[key.strip()] = value.strip()
         return 200, {
+            "config_file_present": config_path.exists(),
             "deepseek_configured": bool(values.get("DEEPSEEK_API_KEY")),
             "ali_imap_configured": bool(values.get("ALI_IMAP_USERNAME") and values.get("ALI_IMAP_PASSWORD")),
             "ali_smtp_enabled": self._sending_enabled,
+            "setup_required": not bool(values.get("DEEPSEEK_API_KEY")),
             "config_path": "config/.env",
         }
+
+    @staticmethod
+    def _config_path() -> Path:
+        root = Path(sys.executable).resolve().parent if getattr(sys, "frozen", False) else Path(__file__).resolve().parents[2]
+        return root / "config" / ".env"
+
+    def _save_settings(self, body: dict) -> tuple[int, dict]:
+        """Save only the small set of customer-facing credentials locally."""
+        api_key = str(body.get("deepseek_api_key", "")).strip()
+        email = str(body.get("ali_email", "")).strip()
+        password = str(body.get("ali_password", ""))
+        if not api_key:
+            raise ValueError("请填写 DeepSeek API Key")
+        if not email or "@" not in email:
+            raise ValueError("请填写正确的阿里邮箱地址")
+        if not password:
+            raise ValueError("请填写阿里邮箱密码")
+
+        config_path = self._config_path()
+        config_path.parent.mkdir(parents=True, exist_ok=True)
+        template_path = config_path.with_name(".env.example")
+        lines = template_path.read_text(encoding="utf-8").splitlines() if template_path.exists() else []
+        values = {
+            "DEEPSEEK_API_KEY": api_key,
+            "ALI_IMAP_USERNAME": email,
+            "ALI_IMAP_PASSWORD": password,
+            "ALI_SMTP_USERNAME": email,
+            "ALI_SMTP_PASSWORD": password,
+            "ALI_SMTP_SENDING_ENABLED": "true" if body.get("enable_sending", True) else "false",
+        }
+        seen = set()
+        output = []
+        for line in lines:
+            key = line.split("=", 1)[0].strip() if "=" in line and not line.lstrip().startswith("#") else ""
+            if key in values:
+                output.append(f"{key}={values[key]}")
+                seen.add(key)
+            else:
+                output.append(line)
+        for key, value in values.items():
+            if key not in seen:
+                output.append(f"{key}={value}")
+        config_path.write_text("\n".join(output) + "\n", encoding="utf-8")
+        return 200, {"saved": True, "restart_required": True, "config_path": "config/.env"}
 
     def _test_mailbox(self) -> tuple[int, dict]:
         if self._mailbox is None:

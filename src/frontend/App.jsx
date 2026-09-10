@@ -120,6 +120,7 @@ function App() {
   const [databaseLoading, setDatabaseLoading] = useState(false)
   const [databaseExportLoading, setDatabaseExportLoading] = useState(false)
   const [settingsStatus, setSettingsStatus] = useState(null)
+  const [setupOpen, setSetupOpen] = useState(false)
   const searchWarnings = searchCriteriaWarnings({ product: searchProduct, keywords: searchKeywords, countries: searchCountries, industries: searchIndustries })
   useEffect(() => {
     let cancelled = false
@@ -165,14 +166,13 @@ function App() {
     return () => { cancelled = true }
   }, [activeNav, remoteTaskId])
   useEffect(() => {
-    if (activeNav !== '设置') return undefined
     let cancelled = false
     fetch('/api/settings/status')
       .then((response) => response.ok ? response.json() : Promise.reject(new Error('settings status failed')))
-      .then((data) => { if (!cancelled) setSettingsStatus(data) })
+      .then((data) => { if (!cancelled) { setSettingsStatus(data); setSetupOpen(data.setup_required) } })
       .catch(() => { if (!cancelled) setSettingsStatus(null) })
     return () => { cancelled = true }
-  }, [activeNav])
+  }, [])
   useEffect(() => {
     if (!remoteTaskId) return undefined
     let cancelled = false
@@ -771,6 +771,17 @@ function App() {
     } catch (error) { notify(error.message || '研究规则保存失败，请检查配置') }
   }
 
+  const saveSettings = async (settings) => {
+    try {
+      const response = await fetch('/api/settings/config', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify(settings) })
+      const payload = await response.json()
+      if (!response.ok) throw new Error(payload.error || '设置保存失败')
+      setSettingsStatus((current) => ({ ...(current || {}), config_file_present: true, setup_required: false, deepseek_configured: true, ali_imap_configured: true, ali_smtp_enabled: Boolean(settings.enable_sending) }))
+      setSetupOpen(false)
+      notify('设置已保存，请重启程序后生效')
+    } catch (error) { notify(error.message || '设置保存失败，请检查填写内容') }
+  }
+
   return <div className="app-shell">
     <aside className="sidebar">
       <div className="brand"><span className="brand-mark">✦</span><span>NORTHSTAR OPS</span></div>
@@ -780,7 +791,7 @@ function App() {
     <main className="main-shell">
       <header className="topbar"><div className="top-actions"><button className="icon-button" onClick={() => notify('暂无新的系统通知')} aria-label="通知"><Icon name="bell" size={20}/><i className="notification-dot"/></button></div></header>
       <div className="content">
-      {activeNav === '本地数据库' ? <DatabasePanel overview={databaseOverview} loading={databaseLoading} exportLoading={databaseExportLoading} onExport={exportDatabase} onSelect={selectDatabaseLead} searchCountries={searchCountries}/> : activeNav === '发件人资料' ? <SenderProfilePage taskConfig={remoteTaskConfig} onSave={saveSenderProfile}/> : activeNav === '设置' ? <SettingsPanel status={settingsStatus} mailboxStatus={mailboxStatus}/> : <>
+      {activeNav === '本地数据库' ? <DatabasePanel overview={databaseOverview} loading={databaseLoading} exportLoading={databaseExportLoading} onExport={exportDatabase} onSelect={selectDatabaseLead} searchCountries={searchCountries}/> : activeNav === '发件人资料' ? <SenderProfilePage taskConfig={remoteTaskConfig} onSave={saveSenderProfile}/> : activeNav === '设置' ? <SettingsPanel status={settingsStatus} mailboxStatus={mailboxStatus} onSave={saveSettings}/> : <>
         <div className="page-heading"><div><h1>找客户</h1><p>输入目标条件，优先展示官网有公开邮箱的客户</p></div>{!remoteTaskId && <button className="primary-button" onClick={() => setShowTask(true)}><Icon name="plus" size={19}/>开始使用</button>}</div>
         <div className={`data-notice ${apiState}`}><span />{apiState === 'loading' ? '正在准备客户资料…' : apiState === 'connected' ? '客户资料已准备就绪' : apiState === 'empty' ? '当前还没有客户资料' : '客户资料暂时无法读取'}</div>
         <section className="search-panel panel"><div className="search-panel-heading"><div><h2>搜索条件</h2><p>常用条件放在这里，中文也可以直接输入</p></div><button type="button" className="primary-button" disabled={!remoteTaskId || discoverLoading || discoveryRun?.status === 'running'} onClick={discoverLeads}><Icon name="search" size={16}/>{discoverLoading || discoveryRun?.status === 'running' ? '正在搜索…' : '搜索可发送客户'}</button></div><div className="search-fields"><label>产品或业务<input value={searchProduct} onChange={(event) => setSearchProduct(event.target.value)} placeholder="例如：注塑件、精密零件" /></label><label>关键词<input value={searchKeywords} onChange={(event) => setSearchKeywords(event.target.value)} placeholder="例如：精密零件、注塑件" /></label><label>目标国家 / 地区<input value={searchCountries} onChange={(event) => setSearchCountries(event.target.value)} placeholder="例如：德国、墨西哥" /></label><label>行业<input value={searchIndustries} onChange={(event) => setSearchIndustries(event.target.value)} placeholder="例如：汽车、电子" /></label>{searchWarnings.length > 0 && <div className="criteria-hint">{searchWarnings.map((warning) => <span key={warning}>{warning}</span>)}</div>}{discoveryError && <div className="discovery-friendly-error">{discoveryError}</div>}</div><div className="search-panel-foot"><details className="maintenance-inline"><summary>维护工具（不常用）</summary><div className="maintenance-inline-body"><button type="button" className="outline-button" onClick={() => setShowRuleEditor(true)}>研究规则</button><button type="button" className="outline-button" onClick={() => setShowBrowserImport(true)}>备用导入</button></div></details></div></section>
@@ -800,6 +811,7 @@ function App() {
     {showBrowserImport && (
       <BrowserImportModal onClose={() => setShowBrowserImport(false)} onImport={importBrowserResults} loading={browserImportLoading}/>
     )}
+    {setupOpen && <SetupWizard onSave={saveSettings} onLater={() => setSetupOpen(false)}/>} 
   </div>
 }
 
@@ -959,12 +971,28 @@ function SenderProfilePage({ taskConfig, onSave }) {
   return <div className="settings-page"><div className="page-heading"><div><h1>发件人资料</h1><p>统一用于自动生成邮件，保存后新邮件会自动使用。</p></div><span className="database-local-badge">本机保存</span></div><div className="settings-content"><SenderProfileEditor taskConfig={taskConfig} onSave={onSave}/><div className="settings-tip"><strong>使用说明</strong><p>只需要填写一次。系统会把公司名称、联系人姓名和职位带入后续邮件，不需要逐封重复填写。</p></div></div></div>
 }
 
-function SettingsPanel({ status, mailboxStatus }) {
+function SetupWizard({ onSave, onLater }) {
+  const [apiKey, setApiKey] = useState('')
+  const [email, setEmail] = useState('')
+  const [password, setPassword] = useState('')
+  const [enableSending, setEnableSending] = useState(true)
+  return <div className="modal-backdrop"><form className="task-modal setup-wizard" onSubmit={(event) => { event.preventDefault(); onSave({ deepseek_api_key: apiKey, ali_email: email, ali_password: password, enable_sending: enableSending }) }}>
+    <span className="modal-icon"><Icon name="settings"/></span><h2>首次使用设置</h2><p>只填写下面三项，其他连接参数由系统自动配置。</p>
+    <label>DeepSeek API Key<input type="password" value={apiKey} onChange={(event) => setApiKey(event.target.value)} placeholder="粘贴你的 API Key" autoComplete="off" required/></label>
+    <label>阿里云邮箱<input type="email" value={email} onChange={(event) => setEmail(event.target.value)} placeholder="例如：sales@your-company.com" required/></label>
+    <label>阿里云邮箱密码<input type="password" value={password} onChange={(event) => setPassword(event.target.value)} placeholder="邮箱登录密码或专用密码" autoComplete="new-password" required/></label>
+    <label className="setup-checkbox"><input type="checkbox" checked={enableSending} onChange={(event) => setEnableSending(event.target.checked)}/>允许系统发送已审核的邮件</label>
+    <div className="setup-actions"><button type="button" className="outline-button" onClick={onLater}>稍后设置</button><button type="submit" className="primary-button">保存并继续 <Icon name="arrow" size={16}/></button></div>
+  </form></div>
+}
+
+function SettingsPanel({ status, mailboxStatus, onSave }) {
+  const [editing, setEditing] = useState(false)
   const badge = (ready, enabled = ready) => enabled ? ['已就绪', 'ready'] : ['未配置', 'pending']
   const [deepseekLabel, deepseekTone] = badge(status?.deepseek_configured)
   const [imapLabel, imapTone] = badge(status?.ali_imap_configured || mailboxStatus?.configured)
   const [smtpLabel, smtpTone] = badge(status?.ali_smtp_enabled, status?.ali_smtp_enabled)
-  return <div className="settings-page"><div className="page-heading"><div><h1>设置</h1><p>管理 AI 和邮箱连接状态。账号、密码和 API Key 不会显示在页面中。</p></div></div><div className="settings-grid"><section className="settings-card panel"><div className="section-title"><h2>DeepSeek</h2><span className={`settings-status ${deepseekTone}`}><i/>{deepseekLabel}</span></div><p>用于整理客户资料、核验公开信息和自动生成邮件。</p><div className="settings-row"><span>配置文件</span><strong>{status?.config_path || 'config/.env'}</strong></div><div className="settings-row"><span>API Key</span><strong>已隐藏</strong></div></section><section className="settings-card panel"><div className="section-title"><h2>阿里邮箱</h2><span className={`settings-status ${imapTone}`}><i/>{imapLabel}</span></div><p>用于读取收件箱。当前收件功能保持只读，不会自动发送邮件。</p><div className="settings-row"><span>IMAP 收件</span><strong>{imapLabel}</strong></div><div className="settings-row"><span>SMTP 发信</span><strong className={`settings-value ${smtpTone}`}>{smtpLabel === '已就绪' ? '已开启' : '未开启'}</strong></div></section></div><div className="settings-guide panel"><strong>需要修改配置？</strong><p>编辑项目中的 <code>config/.env</code>，保存后重启本地服务。密码和 API Key 只放在本机配置文件中，不要提交到 Git。</p></div></div>
+  return <><div className="settings-page"><div className="page-heading"><div><h1>设置</h1><p>管理 AI 和邮箱连接状态。账号、密码和 API Key 不会显示在页面中。</p></div><button className="primary-button" onClick={() => setEditing(true)}>修改连接设置</button></div><div className="settings-grid"><section className="settings-card panel"><div className="section-title"><h2>DeepSeek</h2><span className={`settings-status ${deepseekTone}`}><i/>{deepseekLabel}</span></div><p>用于整理客户资料、核验公开信息和自动生成邮件。</p><div className="settings-row"><span>API Key</span><strong>已隐藏</strong></div></section><section className="settings-card panel"><div className="section-title"><h2>阿里邮箱</h2><span className={`settings-status ${imapTone}`}><i/>{imapLabel}</span></div><p>用于读取收件箱和发送已审核邮件。</p><div className="settings-row"><span>邮箱连接</span><strong>{imapLabel}</strong></div><div className="settings-row"><span>发送功能</span><strong className={`settings-value ${smtpTone}`}>{smtpLabel === '已就绪' ? '已开启' : '未开启'}</strong></div></section></div><div className="settings-guide panel"><strong>修改连接设置</strong><p>只需要填写 DeepSeek API Key、阿里云邮箱和邮箱密码，其他参数由系统自动配置。</p><button className="outline-button" onClick={() => setEditing(true)}>打开设置向导</button></div></div>{editing && <SetupWizard onSave={onSave} onLater={() => setEditing(false)}/>}</>
 }
 
 function DraftGenerator({ lead, taskConfig, loading, onGenerate }) {
