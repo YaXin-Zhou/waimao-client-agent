@@ -163,7 +163,7 @@ function App() {
       .catch(() => { if (!cancelled) setDatabaseOverview(null) })
       .finally(() => { if (!cancelled) setDatabaseLoading(false) })
     return () => { cancelled = true }
-  }, [activeNav, remoteLeads, remoteTaskId])
+  }, [activeNav, remoteTaskId])
   useEffect(() => {
     if (activeNav !== '设置') return undefined
     let cancelled = false
