@@ -864,7 +864,7 @@ function evidenceCheckStatus(value) {
 
 function DiscoveryFunnel({ summary, visibleCount }) {
   const count = Number.isFinite(visibleCount) ? visibleCount : (summary?.qualified_count || 0)
-  return <div className="discovery-funnel simple-funnel"><div><strong>当前客户池</strong><span>可发送客户</span></div><div className="qualified-result-count"><b>{count}</b><span>家</span></div><p className="funnel-note">这些客户已找到官网公开邮箱，可以直接进入人工发送。</p></div>
+  return <div className="discovery-funnel simple-funnel"><div><strong>当前条件下</strong><span>可发送客户</span></div><div className="qualified-result-count"><b>{count}</b><span>家</span></div><p className="funnel-note">这些客户已找到官网公开邮箱，可以直接进入人工发送。其他搜索条件的客户仍保存在本机数据库。</p></div>
 }
 
 function Metric({ icon, label, value, note }) { return <div className="metric"><span className={`metric-icon ${icon}`}><Icon name={icon === 'researching' ? 'users' : icon} size={20}/></span><div><span>{label}</span><strong>{value}<Icon name="arrow" size={16}/></strong><small>{note}</small></div></div> }
