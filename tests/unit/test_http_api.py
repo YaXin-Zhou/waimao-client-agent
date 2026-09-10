@@ -452,6 +452,16 @@ def test_api_returns_lead_list():
     assert payload["summary"]["funnel"]["public_email_count"] == 1
 
 
+def test_api_summary_lead_list_omits_large_source_excerpts():
+    app, task, _, _ = make_app()
+
+    status, payload = app.handle("GET", f"/api/tasks/{task.id}/leads?view=summary")
+
+    assert status == 200
+    assert "sources" not in payload["items"][0]["lead"]
+    assert "source_summary" in payload["items"][0]["lead"]
+
+
 def test_api_marks_external_sources_as_linked_but_requiring_review():
     lead = clean_leads(
         [

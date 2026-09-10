@@ -195,7 +195,7 @@ function App() {
     let cancelled = false
     const loadLeads = async () => {
       try {
-        const leadResponse = await fetch(`/api/tasks/${remoteTaskId}/leads`)
+        const leadResponse = await fetch(`/api/tasks/${remoteTaskId}/leads?view=summary`)
         if (!leadResponse.ok) throw new Error('leads request failed')
         const data = await leadResponse.json()
         const loaded = (data.items || []).map(mapRemoteLead)
@@ -230,7 +230,7 @@ function App() {
         }
         if (latest?.status === 'succeeded') {
           setDiscoveryError(null)
-          const leadResponse = await fetch(`/api/tasks/${remoteTaskId}/leads`)
+          const leadResponse = await fetch(`/api/tasks/${remoteTaskId}/leads?view=summary`)
           if (!leadResponse.ok) return
           const leads = await leadResponse.json()
           setRemoteLeads((leads.items || []).map(mapRemoteLead))
@@ -274,7 +274,7 @@ function App() {
           if (runs.some((run) => run.status === 'running')) {
             timer = window.setTimeout(loadRuns, 1200)
           } else if (runs.some((run) => ['succeeded', 'review_required'].includes(run.status))) {
-            const leadResponse = await fetch(`/api/tasks/${remoteTaskId}/leads`)
+            const leadResponse = await fetch(`/api/tasks/${remoteTaskId}/leads?view=summary`)
             if (!leadResponse.ok) throw new Error('leads refresh request failed')
             const leads = await leadResponse.json()
             const loaded = (leads.items || []).map(mapRemoteLead)
@@ -483,7 +483,7 @@ function App() {
   const refreshAfterSend = async () => {
     if (!remoteTaskId) return
     const [leadResponse, databaseResponse] = await Promise.all([
-      fetch(`/api/tasks/${remoteTaskId}/leads`),
+      fetch(`/api/tasks/${remoteTaskId}/leads?view=summary`),
       fetch('/api/database/overview'),
     ])
     if (!leadResponse.ok || !databaseResponse.ok) return
@@ -710,7 +710,7 @@ function App() {
       const response = await fetch(`/api/tasks/${remoteTaskId}/sender-profile`, { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify(profile) })
       if (!response.ok) throw new Error('sender profile update failed')
       setRemoteTaskConfig(await response.json())
-      await fetch(`/api/tasks/${remoteTaskId}/leads`)
+      await fetch(`/api/tasks/${remoteTaskId}/leads?view=summary`)
       notify('发件人资料已保存，符合条件的邮件会自动生成')
     } catch { notify('发件人资料保存失败，请稍后重试') }
   }

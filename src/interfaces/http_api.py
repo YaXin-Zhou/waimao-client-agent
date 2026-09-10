@@ -330,7 +330,8 @@ class ApiApplication:
                 and segments[:2] == ["api", "tasks"]
                 and segments[3] == "leads"
             ):
-                return self._lead_list(segments[2])
+                compact = parse_qs(urlsplit(path).query).get("view", [""])[0] == "summary"
+                return self._lead_list(segments[2], compact=compact)
             if method == "GET" and len(segments) == 3 and segments[:2] == ["api", "drafts"]:
                 return self._draft_detail(segments[2])
             if (
@@ -378,7 +379,7 @@ class ApiApplication:
         except (TypeError, ValueError, json.JSONDecodeError) as error:
             return 400, {"error": str(error)}
 
-    def _lead_list(self, task_id: str) -> tuple[int, dict]:
+    def _lead_list(self, task_id: str, compact: bool = False) -> tuple[int, dict]:
         self._require_task(task_id)
         # Route reads through the application service so legacy records receive
         # the same evidence sanitization and qualification refresh as other reads.
@@ -391,12 +392,18 @@ class ApiApplication:
         items = []
         effective_assessed = []
         contacted_emails = self._contacted_emails()
+        research_by_domain = (
+            self._research.list_for_task(task_id)
+            if self._research is not None and hasattr(self._research, "list_for_task")
+            else {}
+        )
         for item in displayable_assessed:
-            report = (
-                self._research.get(task_id, item.lead.domain)
-                if self._research is not None and item.lead.domain
-                else None
-            )
+            if item.lead.domain:
+                report = research_by_domain.get(item.lead.domain)
+                if not research_by_domain and self._research is not None:
+                    report = self._research.get(task_id, item.lead.domain)
+            else:
+                report = None
             effective_item = item
             if report is not None and report.country and not item.lead.country:
                 effective_item = replace(
@@ -407,7 +414,7 @@ class ApiApplication:
                 [effective_item], task.criteria
             )[0]
             effective_assessed.append(effective_item)
-            payload = self._assessed(effective_item, task.criteria)
+            payload = self._assessed(effective_item, task.criteria, include_sources=not compact)
             payload["contacted"] = bool(
                 set(email.lower() for email in effective_item.lead.emails)
                 & contacted_emails
@@ -1667,8 +1674,8 @@ class ApiApplication:
         }
 
     @staticmethod
-    def _lead(lead, criteria=None) -> dict:
-        return {
+    def _lead(lead, criteria=None, include_sources: bool = True) -> dict:
+        payload = {
             # Keep raw search titles in evidence, but expose a cleaned name in
             # customer-facing lists and the local database.
             "company_name": clean_company_name(lead.company_name, lead.domain),
@@ -1679,12 +1686,14 @@ class ApiApplication:
             "quality": lead.quality,
             "status": lead.status.value,
             "flags": list(lead.flags),
-            "sources": [list(source) for source in lead.sources],
             "evidence_level": evidence_level(lead),
             "identity_consistency": identity_consistency(lead),
             "source_summary": ApiApplication._source_summary(lead),
             "evidence_checks": ApiApplication._evidence_checks(lead, criteria),
         }
+        if include_sources:
+            payload["sources"] = [list(source) for source in lead.sources]
+        return payload
 
     @staticmethod
     def _evidence_checks(lead, criteria=None) -> dict:
@@ -1758,9 +1767,9 @@ class ApiApplication:
         return {"total": score.total, "priority": score.priority, "breakdown": score.breakdown}
 
     @staticmethod
-    def _assessed(item, criteria=None) -> dict:
+    def _assessed(item, criteria=None, include_sources: bool = True) -> dict:
         return {
-            "lead": ApiApplication._lead(item.lead, criteria),
+            "lead": ApiApplication._lead(item.lead, criteria, include_sources=include_sources),
             "score": ApiApplication._score(item.score),
             "qualified": item.qualified,
             "rejection_reasons": list(item.rejection_reasons),
