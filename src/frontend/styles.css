@@ -103,6 +103,27 @@ h1 { color: #132238; font-size: 29px; font-weight: 700; letter-spacing: -.8px; }
 .browser-import-boundary { margin-top: 12px; padding: 9px 10px; border: 1px solid #dbeaf4; border-radius: 6px; color: #58748e; background: #f6fbfe; font-size: 11px; line-height: 1.5; }
 .form-error { margin-top: 9px; color: #b34a43; font-size: 11px; }
 @media (prefers-reduced-motion: reduce) { *, *:before, *:after { scroll-behavior: auto !important; animation-duration: .01ms !important; animation-iteration-count: 1 !important; transition-duration: .01ms !important; } }
+
+.batch-mail-panel { margin: 18px 0; }
+.batch-mail-toolbar { display: flex; align-items: end; gap: 16px; flex-wrap: wrap; padding: 0 18px 16px; color: #58748e; font-size: 12px; }
+.batch-mail-toolbar label { display: grid; gap: 5px; color: #263a51; font-weight: 600; }
+.batch-mail-toolbar input { min-width: 150px; border: 1px solid #d6e1eb; border-radius: 6px; padding: 8px 10px; color: #263a51; }
+.batch-mail-toolbar span { margin-right: auto; padding-bottom: 9px; }
+.batch-mail-carousel { display: flex; align-items: center; gap: 12px; padding: 0 18px 18px; }
+.carousel-arrow { width: 34px; height: 34px; border: 1px solid #d6e1eb; border-radius: 50%; background: #fff; color: #2879ae; font-size: 25px; line-height: 1; cursor: pointer; }
+.carousel-arrow:disabled { opacity: .35; cursor: not-allowed; }
+.batch-mail-card { flex: 1; min-width: 0; border: 1px solid #dbe7ef; border-radius: 10px; padding: 16px; background: #fbfdff; }
+.batch-mail-card-top, .batch-card-actions, .batch-select { display: flex; align-items: center; gap: 10px; }
+.batch-mail-card-top { justify-content: space-between; color: #7890a3; font-size: 11px; }
+.batch-draft-status { padding: 3px 8px; border-radius: 999px; background: #fff4e5; color: #a96821; }
+.batch-draft-status.approved { background: #e7f8f0; color: #168b63; }
+.batch-mail-card > strong, .batch-mail-card > b { display: block; margin-top: 10px; color: #263a51; }
+.batch-mail-card > p { max-height: 130px; overflow: auto; margin: 12px 0; white-space: pre-wrap; color: #58748e; font-size: 12px; line-height: 1.6; }
+.batch-select { margin: 10px 0; color: #2879ae; font-size: 12px; }
+.batch-card-actions { margin-top: 12px; }
+.batch-send-confirm { display: flex; align-items: center; gap: 14px; margin: 0 18px 18px; padding: 12px 14px; border: 1px solid #b8e4d2; border-radius: 8px; background: #f0fbf6; color: #237a63; }
+.batch-send-confirm p { margin: 0 auto 0 0; font-size: 12px; }
+@media (max-width: 720px) { .batch-mail-carousel { padding-left: 10px; padding-right: 10px; } .batch-mail-card { padding: 12px; } .batch-mail-toolbar span { width: 100%; margin: 0; } }
 .criteria-builder { max-height: 360px; margin-top: 20px; padding: 14px 0 2px; overflow-y: auto; border-top: 1px solid #e8eef4; border-bottom: 1px solid #e8eef4; scrollbar-width: thin; }
 .criteria-advanced:not([open]) { max-height: none; padding: 12px 0; overflow: visible; }
 .criteria-advanced > summary { cursor: pointer; list-style: none; }

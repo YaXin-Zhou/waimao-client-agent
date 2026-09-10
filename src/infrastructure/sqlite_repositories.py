@@ -841,6 +841,14 @@ class SQLiteEmailDraftRepository:
             ).fetchall()
         return [self.get(row["id"]) for row in rows]
 
+    def list_for_task(self, task_id: str) -> list[EmailDraft]:
+        with _connect(self._database) as connection:
+            rows = connection.execute(
+                "SELECT id FROM email_drafts WHERE task_id = ? AND kind = ? ORDER BY rowid",
+                (task_id, EmailDraftKind.OUTREACH.value),
+            ).fetchall()
+        return [self.get(row["id"]) for row in rows]
+
 
 class SQLiteAuditEventRepository:
     def __init__(self, database: str | Path):
