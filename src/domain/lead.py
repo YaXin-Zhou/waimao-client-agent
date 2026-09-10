@@ -150,6 +150,9 @@ def clean_company_name(value: str, domain: str = "") -> str:
         return ""
     cleaned = re.sub(r"^.*https?://[^\s]+?(?=[A-Z])", "", cleaned).strip(" -|·")
     cleaned = re.sub(r"^[a-z0-9][a-z0-9.-]*(?=[A-Z][a-z])", "", cleaned).strip(" -|·")
+    # Search engines can glue a two-letter locale breadcrumb to the title,
+    # such as ``enISOCO`` or ``enRKT``. Remove only the lowercase marker.
+    cleaned = re.sub(r"^(?:en|de|fr|it|es|uk)(?=[A-Z])", "", cleaned).strip(" -|·")
     cleaned = re.sub(r"\s+(?:duplicate|copy)\b$", "", cleaned, flags=re.IGNORECASE).strip()
     cleaned = re.sub(r"^startseite\s*[-|:]\s*", "", cleaned, flags=re.IGNORECASE).strip()
     # Search engines often put the actual legal/company name after a marketing

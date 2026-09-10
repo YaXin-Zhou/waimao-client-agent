@@ -80,6 +80,12 @@ def test_clean_company_name_removes_search_title_prefixes():
     assert clean_company_name(
         "Top 10 Automotive Plastic Injection Molding Companies", "example.com"
     ) == "example.com"
+    assert clean_company_name("enISOCO Plastics Technology GmbH", "isoco.de") == (
+        "ISOCO Plastics Technology GmbH"
+    )
+    assert clean_company_name(
+        "enRKT - Leading supplier of plastics technology", "rkt.de"
+    ) == "RKT - Leading supplier of plastics technology"
 
 
 def test_clean_company_name_replaces_information_page_titles_with_domain():
