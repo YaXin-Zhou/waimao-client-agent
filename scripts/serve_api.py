@@ -33,7 +33,7 @@ from src.infrastructure.deepseek_provider import DeepSeekConfig, DeepSeekProvide
 from src.infrastructure.fallback_search_provider import FallbackSearchProvider  # noqa: E402
 from src.infrastructure.google_search_provider import GoogleSearchProvider  # noqa: E402
 from src.infrastructure.machine_translation_provider import (  # noqa: E402
-    GoogleMachineTranslationProvider,
+    LocalArgosTranslationProvider,
 )
 from src.infrastructure.playwright_search_provider import PlaywrightSearchProvider  # noqa: E402
 from src.infrastructure.sqlite_repositories import (  # noqa: E402
@@ -227,7 +227,7 @@ application = ApiApplication(
     research_repository,
     email_draft_repository,
     email_drafts=email_draft_service,
-    translation=TranslationService(GoogleMachineTranslationProvider()),
+    translation=TranslationService(LocalArgosTranslationProvider()),
     audit=audit_repository,
     acquisition=acquisition_service,
     website_reader=WebsiteFetcher(

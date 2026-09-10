@@ -1,5 +1,6 @@
 from src.application.translation_service import TranslationService
 from src.domain.email_draft import EmailDraft
+from src.infrastructure.machine_translation_provider import LocalArgosTranslationProvider
 
 
 class FakeTranslator:
@@ -38,3 +39,13 @@ def test_translation_preview_rejects_unsupported_language():
         assert str(error) == "only zh-CN preview is supported"
     else:
         raise AssertionError("unsupported language should fail")
+
+
+def test_local_argos_provider_translates_without_external_service():
+    provider = LocalArgosTranslationProvider()
+
+    translated = provider.translate("Portable solar products", "en", "zh")
+
+    assert translated
+    assert translated != "Portable solar products"
+    assert any("\u4e00" <= char <= "\u9fff" for char in translated)
