@@ -816,15 +816,49 @@ class ApiApplication:
         workbook = Workbook()
         sheet = workbook.active
         sheet.title = "客户资料"
-        headers = (
+        base_headers = (
             "公司名称", "官网域名", "国家/地区", "客户类型", "公开邮箱",
             "发送安排", "业务简介", "产品", "来源数量",
         )
-        sheet.append(headers)
+        field_labels = {
+            "company_full_name": "公司全称",
+            "registered_address": "注册地址",
+            "founded_date": "成立时间",
+            "legal_entity_type": "公司类型",
+            "social_profiles": "社媒链接",
+            "public_phone": "电话",
+            "main_products": "主营产品",
+            "business_positioning": "业务定位",
+            "industry": "所在行业",
+            "product_need_evidence": "产品需求证据",
+            "key_contacts": "核心岗位及联系人",
+            "decision_maker_email": "决策人邮箱",
+            "decision_maker_linkedin": "决策人 LinkedIn",
+            "historical_sourcing_categories": "过往采购品类",
+        }
+        reports = {}
+        field_keys = list(field_labels)
         for item in overview["items"]:
             lead = item["lead"]
             report = self._research.get(item["task_id"], lead.get("domain", "")) if lead.get("domain") else None
+            reports[id(item)] = report
+            for key in (report.custom_fields if report else {}):
+                if key not in field_keys:
+                    field_keys.append(key)
+        headers = base_headers + tuple(field_labels.get(key, key) for key in field_keys) + ("字段证据来源",)
+        sheet.append(headers)
+        for item in overview["items"]:
+            lead = item["lead"]
+            report = reports[id(item)]
             research = self._research_result(report) if report else {}
+            custom_fields = report.custom_fields if report else {}
+            field_sources = []
+            custom_values = []
+            for key in field_keys:
+                field = custom_fields.get(key)
+                custom_values.append(field.value if field else "")
+                if field:
+                    field_sources.extend(field.sources)
             sheet.append((
                 lead.get("company_name") or lead.get("domain", ""),
                 lead.get("domain", ""),
@@ -835,6 +869,8 @@ class ApiApplication:
                 research.get("business_summary", ""),
                 "; ".join(research.get("products", [])),
                 lead.get("source_summary", {}).get("website_count", 0),
+                *custom_values,
+                "; ".join(dict.fromkeys(field_sources)),
             ))
         sheet.freeze_panes = "A2"
         sheet.auto_filter.ref = sheet.dimensions

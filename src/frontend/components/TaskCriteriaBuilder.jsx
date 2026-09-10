@@ -13,12 +13,20 @@ const DEFAULT_OFFERINGS = [
 ]
 
 const DEFAULT_FIELDS = [
-  { name: '公司主体信息', key: 'company_identity', description: '公司全称、注册地址、成立时间和公司类型。', keywords: 'registered address, founded, established, legal form, LLC, Inc', type: 'text', required: true, evidence_required: true, human_review: true, options: '' },
-  { name: '官网与联系方式', key: 'official_contact_channels', description: '官网、社媒、公开邮箱和电话。', keywords: 'official website, LinkedIn, Facebook, Instagram, email, phone, contact', type: 'text', required: true, evidence_required: true, human_review: true, options: '' },
-  { name: '主营产品与业务定位', key: 'business_positioning', description: '主营产品，以及品牌方、贸易商、采购方或加工厂等定位。', keywords: 'products, brand, distributor, wholesaler, importer, manufacturer, OEM', type: 'text', required: true, evidence_required: true, human_review: true, options: '' },
-  { name: '行业与业务需求匹配', key: 'industry_business_fit', description: '所在行业，以及是否确实需要注塑件、CNC 机加工或模具。', keywords: 'industry, plastic parts, injection molding, CNC machining, mold, tooling', type: 'text', required: true, evidence_required: true, human_review: true, options: '' },
-  { name: '采购与决策层信息', key: 'procurement_decision_makers', description: 'Sourcing Manager、Purchaser、Engineering Manager、Product Development 等岗位及公开联系人。', keywords: 'sourcing manager, purchaser, procurement, engineering manager, product development', type: 'text', required: false, evidence_required: true, human_review: true, options: '' },
-  { name: '过往采购品类', key: 'historical_sourcing_categories', description: '过往是否采购塑料件、模具或相关产品。', keywords: 'purchasing, procurement, plastic parts, injection molded, CNC parts, molds', type: 'text', required: false, evidence_required: true, human_review: true, options: '' },
+  { name: '公司全称', key: 'company_full_name', description: '公开来源中的正式公司名称。', keywords: 'company name, legal name, official name', type: 'text', required: false, evidence_required: true, human_review: true, options: '' },
+  { name: '注册地址', key: 'registered_address', description: '注册地或公开办公地址。', keywords: 'registered address, registered office, headquarters, office address', type: 'text', required: false, evidence_required: true, human_review: true, options: '' },
+  { name: '成立时间', key: 'founded_date', description: '成立年份或成立日期。', keywords: 'founded, established, since, incorporated', type: 'text', required: false, evidence_required: true, human_review: true, options: '' },
+  { name: '公司类型', key: 'legal_entity_type', description: 'LLC、Inc、Ltd 等法律主体类型。', keywords: 'LLC, Inc, Ltd, GmbH, company type, legal form', type: 'text', required: false, evidence_required: true, human_review: true, options: '' },
+  { name: '社媒链接', key: 'social_profiles', description: 'LinkedIn、Facebook、Instagram 等公开主页。', keywords: 'LinkedIn, Facebook, Instagram, social media', type: 'text', required: false, evidence_required: true, human_review: true, options: '' },
+  { name: '电话', key: 'public_phone', description: '官网或其他公开来源中的电话。', keywords: 'phone, telephone, tel, call us', type: 'text', required: false, evidence_required: true, human_review: true, options: '' },
+  { name: '主营产品', key: 'main_products', description: '公司公开展示的主要产品或服务。', keywords: 'products, product range, services, solutions', type: 'text', required: false, evidence_required: true, human_review: true, options: '' },
+  { name: '业务定位', key: 'business_positioning', description: '品牌方、贸易商、采购方、制造商等业务角色。', keywords: 'brand, distributor, wholesaler, importer, manufacturer, OEM', type: 'text', required: false, evidence_required: true, human_review: true, options: '' },
+  { name: '所在行业', key: 'industry', description: '公司公开资料显示的所属行业。', keywords: 'industry, sector, automotive, electronics, medical, industrial', type: 'text', required: false, evidence_required: true, human_review: true, options: '' },
+  { name: '产品需求证据', key: 'product_need_evidence', description: '是否确实涉及注塑件、CNC 机加工或模具等产品需求。', keywords: 'plastic parts, injection molding, CNC machining, mold, tooling', type: 'text', required: false, evidence_required: true, human_review: true, options: '' },
+  { name: '核心岗位及联系人', key: 'key_contacts', description: 'Sourcing Manager、Purchaser、Engineering Manager、Product Development 等公开联系人。', keywords: 'sourcing manager, purchaser, procurement, engineering manager, product development', type: 'text', required: false, evidence_required: true, human_review: true, options: '' },
+  { name: '决策人邮箱', key: 'decision_maker_email', description: '公开来源中的决策人或采购负责人邮箱。', keywords: 'buyer email, purchaser email, sourcing email, procurement email', type: 'text', required: false, evidence_required: true, human_review: true, options: '' },
+  { name: '决策人 LinkedIn', key: 'decision_maker_linkedin', description: '公开来源中的决策人 LinkedIn 账号。', keywords: 'buyer LinkedIn, purchaser LinkedIn, sourcing manager LinkedIn', type: 'text', required: false, evidence_required: true, human_review: true, options: '' },
+  { name: '过往采购品类', key: 'historical_sourcing_categories', description: '公开来源中出现的历史采购或使用品类。', keywords: 'purchasing, procurement, plastic parts, injection molded, CNC parts, molds', type: 'text', required: false, evidence_required: true, human_review: true, options: '' },
 ]
 
 function toList(value) {
