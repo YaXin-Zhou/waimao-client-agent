@@ -7,6 +7,11 @@ const navItems = [
   ['database', '本地数据库'],
 ]
 
+const accountNavItems = [
+  ['users', '发件人资料'],
+  ['settings', '设置'],
+]
+
 function Icon({ name, size = 18 }) {
   const paths = {
     users: <><path d="M16 21v-2a4 4 0 0 0-4-4H6a4 4 0 0 0-4 4v2"/><circle cx="9" cy="7" r="4"/><path d="M22 21v-2a4 4 0 0 0-3-3.87M16 3.13a4 4 0 0 1 0 7.75"/></>,
@@ -112,6 +117,7 @@ function App() {
   const [databaseOverview, setDatabaseOverview] = useState(null)
   const [databaseLoading, setDatabaseLoading] = useState(false)
   const [databaseExportLoading, setDatabaseExportLoading] = useState(false)
+  const [settingsStatus, setSettingsStatus] = useState(null)
   const searchWarnings = searchCriteriaWarnings({ product: searchProduct, keywords: searchKeywords, countries: searchCountries, industries: searchIndustries })
   useEffect(() => {
     let cancelled = false
@@ -155,6 +161,15 @@ function App() {
       .finally(() => { if (!cancelled) setDatabaseLoading(false) })
     return () => { cancelled = true }
   }, [activeNav, remoteLeads, remoteTaskId])
+  useEffect(() => {
+    if (activeNav !== '设置') return undefined
+    let cancelled = false
+    fetch('/api/settings/status')
+      .then((response) => response.ok ? response.json() : Promise.reject(new Error('settings status failed')))
+      .then((data) => { if (!cancelled) setSettingsStatus(data) })
+      .catch(() => { if (!cancelled) setSettingsStatus(null) })
+    return () => { cancelled = true }
+  }, [activeNav])
   useEffect(() => {
     if (!remoteTaskId) return undefined
     let cancelled = false
@@ -742,13 +757,13 @@ function App() {
   return <div className="app-shell">
     <aside className="sidebar">
       <div className="brand"><span className="brand-mark">✦</span><span>NORTHSTAR OPS</span></div>
-      <nav>{navItems.map(([icon, label]) => <button key={label} className={`nav-item ${activeNav === label ? 'active' : ''}`} onClick={() => setActiveNav(label)}><Icon name={icon} /><span>{label}</span></button>)}</nav>
+      <nav>{navItems.map(([icon, label]) => <button key={label} className={`nav-item ${activeNav === label ? 'active' : ''}`} onClick={() => setActiveNav(label)}><Icon name={icon} /><span>{label}</span></button>)}<div className="nav-divider"/><div className="nav-group-label">工作配置</div>{accountNavItems.map(([icon, label]) => <button key={label} className={`nav-item nav-item-sub ${activeNav === label ? 'active' : ''}`} onClick={() => setActiveNav(label)}><Icon name={icon} /><span>{label}</span></button>)}</nav>
       <div className="sidebar-bottom"><div className="sidebar-rule"/><p>让中国制造<br/>连接全球真实需求</p><small>NORTHSTAR OPS</small></div>
     </aside>
     <main className="main-shell">
       <header className="topbar"><div className="top-actions"><button className="icon-button" onClick={() => notify('暂无新的系统通知')} aria-label="通知"><Icon name="bell" size={20}/><i className="notification-dot"/></button></div></header>
       <div className="content">
-      {activeNav === '本地数据库' ? <DatabasePanel overview={databaseOverview} loading={databaseLoading} exportLoading={databaseExportLoading} onExport={exportDatabase} onSelect={selectDatabaseLead} searchCountries={searchCountries}/> : <>
+      {activeNav === '本地数据库' ? <DatabasePanel overview={databaseOverview} loading={databaseLoading} exportLoading={databaseExportLoading} onExport={exportDatabase} onSelect={selectDatabaseLead} searchCountries={searchCountries}/> : activeNav === '发件人资料' ? <SenderProfilePage taskConfig={remoteTaskConfig} onSave={saveSenderProfile}/> : activeNav === '设置' ? <SettingsPanel status={settingsStatus} mailboxStatus={mailboxStatus}/> : <>
         <div className="page-heading"><div><h1>找客户</h1><p>输入目标条件，优先展示官网有公开邮箱的客户</p></div>{!remoteTaskId && <button className="primary-button" onClick={() => setShowTask(true)}><Icon name="plus" size={19}/>开始使用</button>}</div>
         <div className={`data-notice ${apiState}`}><span />{apiState === 'loading' ? '正在准备客户资料…' : apiState === 'connected' ? '客户资料已准备就绪' : apiState === 'empty' ? '当前还没有客户资料' : '客户资料暂时无法读取'}</div>
         <section className="search-panel panel"><div className="search-panel-heading"><div><h2>搜索条件</h2><p>常用条件放在这里，中文也可以直接输入</p></div><button type="button" className="primary-button" disabled={!remoteTaskId || discoverLoading || discoveryRun?.status === 'running'} onClick={discoverLeads}><Icon name="search" size={16}/>{discoverLoading || discoveryRun?.status === 'running' ? '正在搜索…' : '搜索可发送客户'}</button></div><div className="search-fields"><label>产品或业务<input value={searchProduct} onChange={(event) => setSearchProduct(event.target.value)} placeholder="例如：注塑件、精密零件" /></label><label>关键词<input value={searchKeywords} onChange={(event) => setSearchKeywords(event.target.value)} placeholder="例如：精密零件、注塑件" /></label><label>目标国家 / 地区<input value={searchCountries} onChange={(event) => setSearchCountries(event.target.value)} placeholder="例如：德国、墨西哥" /></label><label>行业<input value={searchIndustries} onChange={(event) => setSearchIndustries(event.target.value)} placeholder="例如：汽车、电子" /></label>{searchWarnings.length > 0 && <div className="criteria-hint">{searchWarnings.map((warning) => <span key={warning}>{warning}</span>)}</div>}{discoveryError && <div className="discovery-friendly-error">{discoveryError}</div>}</div><div className="search-panel-foot"><details className="maintenance-inline"><summary>维护工具（不常用）</summary><div className="maintenance-inline-body"><button type="button" className="outline-button" onClick={() => setShowRuleEditor(true)}>研究规则</button><button type="button" className="outline-button" onClick={() => setShowBrowserImport(true)}>备用导入</button></div></details></div></section>
@@ -757,7 +772,7 @@ function App() {
         <ReplyCenter mailboxStatus={mailboxStatus} threads={mailThreads} analyses={replyAnalyses} followUpTasks={followUpTasks} loading={replyLoading} onTest={testMailbox} onSync={syncMailbox} onAnalyze={analyzeReplies} onGenerateDraft={generateReplyDraft} onFollowUpStatus={updateFollowUpStatus}/>
         <section className="workspace-grid">
           <div className="lead-panel panel"><div className="panel-heading"><div><h2>可发送客户 <span>共 {filteredLeads.length} 个</span></h2><p>已找到官网公开邮箱，可以直接联系</p></div></div><div className="table-head"><span className="checkbox"/><span>公司名称</span><span>国家 / 地区</span><span>客户类型</span><span>状态</span><span/></div><div className="lead-list">{filteredLeads.length ? filteredLeads.map((lead) => <button className={`lead-row ${selected?.name === lead.name ? 'selected' : ''}`} key={lead.name} onClick={() => selectLead(lead)}><span className={`checkbox ${selected?.name === lead.name ? 'checked' : ''}`}>{selected?.name === lead.name && <Icon name="check" size={13}/>}</span><strong>{lead.name}</strong><span className="country"><span>{lead.flag}</span>{lead.country}</span><span>{lead.type}</span><Status status={lead.status}/><span className="more">···</span></button>) : <div className="empty-results">{remoteLeads.length ? '这次没有找到合格客户，请换一组条件' : '搜索后，合格客户会显示在这里'}</div>}</div><div className="table-footer"><span>当前显示 {filteredLeads.length} 个客户</span></div></div>
-          <aside className={`detail-panel panel ${filteredLeads.length && activeLead ? '' : 'detail-empty'}`}>{filteredLeads.length && activeLead ? <><div className="detail-top"><div className="company-symbol">◎</div><div className="company-title"><div><h2>{activeLead.name} <a href={activeLead.website} target="_blank" rel="noreferrer"><Icon name="external" size={14}/></a></h2><p>{activeLead.country} <i/> {activeLead.type} <i/> {activeLead.research ? '已完成官网背调' : '资料待整理'}</p></div><Status status={activeLead.status}/></div></div><div className="detail-tabs">{['概览', '来源证据', '邮件草稿'].map((tab) => <button className={detailTab === tab ? 'active' : ''} key={tab} onClick={() => setDetailTab(tab)}>{tab}</button>)}</div>{detailTab === '概览' && <><Overview lead={activeLead} onEvidence={() => setDetailTab('来源证据')} onDraft={() => setDetailTab('邮件草稿')}/><ResearchPanel lead={activeLead} loading={researchLoading} onStart={startResearch} onReview={reviewResearchField}/><LeadTimeline lead={activeLead} events={activeLead.auditEvents} onTransition={transitionLead} loading={leadTransitionLoading}/></>} {detailTab === '来源证据' && <Evidence lead={activeLead} onRefresh={refreshContacts} refreshing={contactRefreshLoading}/>} {detailTab === '邮件草稿' && <><Draft lead={activeLead} language={language} setLanguage={setLanguage} translatedDraft={translatedDraft} translationLoading={translationLoading} onTranslate={translateDraft} onReview={reviewDraft} reviewLoading={reviewLoading} status={draftStatus} setStatus={setDraftStatus} notify={notify}/><ContactForm lead={activeLead} onUpdate={updateContact} onRefresh={refreshContacts} refreshing={contactRefreshLoading}/><SenderProfileEditor taskConfig={remoteTaskConfig} onSave={saveSenderProfile}/><DraftGenerator lead={activeLead} taskConfig={remoteTaskConfig} loading={reviewLoading} onGenerate={generateDraft}/><ReviewControls lead={activeLead} sendingEnabled={mailboxStatus?.sending_enabled} onReview={reviewDraft} onSafetyCheck={runSendSafetyCheck} safetyLoading={safetyLoading} safetyResult={sendSafety} onSend={sendDraft} sendLoading={sendLoading} loading={reviewLoading}/></>}</> : <div className="detail-empty-state"><strong>没有选中的客户</strong><span>调整搜索词后选择一条客户记录</span></div>}</aside>
+          <aside className={`detail-panel panel ${filteredLeads.length && activeLead ? '' : 'detail-empty'}`}>{filteredLeads.length && activeLead ? <><div className="detail-top"><div className="company-symbol">◎</div><div className="company-title"><div><h2>{activeLead.name} <a href={activeLead.website} target="_blank" rel="noreferrer"><Icon name="external" size={14}/></a></h2><p>{activeLead.country} <i/> {activeLead.type} <i/> {activeLead.research ? '已完成官网背调' : '资料待整理'}</p></div><Status status={activeLead.status}/></div></div><div className="detail-tabs">{['概览', '来源证据', '邮件草稿'].map((tab) => <button className={detailTab === tab ? 'active' : ''} key={tab} onClick={() => setDetailTab(tab)}>{tab}</button>)}</div>{detailTab === '概览' && <><Overview lead={activeLead} onEvidence={() => setDetailTab('来源证据')} onDraft={() => setDetailTab('邮件草稿')}/><ResearchPanel lead={activeLead} loading={researchLoading} onStart={startResearch} onReview={reviewResearchField}/><LeadTimeline lead={activeLead} events={activeLead.auditEvents} onTransition={transitionLead} loading={leadTransitionLoading}/></>} {detailTab === '来源证据' && <Evidence lead={activeLead} onRefresh={refreshContacts} refreshing={contactRefreshLoading}/>} {detailTab === '邮件草稿' && <><Draft lead={activeLead} language={language} setLanguage={setLanguage} translatedDraft={translatedDraft} translationLoading={translationLoading} onTranslate={translateDraft} onReview={reviewDraft} reviewLoading={reviewLoading} status={draftStatus} setStatus={setDraftStatus} notify={notify}/><ContactForm lead={activeLead} onUpdate={updateContact} onRefresh={refreshContacts} refreshing={contactRefreshLoading}/><DraftGenerator lead={activeLead} taskConfig={remoteTaskConfig} loading={reviewLoading} onGenerate={generateDraft}/><ReviewControls lead={activeLead} sendingEnabled={mailboxStatus?.sending_enabled} onReview={reviewDraft} onSafetyCheck={runSendSafetyCheck} safetyLoading={safetyLoading} safetyResult={sendSafety} onSend={sendDraft} sendLoading={sendLoading} loading={reviewLoading}/></>}</> : <div className="detail-empty-state"><strong>没有选中的客户</strong><span>调整搜索词后选择一条客户记录</span></div>}</aside>
         </section>
       </>}
       </div>
@@ -921,6 +936,18 @@ function SenderProfileEditor({ taskConfig, onSave }) {
   const [contactName, setContactName] = useState(profile.contact_name || '')
   const [position, setPosition] = useState(profile.position || '')
   return <div className="review-controls sender-editor"><div className="section-title"><h3>发件人资料</h3><span>用于下一版草稿</span></div><label>公司名称<input value={companyName} onChange={(event) => setCompanyName(event.target.value)} placeholder="例如：ABC Trading Co., Ltd." /></label><label>联系人姓名<input value={contactName} onChange={(event) => setContactName(event.target.value)} placeholder="例如：Li Ming" /></label><label>职位<input value={position} onChange={(event) => setPosition(event.target.value)} placeholder="例如：Sales Manager" /></label><button className="outline-button full" onClick={() => onSave({ company_name: companyName, contact_name: contactName, position })}>保存发件人资料</button></div>
+}
+
+function SenderProfilePage({ taskConfig, onSave }) {
+  return <div className="settings-page"><div className="page-heading"><div><h1>发件人资料</h1><p>统一用于自动生成邮件，保存后新邮件会自动使用。</p></div><span className="database-local-badge">本机保存</span></div><div className="settings-content"><SenderProfileEditor taskConfig={taskConfig} onSave={onSave}/><div className="settings-tip"><strong>使用说明</strong><p>只需要填写一次。系统会把公司名称、联系人姓名和职位带入后续邮件，不需要逐封重复填写。</p></div></div></div>
+}
+
+function SettingsPanel({ status, mailboxStatus }) {
+  const badge = (ready, enabled = ready) => enabled ? ['已就绪', 'ready'] : ['未配置', 'pending']
+  const [deepseekLabel, deepseekTone] = badge(status?.deepseek_configured)
+  const [imapLabel, imapTone] = badge(status?.ali_imap_configured || mailboxStatus?.configured)
+  const [smtpLabel, smtpTone] = badge(status?.ali_smtp_enabled, status?.ali_smtp_enabled)
+  return <div className="settings-page"><div className="page-heading"><div><h1>设置</h1><p>管理 AI 和邮箱连接状态。账号、密码和 API Key 不会显示在页面中。</p></div></div><div className="settings-grid"><section className="settings-card panel"><div className="section-title"><h2>DeepSeek</h2><span className={`settings-status ${deepseekTone}`}><i/>{deepseekLabel}</span></div><p>用于整理客户资料、核验公开信息和自动生成邮件。</p><div className="settings-row"><span>配置文件</span><strong>{status?.config_path || 'config/.env'}</strong></div><div className="settings-row"><span>API Key</span><strong>已隐藏</strong></div></section><section className="settings-card panel"><div className="section-title"><h2>阿里邮箱</h2><span className={`settings-status ${imapTone}`}><i/>{imapLabel}</span></div><p>用于读取收件箱。当前收件功能保持只读，不会自动发送邮件。</p><div className="settings-row"><span>IMAP 收件</span><strong>{imapLabel}</strong></div><div className="settings-row"><span>SMTP 发信</span><strong className={`settings-value ${smtpTone}`}>{smtpLabel === '已就绪' ? '已开启' : '未开启'}</strong></div></section></div><div className="settings-guide panel"><strong>需要修改配置？</strong><p>编辑项目中的 <code>config/.env</code>，保存后重启本地服务。密码和 API Key 只放在本机配置文件中，不要提交到 Git。</p></div></div>
 }
 
 function DraftGenerator({ lead, taskConfig, loading, onGenerate }) {

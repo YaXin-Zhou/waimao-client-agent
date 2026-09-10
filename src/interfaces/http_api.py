@@ -5,6 +5,7 @@ from __future__ import annotations
 import base64
 import io
 import json
+from pathlib import Path
 from concurrent.futures import ThreadPoolExecutor
 from dataclasses import replace
 from datetime import datetime, timezone
@@ -114,6 +115,8 @@ class ApiApplication:
                 return self._database_export()
             if method == "GET" and segments == ["api", "mailbox", "status"]:
                 return self._mailbox_status()
+            if method == "GET" and segments == ["api", "settings", "status"]:
+                return self._settings_status()
             if method == "POST" and segments == ["api", "mailbox", "test"]:
                 return self._test_mailbox()
             if (
@@ -532,6 +535,23 @@ class ApiApplication:
             "configured": self._mailbox is not None,
             "mode": "read_only",
             "sending_enabled": self._sending_enabled,
+        }
+
+    def _settings_status(self) -> tuple[int, dict]:
+        """Expose integration readiness without returning credentials or account values."""
+        config_path = Path(__file__).resolve().parents[2] / "config" / ".env"
+        values = {}
+        if config_path.exists():
+            for raw_line in config_path.read_text(encoding="utf-8").splitlines():
+                line = raw_line.strip()
+                if line and not line.startswith("#") and "=" in line:
+                    key, value = line.split("=", 1)
+                    values[key.strip()] = value.strip()
+        return 200, {
+            "deepseek_configured": bool(values.get("DEEPSEEK_API_KEY")),
+            "ali_imap_configured": bool(values.get("ALI_IMAP_USERNAME") and values.get("ALI_IMAP_PASSWORD")),
+            "ali_smtp_enabled": self._sending_enabled,
+            "config_path": "config/.env",
         }
 
     def _test_mailbox(self) -> tuple[int, dict]:
