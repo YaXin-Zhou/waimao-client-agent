@@ -3,7 +3,7 @@
 from __future__ import annotations
 
 import re
-from concurrent.futures import ThreadPoolExecutor
+from concurrent.futures import ThreadPoolExecutor, TimeoutError as FuturesTimeoutError, as_completed
 from dataclasses import dataclass, replace
 from urllib.parse import urlparse
 
@@ -93,6 +93,7 @@ class AcquisitionService:
         website_workers: int = 8,
         website_page_limit: int = 3,
         external_source_limit: int = 1,
+        website_enrichment_timeout_seconds: int = 45,
     ):
         self._tasks = task_repository
         self._leads = lead_repository
@@ -105,7 +106,10 @@ class AcquisitionService:
         self._external_source_limit = external_source_limit
         if website_workers <= 0:
             raise ValueError("website_workers must be positive")
+        if website_enrichment_timeout_seconds <= 0:
+            raise ValueError("website_enrichment_timeout_seconds must be positive")
         self._website_workers = website_workers
+        self._website_enrichment_timeout_seconds = website_enrichment_timeout_seconds
         # Search rounds often return the same domains. Cache only successful
         # public-page extraction so changing criteria reuses evidence without
         # hiding a transient fetch failure.
@@ -613,15 +617,33 @@ class AcquisitionService:
         task = self._tasks.get(task_id)
         if task is None:
             raise KeyError(f"Task not found: {task_id}")
-        with ThreadPoolExecutor(max_workers=self._website_workers) as executor:
-            for record, additions in zip(unique_records, executor.map(
-                lambda record: self._enrich_one_search_record(record, task.criteria),
-                unique_records,
-            )):
+        executor = ThreadPoolExecutor(max_workers=self._website_workers)
+        futures = {
+            executor.submit(self._enrich_one_search_record, record, task.criteria): record
+            for record in unique_records
+        }
+        try:
+            completed = as_completed(
+                futures,
+                timeout=self._website_enrichment_timeout_seconds,
+            )
+            for future in completed:
+                record = futures[future]
+                try:
+                    additions = future.result()
+                except Exception:
+                    additions = []
                 enriched.extend(additions)
                 domain = (urlparse(record.website.strip()).hostname or "").lower().removeprefix("www.")
                 if domain and additions:
                     self._website_enrichment_cache[domain] = tuple(additions)
+        except FuturesTimeoutError:
+            # A slow or unresponsive site must not hold up the entire search round.
+            pass
+        finally:
+            for future in futures:
+                future.cancel()
+            executor.shutdown(wait=False, cancel_futures=True)
         return enriched
 
     def _enrich_one_search_record(

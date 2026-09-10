@@ -209,13 +209,16 @@ acquisition_service = AcquisitionService(
     website_workers=int(config_values.get("WEBSITE_FETCH_WORKERS", "8")),
     website_page_limit=int(config_values.get("WEBSITE_FETCH_PAGE_LIMIT", "3")),
     external_source_limit=int(config_values.get("WEBSITE_EXTERNAL_SOURCE_LIMIT", "1")),
+    website_enrichment_timeout_seconds=int(
+        config_values.get("WEBSITE_ENRICHMENT_TIMEOUT_SECONDS", "45")
+    ),
 )
 discovery_queue = DiscoveryJobQueue(
     acquisition_service,
     discovery_run_repository,
     max_workers=int(config_values.get("DISCOVERY_QUEUE_WORKERS", "1")),
     max_pending=int(config_values.get("DISCOVERY_QUEUE_MAX_PENDING", "2")),
-    max_search_rounds=int(config_values.get("DISCOVERY_MAX_SEARCH_ROUNDS", "6")),
+    max_search_rounds=int(config_values.get("DISCOVERY_MAX_SEARCH_ROUNDS", "1")),
     research_queue=research_queue,
 )
 application = ApiApplication(

@@ -317,6 +317,37 @@ def test_service_enriches_multiple_websites_with_bounded_concurrency():
     assert state["max_active"] == 2
 
 
+def test_service_does_not_wait_for_slow_website_enrichment():
+    class Search:
+        def search(self, criteria):
+            return [LeadRecord("Slow Company", "https://slow.example", "", "Germany")]
+
+    class SlowReader:
+        def fetch(self, url):
+            time.sleep(0.2)
+            return SourceDocument(url, "Slow Company", "sales@slow.example")
+
+    tasks = InMemoryTaskRepository()
+    service = AcquisitionService(
+        tasks,
+        InMemoryLeadRepository(),
+        search_provider=Search(),
+        website_reader=SlowReader(),
+        website_enrichment_timeout_seconds=0.05,
+    )
+    task = service.create_task(
+        "Slow website timeout",
+        AcquisitionCriteria(product="plastic components", minimum_qualification_score=0),
+    )
+
+    started = time.monotonic()
+    results = service.discover_and_assess(task.id, {}, {})
+    elapsed = time.monotonic() - started
+
+    assert elapsed < 0.15
+    assert results[0].lead.emails == ()
+
+
 def test_service_uses_fetched_website_text_as_match_evidence_without_query_injection():
     class Search:
         def search(self, criteria):
