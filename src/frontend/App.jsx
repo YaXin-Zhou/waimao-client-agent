@@ -368,7 +368,9 @@ function App() {
     try {
       const response = await fetch(`/api/drafts/${selectedDraft.id}/translate`, { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ target_language: 'zh-CN' }) })
       if (!response.ok) throw new Error('translation failed')
-      setTranslatedDraft(await response.json())
+      const payload = await response.json()
+      if (!payload?.body || /Error 500|Server Error|That’s an error/i.test(payload.body)) throw new Error('translation failed')
+      setTranslatedDraft(payload)
       setLanguage('中文')
       notify('中文预览已生成，英文邮件内容未改变')
     } catch { notify('翻译失败，请检查本地翻译服务或网络') } finally { setTranslationLoading(false) }
