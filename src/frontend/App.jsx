@@ -79,7 +79,6 @@ function App() {
   const [selectedDraft, setSelectedDraft] = useState(null)
   const [batchDrafts, setBatchDrafts] = useState([])
   const [batchIndex, setBatchIndex] = useState(0)
-  const [batchReviewer, setBatchReviewer] = useState('')
   const [batchSelectedIds, setBatchSelectedIds] = useState([])
   const [batchPreview, setBatchPreview] = useState(null)
   const [batchLoading, setBatchLoading] = useState(false)
@@ -374,22 +373,22 @@ function App() {
       notify('中文预览已生成，英文邮件内容未改变')
     } catch { notify('翻译失败，请检查本地翻译服务或网络') } finally { setTranslationLoading(false) }
   }
-  const reviewDraft = async (action, note, reviewer) => {
-    if (!selectedDraft?.id || !reviewer.trim()) { notify('请先填写审核人'); return }
+  const reviewDraft = async (action, note) => {
+    if (!selectedDraft?.id) return
     if ((action === 'request-revision' || action === 'reject') && !note.trim()) { notify('请填写处理意见'); return }
     setReviewLoading(true)
     try {
-      const response = await fetch(`/api/drafts/${selectedDraft.id}/${action}`, { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ reviewer: reviewer.trim(), note: note.trim() }) })
+      const response = await fetch(`/api/drafts/${selectedDraft.id}/${action}`, { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ note: note.trim() }) })
       if (!response.ok) throw new Error('review failed')
       setSelectedDraft(await response.json())
       setSendSafety(null)
       notify(action === 'approve' ? '草稿已批准，等待发送' : action === 'request-revision' ? '草稿已退回修改' : '草稿已拒绝')
     } catch { notify('审核操作失败，请稍后重试') } finally { setReviewLoading(false) }
   }
-  const reviewResearchField = async (fieldKey, value, reviewer) => {
-    if (!remoteTaskId || !selected?.domain || !reviewer?.trim()) { notify('请先填写字段复核人'); return }
+  const reviewResearchField = async (fieldKey, value) => {
+    if (!remoteTaskId || !selected?.domain) return
     try {
-      const response = await fetch(`/api/tasks/${remoteTaskId}/leads/${selected.domain}/research-fields/${fieldKey}`, { method: 'PATCH', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ status: 'verified', value, actor: reviewer.trim() }) })
+      const response = await fetch(`/api/tasks/${remoteTaskId}/leads/${selected.domain}/research-fields/${fieldKey}`, { method: 'PATCH', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ status: 'verified', value }) })
       const data = await response.json()
       if (!response.ok) throw new Error(data.error || 'research field review failed')
       setSelectedResearch(data)
@@ -409,10 +408,9 @@ function App() {
     } catch { notify('邮件生成失败，请确认客户资料已整理完成') } finally { setReviewLoading(false) }
   }
   const reviewBatchDraft = async (draftId, action = 'approve') => {
-    if (!batchReviewer.trim()) { notify('请先填写批量审核人'); return }
     setBatchLoading(true)
     try {
-      const response = await fetch(`/api/drafts/${draftId}/${action}`, { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ reviewer: batchReviewer.trim(), note: '' }) })
+      const response = await fetch(`/api/drafts/${draftId}/${action}`, { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ note: '' }) })
       const payload = await response.json()
       if (!response.ok) throw new Error(payload.error || 'batch review failed')
       setBatchDrafts((items) => items.map((draft) => draft.id === draftId ? payload : draft))
@@ -750,7 +748,7 @@ function App() {
         <div className={`data-notice ${apiState}`}><span />{apiState === 'loading' ? '正在准备客户资料…' : apiState === 'connected' ? '客户资料已准备就绪' : apiState === 'empty' ? '当前还没有客户资料' : '客户资料暂时无法读取'}</div>
         <section className="search-panel panel"><div className="search-panel-heading"><div><h2>搜索条件</h2><p>常用条件放在这里，中文也可以直接输入</p></div><button type="button" className="primary-button" disabled={!remoteTaskId || discoverLoading || discoveryRun?.status === 'running'} onClick={discoverLeads}><Icon name="search" size={16}/>{discoverLoading || discoveryRun?.status === 'running' ? '正在搜索…' : '搜索可发送客户'}</button></div><div className="search-fields"><label>产品或业务<input value={searchProduct} onChange={(event) => setSearchProduct(event.target.value)} placeholder="例如：注塑件、精密零件" /></label><label>关键词<input value={searchKeywords} onChange={(event) => setSearchKeywords(event.target.value)} placeholder="例如：精密零件、注塑件" /></label><label>目标国家 / 地区<input value={searchCountries} onChange={(event) => setSearchCountries(event.target.value)} placeholder="例如：德国、墨西哥" /></label><label>行业<input value={searchIndustries} onChange={(event) => setSearchIndustries(event.target.value)} placeholder="例如：汽车、电子" /></label>{searchWarnings.length > 0 && <div className="criteria-hint">{searchWarnings.map((warning) => <span key={warning}>{warning}</span>)}</div>}{discoveryError && <div className="discovery-friendly-error">{discoveryError}</div>}</div><div className="search-panel-foot"><details className="maintenance-inline"><summary>维护工具（不常用）</summary><div className="maintenance-inline-body"><button type="button" className="outline-button" onClick={() => setShowRuleEditor(true)}>研究规则</button><button type="button" className="outline-button" onClick={() => setShowBrowserImport(true)}>备用导入</button></div></details></div></section>
         {discoverySummary ? <DiscoveryFunnel summary={discoverySummary}/> : null}
-        <BatchMailPanel drafts={batchDrafts} index={batchIndex} onIndexChange={setBatchIndex} reviewer={batchReviewer} onReviewerChange={setBatchReviewer} selectedIds={batchSelectedIds} onToggle={(id) => setBatchSelectedIds((items) => items.includes(id) ? items.filter((item) => item !== id) : items.length >= 30 ? items : [...items, id])} onReview={reviewBatchDraft} onPreview={() => sendBatchDrafts(false)} onConfirm={() => sendBatchDrafts(true)} loading={batchLoading} preview={batchPreview}/>
+        <BatchMailPanel drafts={batchDrafts} index={batchIndex} onIndexChange={setBatchIndex} selectedIds={batchSelectedIds} onToggle={(id) => setBatchSelectedIds((items) => items.includes(id) ? items.filter((item) => item !== id) : items.length >= 30 ? items : [...items, id])} onReview={reviewBatchDraft} onPreview={() => sendBatchDrafts(false)} onConfirm={() => sendBatchDrafts(true)} loading={batchLoading} preview={batchPreview}/>
         <ReplyCenter mailboxStatus={mailboxStatus} threads={mailThreads} analyses={replyAnalyses} followUpTasks={followUpTasks} loading={replyLoading} onTest={testMailbox} onSync={syncMailbox} onAnalyze={analyzeReplies} onGenerateDraft={generateReplyDraft} onFollowUpStatus={updateFollowUpStatus}/>
         <section className="workspace-grid">
           <div className="lead-panel panel"><div className="panel-heading"><div><h2>可发送客户 <span>共 {filteredLeads.length} 个</span></h2><p>已找到官网公开邮箱，可以直接联系</p></div></div><div className="table-head"><span className="checkbox"/><span>公司名称</span><span>国家 / 地区</span><span>客户类型</span><span>状态</span><span/></div><div className="lead-list">{filteredLeads.length ? filteredLeads.map((lead) => <button className={`lead-row ${selected?.name === lead.name ? 'selected' : ''}`} key={lead.name} onClick={() => selectLead(lead)}><span className={`checkbox ${selected?.name === lead.name ? 'checked' : ''}`}>{selected?.name === lead.name && <Icon name="check" size={13}/>}</span><strong>{lead.name}</strong><span className="country"><span>{lead.flag}</span>{lead.country}</span><span>{lead.type}</span><Status status={lead.status}/><span className="more">···</span></button>) : <div className="empty-results">{remoteLeads.length ? '这次没有找到合格客户，请换一组条件' : '搜索后，合格客户会显示在这里'}</div>}</div><div className="table-footer"><span>当前显示 {filteredLeads.length} 个客户</span></div></div>
@@ -855,7 +853,7 @@ function ResearchPanel({ lead, loading, onStart, onReview }) {
   const [sourceUrl, setSourceUrl] = useState(lead.website || '')
   const [maxAttempts, setMaxAttempts] = useState('2')
   const [requestKey, setRequestKey] = useState('')
-  const [reviewer, setReviewer] = useState('')
+  const reviewer = '本地用户'
   const run = lead.researchRun
   const running = run?.status === 'running'
   return <div className="review-controls research-panel"><CustomFieldResults research={lead.research} onReview={(key, value) => onReview(key, value, reviewer)}/><div className="section-title"><h3>资料核验</h3><span>{run?.status === 'running' ? '正在核验' : run?.status === 'failed' ? '核验失败' : lead.research ? '已完成核验' : '资料待整理'}</span></div><p className="research-intro">系统会根据官网公开页面补充公司主体、联系方式、产品和采购信息，并保留来源。</p><label>字段复核人<input value={reviewer} onChange={(event) => setReviewer(event.target.value)} placeholder="填写姓名" /></label><label>来源网址<input value={sourceUrl} onChange={(event) => setSourceUrl(event.target.value)} /></label><button className="primary-button full" disabled={loading || running || !sourceUrl.trim()} onClick={() => onStart(sourceUrl.trim(), Number(maxAttempts), requestKey.trim())}>{loading ? '提交中…' : running ? '正在核验…' : run?.status === 'failed' ? '重新核验客户资料' : '开始核验客户资料'} <Icon name="arrow" size={16}/></button>{run?.error && <p className="generator-hint">核验未完成：请检查官网是否可以访问。</p>}{['succeeded', 'review_required'].includes(run?.status) && <p className="research-success">客户资料已更新，请查看上方核验结果。</p>}<details className="maintenance-inline research-maintenance"><summary>维护：高级核验设置</summary><div className="research-fields"><label>最大尝试次数<select value={maxAttempts} onChange={(event) => setMaxAttempts(event.target.value)}><option value="1">1 次</option><option value="2">2 次</option><option value="3">3 次</option></select></label><label>请求标识（维护用）<input value={requestKey} onChange={(event) => setRequestKey(event.target.value)} placeholder="留空即可" /></label></div></details></div>
@@ -923,13 +921,24 @@ function SenderProfileEditor({ taskConfig, onSave }) {
 function DraftGenerator({ lead, taskConfig, loading, onGenerate }) {
   const [product, setProduct] = useState(taskConfig?.criteria?.product || '')
   const [template, setTemplate] = useState('Introduce {product} to {company} based on their published product range.')
+  const [autoStarted, setAutoStarted] = useState(false)
+  useEffect(() => {
+    const profile = taskConfig?.sender_profile || {}
+    const ready = Boolean(lead.isRemote && lead.research && lead.email?.includes('@') && !lead.draft && product.trim() && profile.company_name?.trim() && profile.contact_name?.trim() && profile.position?.trim())
+    if (ready && !autoStarted && !loading) {
+      setAutoStarted(true)
+      onGenerate(template, product.trim())
+    }
+  }, [lead.isRemote, lead.domain, lead.research, lead.email, lead.draft, product, template, taskConfig?.sender_profile, autoStarted, loading, onGenerate])
   if (!lead.isRemote) return null
   const hasRecipient = Boolean(lead.email?.includes('@'))
   const researchState = researchDraftState(lead)
+  if (!lead.draft) return <div className="review-controls draft-generator"><div className="section-title"><h3>邮件生成</h3><span>{autoStarted ? '正在自动生成' : '等待条件满足'}</span></div><p className="generator-hint">填写并保存统一发件人资料后，系统会根据客户资料自动生成邮件并进入审核。</p>{!hasRecipient && <p className="generator-hint">当前客户没有公开邮箱，暂不生成邮件。</p>}{!lead.research && <p className="generator-hint">客户资料整理完成后自动生成。</p>}</div>
+  if (lead.draft) return <div className="review-controls draft-generator"><div className="section-title"><h3>邮件生成</h3><span>已自动生成</span></div><p className="generator-hint">邮件已根据客户资料和统一发件人资料生成，请在上方查看中文预览后进行审核。</p></div>
   return <div className="review-controls draft-generator"><div className="section-title"><h3>{lead.draft ? '重新生成邮件' : '生成邮件'}</h3><span>{lead.draft ? '会创建新版本，不覆盖当前草稿' : '使用已整理的客户资料与发件人资料'}</span></div><label>产品或服务<input value={product} onChange={(event) => setProduct(event.target.value)} placeholder="填写本次推广产品" /></label><label>写作方向<textarea value={template} onChange={(event) => setTemplate(event.target.value)} rows="2" /></label><button className="primary-button full" disabled={loading || !product.trim() || !lead.research || !hasRecipient} onClick={() => onGenerate(template, product)}>{loading ? '生成中…' : lead.draft ? '生成新版本草稿' : '生成邮件草稿'} <Icon name="arrow" size={16}/></button>{!hasRecipient ? <p className="generator-hint">当前没有公开邮箱，补充收件人后才能生成。</p> : !lead.research && <p className="generator-hint">{researchState.message}</p>}</div>
 }
 
-function BatchMailPanel({ drafts, index, onIndexChange, reviewer, onReviewerChange, selectedIds, onToggle, onReview, onPreview, onConfirm, loading, preview }) {
+function BatchMailPanel({ drafts, index, onIndexChange, reviewer = '', onReviewerChange = () => {}, selectedIds, onToggle, onReview, onPreview, onConfirm, loading, preview }) {
   if (!drafts.length) return null
   const current = drafts[Math.min(index, drafts.length - 1)]
   const approved = drafts.filter((draft) => draft.status === 'approved')
@@ -938,6 +947,7 @@ function BatchMailPanel({ drafts, index, onIndexChange, reviewer, onReviewerChan
 }
 
 function ReviewControls({ lead, sendingEnabled, onReview, onSafetyCheck, safetyLoading, safetyResult, onSend, sendLoading, loading }) {
+  return null
   const [reviewer, setReviewer] = useState('')
   const [note, setNote] = useState('')
   const [confirmingSend, setConfirmingSend] = useState(false)

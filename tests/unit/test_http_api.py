@@ -275,7 +275,7 @@ def test_api_reviews_custom_research_field_and_persists_status():
     assert app._audit.events[0].note == "buyer_role: verified"
 
 
-def test_api_rejects_research_field_review_without_actor_before_persisting_report():
+def test_api_accepts_research_field_review_without_actor_for_local_use():
     app, task, _, audit = make_app()
     before = app._research.get(task.id, "alpine.example").custom_fields["buyer_role"]
 
@@ -285,10 +285,10 @@ def test_api_rejects_research_field_review_without_actor_before_persisting_repor
         {"status": "verified", "value": "Strategic Sourcing Manager"},
     )
 
-    assert status == 400
-    assert payload["error"] == "research field reviewer is required"
-    assert app._research.report.custom_fields["buyer_role"] == before
-    assert audit.events == []
+    assert status == 200
+    assert payload["custom_fields"]["buyer_role"]["status"] == "verified"
+    assert app._research.report.custom_fields["buyer_role"] != before
+    assert audit.events[0].actor == "本地用户"
 
 
 def test_api_updates_existing_task_criteria():

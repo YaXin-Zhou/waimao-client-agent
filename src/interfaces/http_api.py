@@ -1374,9 +1374,7 @@ class ApiApplication:
     def _review_research_field(
         self, task_id: str, domain: str, field_key: str, body: dict
     ) -> tuple[int, dict]:
-        actor = str(body.get("actor", "")).strip()
-        if not actor:
-            raise ValueError("research field reviewer is required")
+        actor = str(body.get("actor") or "本地用户").strip()
         report = self._research.get(task_id, domain)
         if report is None:
             raise KeyError(f"Research report not found: {domain}")
@@ -1520,7 +1518,7 @@ class ApiApplication:
         return 200, self._translation.preview(draft, str(body.get("target_language", "zh-CN")))
 
     def _review(self, draft_id: str, action: str, body: dict) -> tuple[int, dict]:
-        reviewer = body.get("reviewer", "")
+        reviewer = str(body.get("reviewer") or "本地用户").strip()
         if action == "approve":
             draft = self._reviews.approve(draft_id, reviewer)
         elif action == "request-revision":
