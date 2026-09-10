@@ -563,12 +563,16 @@ class ApiApplication:
                 if line and not line.startswith("#") and "=" in line:
                     key, value = line.split("=", 1)
                     values[key.strip()] = value.strip()
+        def configured(key: str) -> bool:
+            value = values.get(key, "").strip().lower()
+            return bool(value) and not value.startswith(("replace-with", "your-", "<"))
+
         return 200, {
             "config_file_present": config_path.exists(),
-            "deepseek_configured": bool(values.get("DEEPSEEK_API_KEY")),
-            "ali_imap_configured": bool(values.get("ALI_IMAP_USERNAME") and values.get("ALI_IMAP_PASSWORD")),
-            "ali_smtp_enabled": self._sending_enabled,
-            "setup_required": not bool(values.get("DEEPSEEK_API_KEY")),
+            "deepseek_configured": configured("DEEPSEEK_API_KEY"),
+            "ali_imap_configured": configured("ALI_IMAP_USERNAME") and configured("ALI_IMAP_PASSWORD"),
+            "ali_smtp_enabled": self._sending_enabled and configured("ALI_SMTP_USERNAME") and configured("ALI_SMTP_PASSWORD"),
+            "setup_required": not configured("DEEPSEEK_API_KEY") or not configured("ALI_IMAP_USERNAME") or not configured("ALI_IMAP_PASSWORD"),
             "config_path": "config/.env",
         }
 
