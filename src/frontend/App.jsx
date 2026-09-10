@@ -158,7 +158,7 @@ function App() {
   useEffect(() => {
     if (!remoteTaskId) return undefined
     let cancelled = false
-    fetch(`/api/tasks/${remoteTaskId}/drafts`)
+    const loadDrafts = () => fetch(`/api/tasks/${remoteTaskId}/drafts`)
       .then((response) => response.ok ? response.json() : Promise.reject(new Error('draft list failed')))
       .then((data) => {
         if (!cancelled) {
@@ -168,7 +168,9 @@ function App() {
         }
       })
       .catch(() => { if (!cancelled) setBatchDrafts([]) })
-    return () => { cancelled = true }
+    loadDrafts()
+    const timer = window.setInterval(loadDrafts, 1800)
+    return () => { cancelled = true; window.clearInterval(timer) }
   }, [remoteTaskId, selectedDraft?.id, selectedDraft?.status])
   useEffect(() => {
     if (!remoteTaskId) return undefined
@@ -676,7 +678,8 @@ function App() {
       const response = await fetch(`/api/tasks/${remoteTaskId}/sender-profile`, { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify(profile) })
       if (!response.ok) throw new Error('sender profile update failed')
       setRemoteTaskConfig(await response.json())
-      notify('发件人资料已保存，重新生成时会创建新草稿版本')
+      await fetch(`/api/tasks/${remoteTaskId}/leads`)
+      notify('发件人资料已保存，符合条件的邮件会自动生成')
     } catch { notify('发件人资料保存失败，请稍后重试') }
   }
   const createTask = async (event) => {

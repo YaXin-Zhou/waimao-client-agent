@@ -5,6 +5,7 @@ from __future__ import annotations
 import base64
 import io
 import json
+from concurrent.futures import ThreadPoolExecutor
 from dataclasses import replace
 from datetime import datetime, timezone
 from urllib.parse import parse_qs, unquote, urlsplit
@@ -96,6 +97,8 @@ class ApiApplication:
         self._website_reader = website_reader
         self._sending_enabled = sending_enabled
         self._reviews = EmailReviewService(drafts, audit)
+        self._auto_draft_executor = ThreadPoolExecutor(max_workers=2)
+        self._auto_draft_jobs = {}
 
     def handle(self, method: str, path: str, body=None) -> tuple[int, dict]:
         try:
@@ -414,6 +417,7 @@ class ApiApplication:
                 if not payload["lead"]["country"] and report.country:
                     payload["lead"]["country"] = report.country
             items.append(payload)
+        self._schedule_missing_drafts(task_id, effective_assessed)
         return 200, {
             "items": items,
             "summary": self._discovery_summary(task_id, effective_assessed),
@@ -441,6 +445,52 @@ class ApiApplication:
             "wikipedia", "worldometer", "population", "quiz", "whois",
         )
         return not any(marker in raw_name.casefold() for marker in noise_markers)
+
+    def _schedule_missing_drafts(self, task_id: str, assessed) -> None:
+        """后台为已核验、合格且有邮箱的客户自动生成邮件草稿。"""
+        if self._email_drafts is None or self._research is None:
+            return
+        task = self._tasks.get(task_id)
+        if task is None:
+            return
+        product = str(getattr(task.criteria, "product", "") or "").strip()
+        profile = task.sender_profile
+        if not product or not all(
+            str(getattr(profile, key, "") or "").strip()
+            for key in ("company_name", "contact_name", "position")
+        ):
+            return
+        self._auto_draft_jobs = {
+            key: job for key, job in self._auto_draft_jobs.items() if not job.done()
+        }
+        for item in assessed:
+            if not item.qualified or not item.lead.domain or not item.lead.emails:
+                continue
+            research = self._research.get(task_id, item.lead.domain)
+            if research is None or self._drafts.latest_for_lead(task_id, item.lead.domain):
+                continue
+            key = (task_id, item.lead.domain)
+            if key in self._auto_draft_jobs:
+                continue
+            self._auto_draft_jobs[key] = self._auto_draft_executor.submit(
+                self._generate_auto_draft, task_id, item.lead, research, product, profile,
+                str(getattr(task.criteria, "language", "English") or "English")
+            )
+
+    def _generate_auto_draft(self, task_id, lead, research, product, profile, language) -> None:
+        try:
+            draft = self._email_drafts.generate(
+                task_id,
+                lead,
+                research,
+                "Introduce {product} to {company} based on their published product range.",
+                product,
+                profile,
+                language,
+            )
+            self._drafts.save(draft)
+        except Exception:
+            return None
 
     def _contacted_emails(self) -> set[str]:
         if self._email_send is None:
