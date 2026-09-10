@@ -50,6 +50,7 @@ from src.infrastructure.sqlite_repositories import (  # noqa: E402
     SQLiteTaskRepository,
 )
 from src.infrastructure.website_fetcher import WebsiteFetcher  # noqa: E402
+from src.infrastructure.yahoo_search_provider import YahooSearchProvider  # noqa: E402
 from src.interfaces.http_api import ApiApplication  # noqa: E402
 
 DATABASE = ROOT / "data" / "runtime" / "acquisition.db"
@@ -110,11 +111,23 @@ bing_search_provider = (
         max_results_per_query=int(config_values.get("SEARCH_RESULTS_PER_QUERY", "10")),
         host=config_values.get("SEARCH_BING_HOST", "www.bing.com"),
     )
-    if config_values.get("SEARCH_BING_ENABLED", "false").lower() == "true"
+    if config_values.get("SEARCH_BING_ENABLED", "true").lower() == "true"
     else None
 )
+yahoo_search_provider = (
+    YahooSearchProvider(
+        timeout=float(config_values.get("SEARCH_TIMEOUT_SECONDS", "15")),
+        max_results_per_query=int(config_values.get("SEARCH_RESULTS_PER_QUERY", "10")),
+        host=config_values.get("SEARCH_YAHOO_HOST", "search.yahoo.com"),
+    )
+    if config_values.get("SEARCH_YAHOO_ENABLED", "true").lower() == "true"
+    else None
+)
+# Bing is the first live source because it provides a bounded HTML result page
+# in the current local network; Google remains available as a fallback when it
+# is reachable, without making a blocked Google session delay every search.
 search_provider = FallbackSearchProvider(
-    static_search_provider, browser_search_provider, bing_search_provider
+    yahoo_search_provider, bing_search_provider, static_search_provider, browser_search_provider
 )
 try:
     deepseek_provider = DeepSeekProvider(DeepSeekConfig.from_env_file(ROOT / "config" / ".env"))
@@ -193,13 +206,17 @@ acquisition_service = AcquisitionService(
     website_reader=WebsiteFetcher(
         timeout=int(config_values.get("WEBSITE_FETCH_TIMEOUT_SECONDS", "15"))
     ),
-    website_workers=int(config_values.get("WEBSITE_FETCH_WORKERS", "4")),
+    website_workers=int(config_values.get("WEBSITE_FETCH_WORKERS", "8")),
+    website_page_limit=int(config_values.get("WEBSITE_FETCH_PAGE_LIMIT", "3")),
+    external_source_limit=int(config_values.get("WEBSITE_EXTERNAL_SOURCE_LIMIT", "1")),
 )
 discovery_queue = DiscoveryJobQueue(
     acquisition_service,
     discovery_run_repository,
     max_workers=int(config_values.get("DISCOVERY_QUEUE_WORKERS", "1")),
     max_pending=int(config_values.get("DISCOVERY_QUEUE_MAX_PENDING", "2")),
+    max_search_rounds=int(config_values.get("DISCOVERY_MAX_SEARCH_ROUNDS", "6")),
+    research_queue=research_queue,
 )
 application = ApiApplication(
     task_repository,

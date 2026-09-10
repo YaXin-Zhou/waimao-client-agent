@@ -2,14 +2,17 @@
 
 from __future__ import annotations
 
+import base64
+import io
 import json
 from dataclasses import replace
 from datetime import datetime, timezone
-from urllib.parse import unquote, urlsplit
+from urllib.parse import parse_qs, unquote, urlsplit
 
 from src.application.acquisition_service import (
     DEFAULT_QUALIFICATION_WEIGHTS,
     AcquisitionService,
+    _country_key,
 )
 from src.application.email_review_service import EmailReviewService
 from src.application.search_health import classify_search_error
@@ -29,6 +32,7 @@ from src.domain.lead import (
     LeadStatus,
     canonical_source_url,
     canonical_website_domain,
+    clean_company_name,
     evidence_level,
     identity_consistency,
     is_search_source,
@@ -38,7 +42,7 @@ from src.domain.research_run import ResearchRun
 from src.domain.send_safety import SendPolicy
 from src.domain.sender_profile import SenderProfile
 from src.domain.task import AcquisitionCriteria, TaskStatus, effective_candidate_limit
-from src.infrastructure.google_search_provider import SearchProviderError
+from src.infrastructure.google_search_provider import GoogleSearchProvider, SearchProviderError
 
 
 class ApiApplication:
@@ -100,6 +104,11 @@ class ApiApplication:
                 return 200, {"status": "ok"}
             if method == "GET" and segments == ["api", "ready"]:
                 return self._ready()
+            if method == "GET" and segments == ["api", "database", "overview"]:
+                task_id = parse_qs(urlsplit(path).query).get("task_id", [""])[0]
+                return self._database_overview(task_id)
+            if method == "GET" and segments == ["api", "database", "export"]:
+                return self._database_export()
             if method == "GET" and segments == ["api", "mailbox", "status"]:
                 return self._mailbox_status()
             if method == "POST" and segments == ["api", "mailbox", "test"]:
@@ -354,8 +363,104 @@ class ApiApplication:
         # the same evidence sanitization and qualification refresh as other reads.
         assessed = self._acquisition.list_leads(task_id)
         task = self._tasks.get(task_id)
-        items = [self._assessed(item, task.criteria) for item in assessed]
-        return 200, {"items": items, "summary": self._discovery_summary(task_id, assessed)}
+        displayable_assessed = [
+            item for item in assessed if self._is_displayable_lead(item.lead)
+        ]
+        self._schedule_missing_research(task_id, displayable_assessed)
+        items = []
+        effective_assessed = []
+        contacted_emails = self._contacted_emails()
+        for item in displayable_assessed:
+            report = (
+                self._research.get(task_id, item.lead.domain)
+                if self._research is not None and item.lead.domain
+                else None
+            )
+            effective_item = item
+            if report is not None and report.country and not item.lead.country:
+                effective_item = replace(
+                    item,
+                    lead=replace(item.lead, country=report.country),
+                )
+            effective_item = AcquisitionService._qualify(
+                [effective_item], task.criteria
+            )[0]
+            effective_assessed.append(effective_item)
+            payload = self._assessed(effective_item, task.criteria)
+            payload["contacted"] = bool(
+                set(email.lower() for email in effective_item.lead.emails)
+                & contacted_emails
+            )
+            if report is not None:
+                if report.company_name.strip():
+                    payload["lead"]["company_name"] = clean_company_name(
+                        report.company_name, item.lead.domain
+                    )
+                payload["lead"]["customer_type"] = report.customer_type.value
+                if not payload["lead"]["country"] and report.country:
+                    payload["lead"]["country"] = report.country
+            items.append(payload)
+        return 200, {
+            "items": items,
+            "summary": self._discovery_summary(task_id, effective_assessed),
+        }
+
+    @staticmethod
+    def _is_displayable_lead(lead) -> bool:
+        """Hide obvious legacy directory/institution records from customer views."""
+        if not lead.domain:
+            return True
+        if not GoogleSearchProvider._is_candidate(
+            f"https://{lead.domain}/", lead.company_name
+        ):
+            return False
+        raw_name = " ".join(str(lead.company_name or "").split()).strip()
+        cleaned_name = clean_company_name(raw_name, lead.domain)
+        # If cleaning can only recover the domain, the collected title was a
+        # search/article headline rather than a company identity. Keep it in
+        # evidence, but keep it out of the customer database view.
+        if raw_name and cleaned_name.casefold() == lead.domain.casefold() and raw_name.casefold() != lead.domain.casefold():
+            return False
+        noise_markers = (
+            "weather", "calculator", "university", "tripadvisor", "hotels.com",
+            "百度知道", "知乎", "站酷", "google trends", "google traductor",
+            "wikipedia", "worldometer", "population", "quiz", "whois",
+        )
+        return not any(marker in raw_name.casefold() for marker in noise_markers)
+
+    def _contacted_emails(self) -> set[str]:
+        if self._email_send is None:
+            return set()
+        getter = getattr(self._email_send, "sent_recipient_emails", None)
+        return {str(email).lower() for email in getter()} if callable(getter) else set()
+
+    def _schedule_missing_research(self, task_id: str, assessed) -> None:
+        """Queue website research for qualified records that lack a report."""
+        if self._research_queue is None or self._research is None:
+            return
+        for item in assessed:
+            if not item.qualified or not item.lead.domain:
+                continue
+            if self._research.get(task_id, item.lead.domain) is not None:
+                continue
+            source_url = next(
+                (
+                    url
+                    for url, _excerpt in item.lead.sources
+                    if url.strip() and not is_search_source(url)
+                ),
+                f"https://{item.lead.domain}",
+            )
+            try:
+                self._research_queue.submit(
+                    task_id,
+                    item.lead,
+                    source_url,
+                    DEFAULT_QUALIFICATION_WEIGHTS,
+                    request_key=f"auto-list:{task_id}:{item.lead.domain}",
+                )
+            except Exception:
+                continue
 
     def _mailbox_status(self) -> tuple[int, dict]:
         return 200, {
@@ -584,6 +689,168 @@ class ApiApplication:
     def _task_list(self) -> tuple[int, dict]:
         return 200, {"items": [self._task(task) for task in self._tasks.list()]}
 
+    def _database_overview(self, task_id: str = "") -> tuple[int, dict]:
+        """为本地数据库页提供只读概览；不暴露原始凭据或内部错误。"""
+        # 数据库页默认展示当前工作台任务，避免把历史测试任务和不同国家
+        # 的客户混在一起。未传 task_id 时保留旧的聚合行为供兼容调用方使用。
+        if task_id.strip():
+            selected_task = self._tasks.get(task_id.strip())
+            tasks = [selected_task] if selected_task is not None else []
+        else:
+            tasks = self._tasks.list()
+        rows = []
+        contacted_emails = self._contacted_emails()
+        reply_domains = self._reply_domains()
+        for task in tasks:
+            assessments = self._acquisition.list_leads(task.id)
+            assessments = [
+                item for item in assessments if self._is_displayable_lead(item.lead)
+            ]
+            assessments = self._apply_research_country(task.id, task, assessments)
+            target_countries = {
+                _country_key(country)
+                for country in task.criteria.countries
+                if str(country).strip()
+            }
+            # 客户可见数据库不展示无法确认国家或不属于本次目标市场的记录。
+            # 记录仍保存在本地候选库，后续重新核验后可再次进入展示范围。
+            assessments = [
+                item
+                for item in assessments
+                if item.lead.country.strip()
+                and item.lead.country.casefold() != "unknown"
+                and (
+                    not target_countries
+                    or _country_key(item.lead.country) in target_countries
+                )
+            ]
+            eligible = [
+                item for item in assessments
+                if item.qualified
+                and item.lead.emails
+                and not (set(email.lower() for email in item.lead.emails) & contacted_emails)
+                and "email_domain_mismatch" not in item.lead.flags
+                and bool(item.lead.domain)
+            ]
+            today_domains = {
+                item.lead.domain
+                for item in sorted(eligible, key=lambda item: item.score.total, reverse=True)[
+                    : task.criteria.daily_limit
+                ]
+            }
+            for item in assessments:
+                is_today_send = item.lead.domain in today_domains
+                is_pending_contact = item.qualified and bool(item.lead.domain) and item.lead.domain not in today_domains
+                is_contacted = bool(set(email.lower() for email in item.lead.emails) & contacted_emails)
+                rows.append({
+                    "task_name": task.name,
+                    "task_id": task.id,
+                    "lead": self._lead(item.lead, task.criteria),
+                    "score": self._score(item.score),
+                    "qualified": bool(item.qualified),
+                    "sendable": is_today_send,
+                    "pending_contact": is_pending_contact,
+                    "contacted": is_contacted,
+                    "follow_up_ready": is_contacted and item.lead.domain in reply_domains,
+                })
+        rows.sort(key=lambda item: item["lead"].get("domain", ""))
+        unique_domains = {item["lead"].get("domain") for item in rows if item["lead"].get("domain")}
+        emails = {email.lower() for item in rows for email in item["lead"].get("emails", []) if "@" in email}
+        qualified = [item for item in rows if item["qualified"]]
+        sendable = [item for item in rows if item["sendable"]]
+        pending_contact = [item for item in rows if item["pending_contact"]]
+        contacted = [item for item in rows if item["contacted"]]
+        follow_up = [item for item in rows if item["follow_up_ready"]]
+        return 200, {
+            "stats": {
+                "task_count": len(tasks),
+                "record_count": len(rows),
+                "company_count": len(unique_domains),
+                "qualified_count": len(qualified),
+                "sendable_count": len(sendable),
+                "pending_contact_count": len(pending_contact),
+                "contacted_count": len(contacted),
+                "follow_up_count": len(follow_up),
+                "email_count": len(emails),
+                "source_count": sum(item["lead"].get("source_summary", {}).get("website_count", 0) for item in rows),
+            },
+            "items": rows[::-1],
+        }
+
+    def _apply_research_country(self, task_id, task, assessments):
+        """让数据库页使用背调补充的国家重新计算合格状态。"""
+        effective = []
+        for item in assessments:
+            report = (
+                self._research.get(task_id, item.lead.domain)
+                if self._research is not None and item.lead.domain
+                else None
+            )
+            candidate = item
+            if report is not None and report.country and not item.lead.country:
+                candidate = replace(
+                    item,
+                    lead=replace(item.lead, country=report.country),
+                )
+            effective.append(AcquisitionService._qualify([candidate], task.criteria)[0])
+        return effective
+
+    def _reply_domains(self) -> set[str]:
+        if self._inbound_emails is None:
+            return set()
+        domains = set()
+        for task in self._tasks.list():
+            for message in self._inbound_emails.list_for_task(task.id):
+                if not getattr(message, "is_bounce", False) and not getattr(message, "is_system_notification", False):
+                    if message.lead_domain:
+                        domains.add(message.lead_domain)
+        return domains
+
+    def _database_export(self) -> tuple[int, dict]:
+        """将本机客户资料导出为真实 XLSX；只导出已保存信息，不补造字段。"""
+        overview_status, overview = self._database_overview()
+        if overview_status != 200:
+            return overview_status, overview
+        from openpyxl import Workbook
+
+        workbook = Workbook()
+        sheet = workbook.active
+        sheet.title = "客户资料"
+        headers = (
+            "公司名称", "官网域名", "国家/地区", "客户类型", "公开邮箱",
+            "发送安排", "业务简介", "产品", "来源数量",
+        )
+        sheet.append(headers)
+        for item in overview["items"]:
+            lead = item["lead"]
+            report = self._research.get(item["task_id"], lead.get("domain", "")) if lead.get("domain") else None
+            research = self._research_result(report) if report else {}
+            sheet.append((
+                lead.get("company_name") or lead.get("domain", ""),
+                lead.get("domain", ""),
+                lead.get("country", ""),
+                lead.get("customer_type", ""),
+                "; ".join(lead.get("emails", [])),
+                "已发送" if item.get("contacted") else "未发送",
+                research.get("business_summary", ""),
+                "; ".join(research.get("products", [])),
+                lead.get("source_summary", {}).get("website_count", 0),
+            ))
+        sheet.freeze_panes = "A2"
+        sheet.auto_filter.ref = sheet.dimensions
+        for column in sheet.columns:
+            width = min(max(max(len(str(cell.value or "")) for cell in column) + 2, 10), 48)
+            sheet.column_dimensions[column[0].column_letter].width = width
+        output = io.BytesIO()
+        workbook.save(output)
+        encoded = base64.b64encode(output.getvalue()).decode("ascii")
+        return 200, {
+            "filename": "客户资料库.xlsx",
+            "content_type": "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet",
+            "content_base64": encoded,
+            "row_count": len(overview["items"]),
+        }
+
     def _create_task(self, body: dict) -> tuple[int, dict]:
         criteria_data = body.get("criteria", {})
         if not isinstance(criteria_data, dict):
@@ -711,7 +978,7 @@ class ApiApplication:
         if task is None:
             raise KeyError(f"Task not found: {task_id}")
         qualified_count = sum(1 for item in results if item.qualified)
-        target = task.criteria.qualified_lead_limit
+        target = task.criteria.daily_limit
         rejection_counts: dict[str, int] = {}
         for item in results:
             for reason in item.rejection_reasons:
@@ -1089,11 +1356,17 @@ class ApiApplication:
             if hasattr(self._drafts, "latest_for_lead")
             else None
         )
+        send_history = []
+        if self._email_send is not None:
+            getter = getattr(self._email_send, "list_attempts_for_lead", None)
+            if callable(getter):
+                send_history = [self._send_attempt(item) for item in getter(task_id, domain)]
         return 200, {
             "lead": self._lead(assessed.lead, self._tasks.get(task_id).criteria),
             "score": self._score(assessed.score),
             "research": self._research_result(report) if report else None,
             "draft": self._draft(draft) if draft else None,
+            "send_history": send_history,
         }
 
     def _draft_detail(self, draft_id: str) -> tuple[int, dict]:
@@ -1150,6 +1423,10 @@ class ApiApplication:
             "status": task.status.value,
             "criteria": {
                 "product": task.criteria.product,
+                "countries": list(task.criteria.countries),
+                "industries": list(task.criteria.industries),
+                "customer_types": list(task.criteria.customer_types),
+                "keywords": list(task.criteria.keywords),
                 "language": task.criteria.language,
                 "daily_limit": task.criteria.daily_limit,
                 "qualified_lead_limit": task.criteria.qualified_lead_limit,
@@ -1169,7 +1446,9 @@ class ApiApplication:
     @staticmethod
     def _lead(lead, criteria=None) -> dict:
         return {
-            "company_name": lead.company_name,
+            # Keep raw search titles in evidence, but expose a cleaned name in
+            # customer-facing lists and the local database.
+            "company_name": clean_company_name(lead.company_name, lead.domain),
             "domain": lead.domain,
             "website": f"https://{lead.domain}" if lead.domain else "",
             "emails": list(lead.emails),
@@ -1211,12 +1490,23 @@ class ApiApplication:
                 else "not_found"
             ),
             "product": "not_checked",
+            "industry": "not_configured",
         }
         if criteria is not None:
             checks["product"] = (
                 "supported"
                 if AcquisitionService.has_product_evidence(lead, criteria)
                 else "not_found"
+            )
+            industry_terms = tuple(
+                term.strip().lower() for term in criteria.industries if term.strip()
+            )
+            checks["industry"] = (
+                "supported"
+                if any(AcquisitionService._term_in_evidence(term, text) for term in industry_terms)
+                else "not_found"
+                if industry_terms
+                else "not_configured"
             )
         return checks
 

@@ -20,7 +20,9 @@ from src.domain.lead import (
     LeadScore,
     LeadStatus,
     canonical_website_domain,
+    clean_company_name,
     clean_leads,
+    identity_consistency,
     is_credible_source_excerpt,
     is_search_source,
     score_lead,
@@ -31,6 +33,7 @@ from src.domain.task import (
     AcquisitionTask,
     TaskStatus,
     configured_research_terms,
+    configured_product_evidence_terms,
 )
 
 
@@ -50,6 +53,35 @@ DEFAULT_QUALIFICATION_WEIGHTS = {
 }
 
 
+_COUNTRY_ALIASES = {
+    "中国": "china",
+    "cn": "china",
+    "china": "china",
+    "德国": "germany",
+    "de": "germany",
+    "germany": "germany",
+    "美国": "united states",
+    "us": "united states",
+    "usa": "united states",
+    "united states": "united states",
+    "英国": "united kingdom",
+    "gb": "united kingdom",
+    "uk": "united kingdom",
+    "united kingdom": "united kingdom",
+    "法国": "france",
+    "fr": "france",
+    "france": "france",
+    "意大利": "italy",
+    "it": "italy",
+    "italy": "italy",
+}
+
+
+def _country_key(value: str) -> str:
+    normalized = " ".join(str(value or "").strip().lower().split())
+    return _COUNTRY_ALIASES.get(normalized, normalized)
+
+
 class AcquisitionService:
     def __init__(
         self,
@@ -58,18 +90,26 @@ class AcquisitionService:
         search_provider: SearchProvider | None = None,
         audit_repository: AuditEventRepository | None = None,
         website_reader=None,
-        website_workers: int = 4,
+        website_workers: int = 8,
+        website_page_limit: int = 3,
+        external_source_limit: int = 1,
     ):
         self._tasks = task_repository
         self._leads = lead_repository
         self._search = search_provider
         self._audit = audit_repository
         self._website_reader = website_reader
-        self._website_page_limit = 5
-        self._external_source_limit = 3
+        if website_page_limit <= 0 or external_source_limit < 0:
+            raise ValueError("website page limits must be valid")
+        self._website_page_limit = website_page_limit
+        self._external_source_limit = external_source_limit
         if website_workers <= 0:
             raise ValueError("website_workers must be positive")
         self._website_workers = website_workers
+        # Search rounds often return the same domains. Cache only successful
+        # public-page extraction so changing criteria reuses evidence without
+        # hiding a transient fetch failure.
+        self._website_enrichment_cache: dict[str, tuple[LeadRecord, ...]] = {}
 
     def create_task(
         self,
@@ -119,8 +159,21 @@ class AcquisitionService:
         criteria = task.criteria
         website_sources = self._same_domain_sources(lead)
         signals: dict[str, int] = {}
-        if "product_match" in weights and self.has_product_evidence(lead, criteria):
-            signals["product_match"] = weights["product_match"]
+        if "product_match" in weights:
+            terms = tuple(
+                term.strip().lower()
+                for term in configured_research_terms(criteria)
+                if term.strip()
+            )
+            searchable = " ".join(source[1] for source in website_sources).lower()
+            matched_terms = sum(
+                self._term_in_evidence(term, searchable) for term in terms
+            )
+            if matched_terms:
+                signals["product_match"] = max(
+                    1,
+                    round(weights["product_match"] * matched_terms / len(terms)),
+                )
         if "email_quality" in weights and lead.emails:
             signals["email_quality"] = weights["email_quality"]
         if "evidence_quality" in weights and website_sources:
@@ -149,7 +202,7 @@ class AcquisitionService:
         """Check configured product terms against non-search-page source text."""
         terms = tuple(
             term.strip().lower()
-            for term in configured_research_terms(criteria)
+            for term in configured_product_evidence_terms(criteria)
             if term.strip()
         )
         searchable = " ".join(
@@ -197,12 +250,42 @@ class AcquisitionService:
                 and not AcquisitionService._same_domain_sources(item.lead)
             ):
                 reasons.append("missing_website_evidence")
+            # 有邮箱不等于符合业务需求；至少要在官网同域来源中找到用户配置的产品/业务证据。
             if configured_research_terms(criteria) and not AcquisitionService.has_product_evidence(
                 item.lead, criteria
             ):
                 reasons.append("missing_product_evidence")
-            if item.score.total < criteria.minimum_qualification_score:
-                reasons.append("score_below_threshold")
+            target_countries = {
+                _country_key(country)
+                for country in criteria.countries
+                if str(country).strip()
+            }
+            detected_country = _country_key(item.lead.country)
+            if (
+                target_countries
+                and not detected_country
+            ):
+                reasons.append("country_unconfirmed")
+            elif (
+                target_countries
+                and detected_country not in target_countries
+            ):
+                reasons.append("country_not_target")
+            # 公司主体必须能被官网同域内容支持。搜索标题、目录页或仅有
+            # 一个孤立域名的记录不能进入可发送列表。
+            identity_status = identity_consistency(item.lead).get("status")
+            raw_name = " ".join(str(item.lead.company_name or "").split()).strip()
+            cleaned_name = clean_company_name(raw_name, item.lead.domain)
+            title_only = bool(
+                raw_name
+                and item.lead.domain
+                and cleaned_name.casefold() == item.lead.domain.casefold()
+                and raw_name.casefold() != item.lead.domain.casefold()
+            )
+            if identity_status in {"unknown", "weak"} or title_only:
+                reasons.append("company_identity_unconfirmed")
+            # 产品证据、目标国家和邮箱归属都是交付前硬条件；评分只用于
+            # 排序，不会把缺少关键证据的记录“抬”进可发送列表。
             if "conflicting_country" in item.lead.flags:
                 reasons.append("conflicting_country")
             if "email_domain_mismatch" in item.lead.flags:
@@ -217,29 +300,10 @@ class AcquisitionService:
                 )
             )
 
-        ranked = sorted(
-            (item for item in evaluated if item.qualified),
-            key=lambda item: item.score.total,
-            reverse=True,
-        )
-        selected_domains = {item.lead.domain for item in ranked[: criteria.qualified_lead_limit]}
-        return [
-            replace(
-                item,
-                qualified=item.lead.domain in selected_domains,
-                rejection_reasons=(
-                    item.rejection_reasons
-                    if item.lead.domain in selected_domains
-                    or not item.qualified
-                    else tuple(
-                        dict.fromkeys(
-                            item.rejection_reasons + ("qualified_quota_exceeded",)
-                        )
-                    )
-                ),
-            )
-            for item in evaluated
-        ]
+        # 合格判断只负责判断“是否符合客户条件”，不再截断为发送数量。
+        # 每日发送上限属于发送环节；其余合格客户必须保留在本地数据库，
+        # 作为后续待联系客户，避免一次搜索结果被无声丢弃。
+        return evaluated
 
     def list_leads(self, task_id: str) -> list[AssessedLead]:
         task = self._tasks.get(task_id)
@@ -251,6 +315,9 @@ class AcquisitionService:
                 item,
                 lead=replace(
                     item.lead,
+                    company_name=clean_company_name(
+                        item.lead.company_name, item.lead.domain
+                    ),
                     sources=tuple(
                         source
                         for source in item.lead.sources
@@ -482,6 +549,7 @@ class AcquisitionService:
         weights: dict[str, int],
         signals_by_domain: dict[str, dict[str, int]],
         progress=None,
+        search_round: int = 0,
     ) -> list[AssessedLead]:
         task = self._tasks.get(task_id)
         if task is None:
@@ -490,7 +558,12 @@ class AcquisitionService:
             raise RuntimeError("Search provider is not configured")
         if progress:
             progress("searching")
-        records = self._search.search(task.criteria)
+        search_pass = getattr(self._search, "search_round", None)
+        records = (
+            search_pass(task.criteria, search_round)
+            if callable(search_pass)
+            else self._search.search(task.criteria)
+        )
         if progress:
             progress(
                 "enriching",
@@ -532,16 +605,23 @@ class AcquisitionService:
             domain = (parsed.hostname or "").lower().removeprefix("www.")
             if domain and domain not in fetched:
                 fetched.add(domain)
-                unique_records.append(record)
+                cached = self._website_enrichment_cache.get(domain)
+                if cached is not None:
+                    enriched.extend(cached)
+                else:
+                    unique_records.append(record)
         task = self._tasks.get(task_id)
         if task is None:
             raise KeyError(f"Task not found: {task_id}")
         with ThreadPoolExecutor(max_workers=self._website_workers) as executor:
-            for additions in executor.map(
+            for record, additions in zip(unique_records, executor.map(
                 lambda record: self._enrich_one_search_record(record, task.criteria),
                 unique_records,
-            ):
+            )):
                 enriched.extend(additions)
+                domain = (urlparse(record.website.strip()).hostname or "").lower().removeprefix("www.")
+                if domain and additions:
+                    self._website_enrichment_cache[domain] = tuple(additions)
         return enriched
 
     def _enrich_one_search_record(

@@ -78,7 +78,23 @@ class LeadScore:
     breakdown: dict[str, int]
 
 
-_COUNTRY_NAMES = {"DE": "Germany", "CN": "China", "US": "United States", "GB": "United Kingdom"}
+_COUNTRY_NAMES = {
+    "DE": "Germany",
+    "CN": "China",
+    "US": "United States",
+    "GB": "United Kingdom",
+    "FR": "France",
+    "IT": "Italy",
+}
+_COUNTRY_TLDS = {
+    "de": "Germany",
+    "cn": "China",
+    "us": "United States",
+    "uk": "United Kingdom",
+    "co.uk": "United Kingdom",
+    "fr": "France",
+    "it": "Italy",
+}
 _PLACEHOLDER_EMAIL_DOMAINS = {
     "example.com",
     "example.org",
@@ -92,6 +108,100 @@ _NON_EMAIL_FILE_TLDS = {"png", "jpg", "jpeg", "gif", "svg", "webp", "avif", "ico
 
 def _normalize_text(value: str) -> str:
     return " ".join(value.split()).strip()
+
+
+def infer_country_from_public_evidence(
+    domain: str, sources: tuple[tuple[str, str], ...]
+) -> str:
+    """Infer a country only from strong, explainable public signals.
+
+    A country-code domain is the strongest deterministic signal. For generic
+    domains, accept an explicit country mention only when it appears next to
+    an address/location/registered-office cue. Search-result titles are not
+    considered, so a ranking page cannot manufacture a country assignment.
+    """
+    hostname = (urlparse(domain).hostname or domain).lower().removeprefix("www.")
+    labels = hostname.split(".")
+    suffix = ".".join(labels[-2:]) if len(labels) >= 2 else ""
+    tld_country = _COUNTRY_TLDS.get(suffix) or _COUNTRY_TLDS.get(labels[-1], "")
+    if tld_country:
+        return tld_country
+
+    website_text = " ".join(
+        excerpt.lower()
+        for url, excerpt in sources
+        if url.strip() and not is_search_source(url)
+    )
+    patterns = {
+        "France": r"(?:based|located|headquartered|registered|office|address)[^.!?]{0,80}\bfrance\b|\bfrance\b[^.!?]{0,80}(?:address|office|location|registered)",
+        "Italy": r"(?:based|located|headquartered|registered|office|address)[^.!?]{0,80}\bitaly\b|\bitaly\b[^.!?]{0,80}(?:address|office|location|registered)",
+        "Germany": r"(?:based|located|headquartered|registered|office|address)[^.!?]{0,80}\bgermany\b|\bgermany\b[^.!?]{0,80}(?:address|office|location|registered)",
+        "United Kingdom": r"(?:based|located|headquartered|registered|office|address)[^.!?]{0,80}\b(?:united kingdom|uk)\b|\b(?:united kingdom|uk)\b[^.!?]{0,80}(?:address|office|location|registered)",
+        "United States": r"(?:based|located|headquartered|registered|office|address)[^.!?]{0,80}\b(?:united states|usa)\b|\b(?:united states|usa)\b[^.!?]{0,80}(?:address|office|location|registered)",
+    }
+    matches = [country for country, pattern in patterns.items() if re.search(pattern, website_text)]
+    return matches[0] if len(set(matches)) == 1 else ""
+
+
+def clean_company_name(value: str, domain: str = "") -> str:
+    """Remove search breadcrumbs, URL prefixes, and glued slugs from titles."""
+    cleaned = _normalize_text(value)
+    if not cleaned:
+        return ""
+    cleaned = re.sub(r"^.*https?://[^\s]+?(?=[A-Z])", "", cleaned).strip(" -|·")
+    cleaned = re.sub(r"^[a-z0-9][a-z0-9.-]*(?=[A-Z][a-z])", "", cleaned).strip(" -|·")
+    cleaned = re.sub(r"\s+(?:duplicate|copy)\b$", "", cleaned, flags=re.IGNORECASE).strip()
+    cleaned = re.sub(r"^startseite\s*[-|:]\s*", "", cleaned, flags=re.IGNORECASE).strip()
+    # Search engines often put the actual legal/company name after a marketing
+    # headline. Prefer that segment when it has a recognizable legal suffix.
+    title_parts = [
+        part.strip(" -|·")
+        for part in re.split(r"\s+(?:[-–—|:]|:)\s+", cleaned)
+        if part.strip(" -|·")
+    ]
+    legal_suffix = re.compile(
+        r"\b(?:gmbh|ltd\.?|limited|inc\.?|llc|corp\.?|corporation|s\.r\.l\.?|"
+        r"srl|b\.v\.?|ag|plc|oy|kg|sas|s\.a\.?)\s*$",
+        re.IGNORECASE,
+    )
+    if len(title_parts) > 1:
+        for part in reversed(title_parts):
+            if legal_suffix.search(part) and len(part) >= 3:
+                return part
+    generic_title = re.search(
+        r"^(?:home\b|top\s+\d+\b|top\s+.*\bmanufacturers?\b|best\b|top\s+quality\b|injection\s+(?:moulding|molding)\b|"
+        r"plastic\s+injection\b|automotive\s+(?:plastic|injection)\b|"
+        r"automotive\s+[–-]|electronics\s+(?:plastic\s+)?injection\b|"
+        r"custom\s+plastic\s+injection\b|"
+        r"turnkey\s+domestic\s+plastic\b|(?:usa|uk)\s+injection\s+(?:moulding|molding)\b)|"
+        r"\b(?:companies|manufacturer|services|homepage|top\s+players|"
+        r"healthencyclopedia|europages|ensun|directory|marketplace|"
+        r"sites?\s*,\s*techniques?|tips|moulders?|molding\s+company|top\s*\d+\s*plastic|"
+        r"moulding\s+company|taking\s+your\s+idea|buyers?\s+(?:and|&)\s+importers?|"
+        r"import\s+data|buyers?\s+list|market\s+data|financial\s+technology|"
+        r"overview\s+for|buy\s+spare\s+parts|plastic\s+car\s+parts|"
+        r"custom\s+plastic\s+part|injection[- ]molded|injection[- ]moulded|"
+        r"faq|calendar|listings)\b",
+        cleaned,
+        re.IGNORECASE,
+    )
+    # A small set of high-confidence editorial/search-page markers seen in
+    # legacy imports. They are not company names, even when a domain exists.
+    generic_title = generic_title or re.search(
+        r"加入我们|知乎|完全指南|这款互联网|百科|天气|计算器|百分比",
+        cleaned,
+        re.IGNORECASE,
+    )
+    # Long CJK headlines with article punctuation are page titles, not legal
+    # entities. Keep the domain as the honest fallback instead of displaying
+    # a search headline as a company.
+    if domain and re.search(r"[\u4e00-\u9fff]", cleaned) and (
+        len(cleaned) >= 18 or re.search(r"[？?：:！!_]|如何|大全|指南", cleaned)
+    ):
+        return domain
+    if (generic_title or re.search(r"top\s*\d+\s*plastic", cleaned, re.IGNORECASE)) and domain:
+        return domain
+    return cleaned or _normalize_text(value)
 
 
 def _normalize_domain(website: str) -> str:
@@ -144,6 +254,28 @@ def is_plausible_email(email: str) -> bool:
     if domain.rsplit(".", 1)[-1] in _NON_EMAIL_FILE_TLDS:
         return False
     return True
+
+
+def email_business_priority(email: str) -> int:
+    """Rank a public mailbox by likely business-development usefulness.
+
+    This is only a presentation/contact-selection preference. It does not
+    validate ownership, deliverability, or consent to receive email.
+    """
+    local = email.rsplit("@", 1)[0].casefold()
+    tokens = set(re.split(r"[._+\-]", local))
+    if tokens & {
+        "sales", "purchase", "purchasing", "procurement", "sourcing",
+        "business", "commercial", "export", "inquiry", "inquiries", "quote",
+    }:
+        return 100
+    if tokens & {"info", "contact", "hello", "office", "enquiry"}:
+        return 80
+    if tokens & {"marketing", "admin", "general"}:
+        return 50
+    if tokens & {"support", "help", "service", "customer", "technical"}:
+        return 20
+    return 40
 
 
 def is_credible_source_excerpt(excerpt: str) -> bool:
@@ -265,16 +397,17 @@ def clean_leads(records: list[LeadRecord]) -> list[CleanLead]:
 
     result: list[CleanLead] = []
     for group in groups.values():
-        names = [
-            _normalize_text(item.company_name)
-            for item in group
-            if _normalize_text(item.company_name)
-        ]
-        company_name = max(names, key=len, default="Unknown")
-        domain = next(
+        group_domain = next(
             (_normalize_domain(item.website) for item in group if _normalize_domain(item.website)),
             "",
         )
+        names = [
+            clean_company_name(item.company_name, group_domain)
+            for item in group
+            if clean_company_name(item.company_name, group_domain)
+        ]
+        company_name = max(names, key=len, default=group_domain or "Unknown")
+        domain = group_domain
         email_values = [_normalize_email(item.email) for item in group]
         emails = tuple(dict.fromkeys(value for value in email_values if value))
         country_values = [_normalize_country(item.country) for item in group]
@@ -293,9 +426,10 @@ def clean_leads(records: list[LeadRecord]) -> list[CleanLead]:
                     enumerate(emails),
                     key=lambda item: (
                         item[1].rsplit("@", 1)[-1] != domain,
+                        -email_business_priority(item[1]),
                         item[0],
                     ),
-            )
+                )
         )
         flags: list[str] = []
         if not domain:
@@ -324,7 +458,9 @@ def clean_leads(records: list[LeadRecord]) -> list[CleanLead]:
             and not domain_alignment
         ):
             flags.append("company_identity_unconfirmed")
-        country = countries[0] if countries else ""
+        country = countries[0] if countries else infer_country_from_public_evidence(
+            group_domain, sources
+        )
         quality = (
             "complete"
             if domain and emails and len(countries) <= 1 and not flags

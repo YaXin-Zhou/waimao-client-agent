@@ -104,3 +104,32 @@ def test_bing_provider_excludes_dictionary_information_pages():
     )
 
     assert [result.website for result in results] == ["https://real-company.example/"]
+
+
+def test_bing_provider_excludes_unrelated_game_results():
+    html = """
+    <ol>
+      <li class="b_algo"><h2><a href="https://www.roblox.com/">Roblox</a></h2></li>
+      <li class="b_algo"><h2><a href="https://real-company.example/">Real manufacturer</a></h2></li>
+    </ol>
+    """
+    provider = BingSearchProvider(opener=lambda request, timeout: Response(html))
+    results = provider.search(
+        AcquisitionCriteria(product="injection molding", candidate_limit=1, qualified_lead_limit=1)
+    )
+    assert [result.website for result in results] == ["https://real-company.example/"]
+
+
+def test_bing_provider_excludes_generic_travel_and_calculation_results():
+    html = """
+    <ol>
+      <li class="b_algo"><h2><a href="https://hotel.example/">Hatta Resorts Hotel</a></h2></li>
+      <li class="b_algo"><h2><a href="https://calculator.example/">50 is what percent of 200?</a></h2></li>
+      <li class="b_algo"><h2><a href="https://real-company.example/">Precision Components</a></h2></li>
+    </ol>
+    """
+    provider = BingSearchProvider(opener=lambda request, timeout: Response(html))
+    results = provider.search(
+        AcquisitionCriteria(product="CNC machining", candidate_limit=1, qualified_lead_limit=1)
+    )
+    assert [result.website for result in results] == ["https://real-company.example/"]

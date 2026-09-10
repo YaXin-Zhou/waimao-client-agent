@@ -127,6 +127,21 @@ def test_google_provider_excludes_job_boards_and_company_directories():
     assert GoogleSearchProvider._is_candidate("https://www.example-manufacturer.com/contact")
 
 
+def test_google_provider_excludes_software_and_generic_industry_sites():
+    assert not GoogleSearchProvider._is_candidate("https://portableapps.com/", "PortableApps")
+    assert not GoogleSearchProvider._is_candidate("https://portapps.io/", "Portapps")
+    assert not GoogleSearchProvider._is_candidate("https://sourceforge.net/projects/tool/", "Tool")
+    assert not GoogleSearchProvider._is_candidate("https://themanufacturer.com/articles/injection-molding", "The Manufacturer")
+    assert not GoogleSearchProvider._is_candidate("https://manufacturer.com/", "Manufacturer.com")
+
+
+def test_google_provider_excludes_school_marketplace_and_research_titles():
+    assert not GoogleSearchProvider._is_candidate("https://bsd405.org/", "Bellevue School District")
+    assert not GoogleSearchProvider._is_candidate("https://tradeford.com/buyers", "Injection Mold Buyers List")
+    assert not GoogleSearchProvider._is_candidate("https://nasdaq.com/", "Nasdaq - Listings, Market Data & Financial Technology")
+    assert GoogleSearchProvider._is_candidate("https://real-mold-maker.example/", "Real Mold Maker")
+
+
 def test_google_provider_excludes_informational_paths_and_public_institutions():
     assert not GoogleSearchProvider._is_candidate(
         "https://www.example.com/resources/plastic-guide"
@@ -189,3 +204,15 @@ def test_google_provider_uses_configured_regional_host_and_filters_google_links(
 
     assert captured[0].startswith("https://www.google.com.hk/search?")
     assert [item.website for item in results] == ["https://real.example/"]
+
+
+def test_google_provider_rotates_buyer_intent_on_later_rounds():
+    captured = []
+
+    def open_search(request, timeout):
+        captured.append(request.full_url)
+        return FakeResponse('<a href="https://real.example/">Real company</a>')
+
+    provider = GoogleSearchProvider(opener=open_search)
+    provider.search_round(AcquisitionCriteria(product="solar generator", daily_limit=1), 2)
+    assert "supplier" in captured[0]

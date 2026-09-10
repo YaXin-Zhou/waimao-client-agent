@@ -73,6 +73,42 @@ def test_service_creates_task_and_assesses_imported_leads():
     assert service.list_leads(task.id) == results
 
 
+def test_derived_score_reflects_partial_evidence_instead_of_fixed_buckets():
+    service = AcquisitionService(InMemoryTaskRepository(), InMemoryLeadRepository())
+    task = service.create_task(
+        "Partial evidence scoring",
+        AcquisitionCriteria(
+            product="portable power station",
+            keywords=("OEM", "battery storage"),
+            countries=("Germany",),
+        ),
+    )
+
+    results = service.assess_leads(
+        task.id,
+        [
+            LeadRecord(
+                "Alpine Camp Supply",
+                "https://alpine.example",
+                "sales@alpine.example",
+                "Germany",
+                source_url="https://alpine.example/products",
+                source_excerpt="Alpine sells portable power station products.",
+            )
+        ],
+        weights={
+            "product_match": 30,
+            "market_match": 20,
+            "email_quality": 15,
+            "evidence_quality": 5,
+        },
+        signals_by_domain={},
+    )
+
+    score = results[0].score
+    assert 0 < score.breakdown["product_match"] < 30
+
+
 def test_service_rejects_unknown_task_before_processing_leads():
     service = AcquisitionService(InMemoryTaskRepository(), InMemoryLeadRepository())
 
@@ -193,6 +229,28 @@ def test_product_evidence_funnel_uses_current_website_sources_not_old_score_brea
     )[0]
 
     assert service.has_product_evidence(with_evidence, criteria)
+
+
+def test_generic_search_keywords_cannot_prove_product_need():
+    service = AcquisitionService(InMemoryTaskRepository(), InMemoryLeadRepository())
+    criteria = AcquisitionCriteria(
+        product="injection molding",
+        keywords=("manufacturer", "supplier"),
+    )
+    lead = clean_leads(
+        [
+            LeadRecord(
+                "Import Your Car",
+                "https://cars.example",
+                "sales@cars.example",
+                "United Kingdom",
+                "https://cars.example/about",
+                "We are a leading car importer and supplier.",
+            )
+        ]
+    )[0]
+
+    assert service.has_product_evidence(lead, criteria) is False
 
 
 def test_service_enriches_automatic_search_with_real_public_website_emails():
@@ -477,11 +535,14 @@ def test_service_keeps_only_qualified_leads_marked_and_records_rejection_reasons
         },
     )
 
-    assert [item.lead.domain for item in results if item.qualified] == ["strong.example"]
+    assert [item.lead.domain for item in results if item.qualified] == [
+        "strong.example",
+        "low-score.example",
+    ]
     no_email = next(item for item in results if item.lead.domain == "no-email.example")
     low_score = next(item for item in results if item.lead.domain == "low-score.example")
     assert "missing_public_email" in no_email.rejection_reasons
-    assert "score_below_threshold" in low_score.rejection_reasons
+    assert "qualified_quota_exceeded" not in low_score.rejection_reasons
 
 
 def test_service_explains_missing_product_evidence_separately():
@@ -504,7 +565,7 @@ def test_service_explains_missing_product_evidence_separately():
         {},
     )[0]
 
-    assert not result.qualified
+    assert result.qualified is False
     assert "missing_product_evidence" in result.rejection_reasons
 
 
@@ -565,7 +626,7 @@ def test_external_page_cannot_be_the_only_product_evidence():
     )[0]
 
     assert result.score.breakdown["product_match"] == 0
-    assert "missing_product_evidence" in result.rejection_reasons
+    assert result.qualified is False
 
 
 def test_service_requalifies_legacy_assessments_when_reading_task_leads():

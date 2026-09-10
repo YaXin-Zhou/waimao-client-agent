@@ -726,6 +726,24 @@ class SQLiteDiscoveryRunRepository:
             ).fetchall()
         return [self._from_row(row) for row in rows]
 
+    def fail_running(self, error: str) -> int:
+        """将服务重启前遗留的运行中记录收敛为可重试的失败状态。"""
+        with _connect(self._database) as connection:
+            cursor = connection.execute(
+                """
+                UPDATE discovery_runs
+                SET status = ?, step = ?, error = ?
+                WHERE status = ?
+                """,
+                (
+                    DiscoveryRunStatus.FAILED.value,
+                    DiscoveryRunStep.FAILED.value,
+                    error,
+                    DiscoveryRunStatus.RUNNING.value,
+                ),
+            )
+        return cursor.rowcount
+
     @staticmethod
     def _from_row(row) -> DiscoveryRun:
         return DiscoveryRun(
@@ -814,6 +832,14 @@ class SQLiteEmailDraftRepository:
                 (task_id, lead_domain),
             ).fetchone()
         return self.get(row["id"]) if row else None
+
+    def list_for_lead(self, task_id: str, lead_domain: str) -> list[EmailDraft]:
+        with _connect(self._database) as connection:
+            rows = connection.execute(
+                "SELECT id FROM email_drafts WHERE task_id = ? AND lead_domain = ? ORDER BY rowid",
+                (task_id, lead_domain),
+            ).fetchall()
+        return [self.get(row["id"]) for row in rows]
 
 
 class SQLiteAuditEventRepository:
@@ -1136,6 +1162,14 @@ class SQLiteEmailSendAttemptRepository:
                 (recipient_email, cutoff),
             ).fetchone()
         return row is not None
+
+    def sent_recipient_emails(self) -> set[str]:
+        with _connect(self._database) as connection:
+            rows = connection.execute(
+                "SELECT DISTINCT lower(recipient_email) AS recipient_email "
+                "FROM email_send_attempts WHERE status = 'sent'"
+            ).fetchall()
+        return {row["recipient_email"] for row in rows if row["recipient_email"]}
 
     def find_by_request_key(self, draft_id: str, request_key: str) -> EmailSendAttempt | None:
         if not request_key:

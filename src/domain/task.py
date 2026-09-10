@@ -66,6 +66,30 @@ def configured_research_terms(criteria: AcquisitionCriteria) -> tuple[str, ...]:
     return tuple(dict.fromkeys(value.strip() for value in values if value.strip()))
 
 
+def configured_product_evidence_terms(criteria: AcquisitionCriteria) -> tuple[str, ...]:
+    """Return only terms that can prove the configured product or service.
+
+    Search-intent keywords such as ``manufacturer`` and ``supplier`` help find
+    websites but are too generic to prove that a buyer needs the product.
+    """
+    values: list[str] = [criteria.product]
+    for offering in criteria.business_offerings:
+        values.extend((offering.name, *offering.keywords))
+    terms = tuple(dict.fromkeys(value.strip() for value in values if value.strip()))
+    generic_intent = {
+        "manufacturer", "supplier", "factory", "distributor", "purchaser",
+        "purchasing", "procurement", "buyer", "buyers", "importer", "wholesaler",
+    }
+    keyword_terms = tuple(
+        value.strip()
+        for value in criteria.keywords
+        if value.strip() and value.strip().casefold() not in generic_intent
+    )
+    # Tasks may intentionally use only keywords, so retain product-like
+    # keywords when no product/offering was configured at all.
+    return tuple(dict.fromkeys((*terms, *keyword_terms)))
+
+
 def effective_candidate_limit(criteria: AcquisitionCriteria) -> int:
     """Return the search pool size without confusing it with the send quota.
 

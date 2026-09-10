@@ -8,9 +8,12 @@ from src.domain.lead import (
     LeadStatus,
     canonical_source_url,
     clean_leads,
+    clean_company_name,
     evidence_level,
     identity_consistency,
+    is_plausible_email,
     score_lead,
+    infer_country_from_public_evidence,
 )
 
 
@@ -28,6 +31,74 @@ def test_sample_dataset_produces_clean_records_for_sales_review():
     )
     assert cleaned[1].quality == "complete"
     assert cleaned[2].quality == "needs_review"
+
+
+def test_email_validation_accepts_dotted_business_mailboxes_and_rejects_urls():
+    assert is_plausible_email("e.blake@centurymold.com") is True
+    assert is_plausible_email("sales@stephensplasticmouldings.co.uk") is True
+    assert is_plausible_email("https://centurymold.com/contact") is False
+    assert is_plausible_email("hero@2x.png") is False
+
+
+def test_country_is_inferred_from_country_code_domain_without_search_title():
+    cleaned = clean_leads(
+        [
+            LeadRecord(
+                "French Precision Parts",
+                "https://precision-parts.fr",
+                "sales@precision-parts.fr",
+                source_url="https://www.google.com/search?q=parts",
+                source_excerpt="Top manufacturers in France",
+            )
+        ]
+    )
+
+    assert cleaned[0].country == "France"
+    assert infer_country_from_public_evidence(
+        "precision-parts.fr", cleaned[0].sources
+    ) == "France"
+
+
+def test_generic_domain_needs_explicit_location_context_for_country_inference():
+    assert infer_country_from_public_evidence(
+        "precision-parts.com",
+        (("https://precision-parts.com", "We serve customers in France and Italy."),),
+    ) == ""
+    assert infer_country_from_public_evidence(
+        "precision-parts.com",
+        (("https://precision-parts.com/contact", "Registered office: Milan, Italy."),),
+    ) == "Italy"
+
+
+def test_clean_company_name_removes_search_title_prefixes():
+    assert clean_company_name(
+        "automotiveAutomotive Injection Moulding - Plastic-IT"
+    ) == "Automotive Injection Moulding - Plastic-IT"
+    assert clean_company_name(
+        "pacificparts.nethttps://www.pacificparts.netPACIFIC PARTS"
+    ) == "PACIFIC PARTS"
+    assert clean_company_name(
+        "Top 10 Automotive Plastic Injection Molding Companies", "example.com"
+    ) == "example.com"
+
+
+def test_clean_company_name_replaces_information_page_titles_with_domain():
+    assert clean_company_name("Injection - healthencyclopedia.org", "health.example") == "health.example"
+    assert clean_company_name("Intramuscular Injection: Sites, Techniques, and Tips", "clinic.example") == "clinic.example"
+    assert clean_company_name("Startseite - Otto Werkzeugbau") == "Otto Werkzeugbau"
+    assert clean_company_name("Xometry duplicate") == "Xometry"
+    assert clean_company_name("加入我们", "zybang.com") == "zybang.com"
+    assert clean_company_name("SoundCloud 这款互联网音乐产品做的如何？", "zhihu.com") == "zhihu.com"
+
+
+def test_clean_company_name_prefers_legal_company_segment_over_marketing_title():
+    assert clean_company_name(
+        "Top quality plastic products - Geiger Automotive GmbH", "geiger.example"
+    ) == "Geiger Automotive GmbH"
+    assert clean_company_name(
+        "USA Injection Molding - Taking Your Idea From Design to Production",
+        "usa-molding.example",
+    ) == "usa-molding.example"
 
 
 def test_clean_leads_preserves_source_evidence_when_merging_records():
@@ -199,6 +270,22 @@ def test_clean_leads_prefers_same_domain_email_for_primary_contact():
 
     assert cleaned[0].emails == ("sales@elmag.eu", "office@elmag.at")
     assert "email_domain_mismatch" in cleaned[0].flags
+
+
+def test_clean_leads_prioritizes_business_development_mailboxes():
+    cleaned = clean_leads(
+        [
+            LeadRecord("Alpine", "https://alpine.example", "support@alpine.example", "Germany"),
+            LeadRecord("Alpine", "https://alpine.example", "purchasing@alpine.example", "Germany"),
+            LeadRecord("Alpine", "https://alpine.example", "info@alpine.example", "Germany"),
+        ]
+    )
+
+    assert cleaned[0].emails == (
+        "purchasing@alpine.example",
+        "info@alpine.example",
+        "support@alpine.example",
+    )
 
 
 def test_clean_leads_flags_company_name_missing_from_website_evidence():

@@ -15,6 +15,12 @@ class FallbackSearchProvider:
         )
 
     def search(self, criteria):
+        return self._search(criteria, 0)
+
+    def search_round(self, criteria, round_index: int = 0):
+        return self._search(criteria, round_index)
+
+    def _search(self, criteria, round_index: int):
         target = (
             effective_candidate_limit(criteria)
             if hasattr(criteria, "candidate_limit") or hasattr(criteria, "daily_limit")
@@ -25,7 +31,12 @@ class FallbackSearchProvider:
         seen = set()
         for provider in self._providers:
             try:
-                records = provider.search(criteria)
+                search_round = getattr(provider, "search_round", None)
+                records = (
+                    search_round(criteria, round_index)
+                    if callable(search_round)
+                    else provider.search(criteria)
+                )
             except SearchProviderError as error:
                 errors.append(error)
                 continue

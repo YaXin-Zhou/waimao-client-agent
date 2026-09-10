@@ -78,3 +78,15 @@ class EmailSendService:
 
     def list_attempts(self, draft_id: str):
         return self._attempts.list_for_draft(draft_id)
+
+    def sent_recipient_emails(self) -> set[str]:
+        """Return recipients with a successful send for lead-pool rotation."""
+        getter = getattr(self._attempts, "sent_recipient_emails", None)
+        return getter() if callable(getter) else set()
+
+    def list_attempts_for_lead(self, task_id: str, lead_domain: str):
+        drafts = getattr(self._drafts, "list_for_lead", lambda *_args: [])(task_id, lead_domain)
+        attempts = []
+        for draft in drafts:
+            attempts.extend(self._attempts.list_for_draft(draft.id))
+        return sorted(attempts, key=lambda item: item.created_at)

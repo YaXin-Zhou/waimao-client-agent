@@ -67,6 +67,25 @@ def test_fetcher_extracts_public_mailto_and_visible_emails_with_context():
     assert all("@alpine.example" in item.excerpt for item in document.public_emails)
 
 
+def test_fetcher_extracts_public_phones_and_explicit_social_profiles():
+    html = (
+        b"<main>Call +49 (0) 30 1234 5678 or +1 415-555-0199</main>"
+        b"<a href='https://www.linkedin.com/company/alpine-outdoor/?trk=site'>LinkedIn</a>"
+        b"<a href='https://instagram.com/alpine.outdoor/'>Instagram</a>"
+        b"<a href='https://alpine.example/company'>Company</a>"
+    )
+
+    document = WebsiteFetcher(opener=lambda _url, _timeout: html).fetch(
+        "https://alpine.example/"
+    )
+
+    assert document.phone_numbers == ("+49 (0) 30 1234 5678", "+1 415-555-0199")
+    assert document.social_links == (
+        "https://www.linkedin.com/company/alpine-outdoor",
+        "https://instagram.com/alpine.outdoor",
+    )
+
+
 def test_fetcher_removes_trailing_markup_punctuation_from_mailto_values():
     html = '<a href="mailto:support@alpine.example\\">support@alpine.example</a>'
 
@@ -352,6 +371,33 @@ def test_fetch_contact_pages_keeps_contact_pages_in_a_product_heavy_site():
         "https://alpine.example/",
         "https://alpine.example/contact",
         "https://alpine.example/products/one",
+    ]
+    assert documents[1].public_emails[0].address == "sales@alpine.example"
+
+
+def test_fetch_contact_pages_prioritizes_team_sales_and_catalog_paths():
+    pages = {
+        "https://alpine.example/": (
+            b"<a href='/team'>Team</a><a href='/catalog'>Catalog</a>"
+            b"<a href='/about'>About</a>"
+        ),
+        "https://alpine.example/team": b"Team page sales@alpine.example",
+        "https://alpine.example/catalog": b"Product catalog",
+    }
+    fetched = []
+
+    def opener(url, timeout):
+        fetched.append(url)
+        return pages[url]
+
+    documents = WebsiteFetcher(opener=opener).fetch_contact_pages(
+        "https://alpine.example/", max_pages=3
+    )
+
+    assert [document.url for document in documents] == [
+        "https://alpine.example/",
+        "https://alpine.example/team",
+        "https://alpine.example/catalog",
     ]
     assert documents[1].public_emails[0].address == "sales@alpine.example"
 

@@ -75,11 +75,26 @@ class BingSearchProvider:
         self._host = host.strip()
 
     def search(self, criteria: AcquisitionCriteria) -> list[LeadRecord]:
+        return self.search_round(criteria, 0)
+
+    def search_round(
+        self, criteria: AcquisitionCriteria, round_index: int = 0
+    ) -> list[LeadRecord]:
         candidate_limit = effective_candidate_limit(criteria)
         records: list[LeadRecord] = []
         seen_domains: set[str] = set()
-        for query in build_search_queries(criteria):
-            for start in range(1, candidate_limit + 1, self._max_results):
+        queries = build_search_queries(criteria)
+        intent_suffixes = ("", "contact", "supplier", "manufacturer", "factory", "distributor", "purchasing", "procurement")
+        suffix = intent_suffixes[round_index % len(intent_suffixes)]
+        if suffix:
+            queries = tuple(f"{query} {suffix}" for query in queries)
+        for query in queries:
+            # Each translated condition already produces multiple query
+            # combinations. One result page per combination keeps discovery
+            # bounded while still giving the enrichment stage a broad pool.
+            # Repeated pagination here could turn a 30-lead search into
+            # hundreds of serial network calls.
+            for start in (1,):
                 url = (
                     f"https://{self._host}/search?q={quote_plus(query)}"
                     f"&count={self._max_results}&first={start}"
@@ -103,6 +118,7 @@ class BingSearchProvider:
                     domain = canonical_website_domain(resolved)
                     if (
                         not GoogleSearchProvider._is_candidate(resolved, title)
+                        or not self._is_query_relevant(query, title, resolved)
                         or not parsed.hostname
                         or not domain
                     ):
@@ -122,12 +138,66 @@ class BingSearchProvider:
                     if len(records) >= candidate_limit:
                         return records
                 if added == 0:
-                    # Keep scanning the bounded result pages after a page that
-                    # contains only filtered or duplicate entries.
                     continue
         if not records:
             raise SearchProviderError("Bing search returned no public website results")
         return records
+
+    @staticmethod
+    def _is_query_relevant(query: str, title: str, url: str) -> bool:
+        """Reject obvious content pages that match only a generic word.
+
+        Bing can rank medical articles or encyclopedias for terms such as
+        ``injection``. Keep the filter deliberately conservative: it removes
+        clear editorial/medical noise but leaves uncertain companies for the
+        website and evidence stages. This is not a qualification decision.
+        """
+        text = f"{title} {url}".lower()
+        blocked = (
+            "intramuscular",
+            "nursing",
+            "health encyclopedia",
+            "healthencyclopedia",
+            "europages",
+            "ensun",
+            "wikipedia",
+            "nasdaq",
+            "school",
+            "university",
+            "college",
+            "directory",
+            "tradeford",
+            "tradekey",
+            "kompass",
+            "symptom",
+            "dictionary",
+            "meaning of",
+            "how to",
+            "roblox",
+            "gaming",
+            "video game",
+            "app store",
+            "creator hub",
+            "windows download",
+            "microsoft account",
+            "outlook",
+            "productivity apps",
+            # Generic pages that Bing may return when a broad industry term
+            # outranks the actual manufacturing companies.
+            "hotel",
+            "resort",
+            "lodges",
+            "travel",
+            "adventure",
+            "calculator",
+            "percentage",
+            "percent",
+            "festival",
+            "synchrony account",
+        )
+        if any(marker in text for marker in blocked):
+            return False
+        return True
 
     @staticmethod
     def _resolve_result_url(href: str) -> str:

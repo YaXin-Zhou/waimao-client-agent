@@ -40,6 +40,11 @@ class PlaywrightSearchProvider:
         self._proxy = proxy.strip()
 
     def search(self, criteria: AcquisitionCriteria) -> list[LeadRecord]:
+        return self.search_round(criteria, 0)
+
+    def search_round(
+        self, criteria: AcquisitionCriteria, round_index: int = 0
+    ) -> list[LeadRecord]:
         try:
             from playwright.sync_api import sync_playwright
         except ImportError as error:
@@ -60,7 +65,12 @@ class PlaywrightSearchProvider:
                 raise SearchProviderError("Unable to launch the configured browser") from error
             try:
                 page = browser.new_page()
-                for query in build_search_queries(criteria):
+                queries = build_search_queries(criteria)
+                intent_suffixes = ("", "contact", "supplier", "manufacturer", "factory", "distributor", "purchasing", "procurement")
+                suffix = intent_suffixes[round_index % len(intent_suffixes)]
+                if suffix:
+                    queries = tuple(f"{query} {suffix}" for query in queries)
+                for query in queries:
                     for page_start in range(0, candidate_limit, self._max_results):
                         url = (
                             f"https://{self._host}/search?q={quote_plus(query)}"

@@ -447,6 +447,7 @@ def test_api_returns_lead_list():
 
     assert status == 200
     assert payload["items"][0]["lead"]["domain"] == "alpine.example"
+    assert payload["items"][0]["lead"]["customer_type"] == "distributor"
     assert payload["summary"]["candidate_count"] == 1
     assert payload["summary"]["funnel"]["public_email_count"] == 1
 
@@ -499,6 +500,7 @@ def test_api_returns_field_level_evidence_checks_from_public_excerpts():
         "country": "supported",
         "email": "supported",
         "product": "supported",
+        "industry": "not_configured",
     }
 
 
@@ -528,6 +530,26 @@ def test_api_marks_country_and_email_conflicts_in_field_checks():
 
     assert checks["country"] == "conflicting"
     assert checks["email"] == "conflicting"
+
+
+def test_api_hides_legacy_school_or_directory_records_from_customer_views():
+    app, task, _, _ = make_app()
+    result = app._leads.results[0]
+    app._leads.results.append(
+        replace(
+            result,
+            lead=replace(
+                result.lead,
+                company_name="Bellevue School District",
+                domain="bsd405.org",
+            ),
+        )
+    )
+
+    status, payload = app.handle("GET", f"/api/tasks/{task.id}/leads")
+
+    assert status == 200
+    assert all(item["lead"]["domain"] != "bsd405.org" for item in payload["items"])
 
 
 def test_api_lead_list_sanitizes_legacy_source_evidence():
@@ -702,7 +724,7 @@ def test_api_discovers_and_assesses_using_configured_search_provider():
     assert payload["items"][0]["lead"]["sources"][0][0] == "https://www.google.com.hk/search?q=power+station"
     assert payload["summary"]["candidate_count"] == 1
     assert payload["summary"]["qualified_count"] == 0
-    assert payload["summary"]["shortfall"] == task.criteria.qualified_lead_limit
+    assert payload["summary"]["shortfall"] == task.criteria.daily_limit
     assert "missing_website_evidence" in payload["items"][0]["rejection_reasons"]
     assert payload["summary"]["funnel"] == {
         "website_count": 1,

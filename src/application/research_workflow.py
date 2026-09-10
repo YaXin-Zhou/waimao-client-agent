@@ -111,7 +111,7 @@ class ResearchWorkflow:
         if not documents:
             raise ValueError("no research source could be fetched")
         combined_text = "\n\n".join(
-            f"SOURCE URL: {document.url}\n{document.text}" for document in documents
+            self._document_evidence_text(document) for document in documents
         )
         research = research_company(
             self._ai,
@@ -134,7 +134,7 @@ class ResearchWorkflow:
                 evidence_sources = tuple(
                     (
                         document.url,
-                        " ".join(document.text.split())[:2000],
+                        self._document_excerpt(document)[:4000],
                     )
                     for document in documents
                     if document.url and document.text.strip()
@@ -147,3 +147,38 @@ class ResearchWorkflow:
                     )
             self._lead_scores.update_score(task_id, lead.domain, score)
         return ResearchAssessment(research=research, score=score)
+
+    @staticmethod
+    def _document_evidence_text(document) -> str:
+        """Expose deterministic contact metadata to the research model as evidence."""
+        parts = [f"SOURCE URL: {document.url}", document.text]
+        emails = tuple(getattr(item, "address", "") for item in getattr(document, "public_emails", ()))
+        phones = tuple(getattr(document, "phone_numbers", ()))
+        socials = tuple(getattr(document, "social_links", ()))
+        if emails:
+            parts.append("Public emails extracted from this page: " + ", ".join(emails))
+        if phones:
+            parts.append("Public phone numbers extracted from this page: " + ", ".join(phones))
+        if socials:
+            parts.append("Explicit social profile links found on this page: " + ", ".join(socials))
+        return "\n".join(part for part in parts if part)
+
+    @classmethod
+    def _document_excerpt(cls, document) -> str:
+        """Keep the original persisted text shape while adding contact evidence."""
+        metadata = cls._document_contact_metadata(document)
+        return " ".join(part for part in (document.text, metadata) if part)
+
+    @staticmethod
+    def _document_contact_metadata(document) -> str:
+        emails = tuple(getattr(item, "address", "") for item in getattr(document, "public_emails", ()))
+        phones = tuple(getattr(document, "phone_numbers", ()))
+        socials = tuple(getattr(document, "social_links", ()))
+        parts = []
+        if emails:
+            parts.append("Public emails: " + ", ".join(emails))
+        if phones:
+            parts.append("Public phones: " + ", ".join(phones))
+        if socials:
+            parts.append("Social profiles: " + ", ".join(socials))
+        return " | ".join(parts)

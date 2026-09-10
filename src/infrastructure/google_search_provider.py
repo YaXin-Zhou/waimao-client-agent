@@ -79,6 +79,14 @@ class GoogleSearchProvider:
             "aliexpress.com",
             "thomasnet.com",
             "europages.com",
+            "europages.co.uk",
+            "ensun.io",
+            "producthunt.com",
+            "supplierscentral.com",
+            "ariba.com",
+            "walmart.com",
+            "homedepot.com",
+            "sciencedirect.com",
             "scienceinsights.org",
             "nationalgeographic.org",
             "ourworldindata.org",
@@ -87,8 +95,27 @@ class GoogleSearchProvider:
             "baike.baidu.com",
             "wallstreetmojo.com",
             "globalsources.com",
+            "tradekey.com",
+            "trademo.com",
+            "tradeford.com",
+            "kompass.com",
+            "seair.co.in",
+            "accio.com",
+            "nasdaq.com",
+            "bsd405.org",
+            "international.bsd405.org",
             "ibm.com",
             "translate.goog",
+            "microsoft.com",
+            "office.com",
+            "live.com",
+            # Software/project and generic industry-information sites that
+            # frequently rank for broad product terms but are not buyers.
+            "portableapps.com",
+            "portapps.io",
+            "sourceforge.net",
+            "themanufacturer.com",
+            "manufacturer.com",
         }
     )
 
@@ -111,10 +138,20 @@ class GoogleSearchProvider:
         self._host = host.strip()
 
     def search(self, criteria: AcquisitionCriteria) -> list[LeadRecord]:
+        return self.search_round(criteria, 0)
+
+    def search_round(
+        self, criteria: AcquisitionCriteria, round_index: int = 0
+    ) -> list[LeadRecord]:
         results: list[LeadRecord] = []
         seen_domains: set[str] = set()
         candidate_limit = effective_candidate_limit(criteria)
-        for query in build_search_queries(criteria):
+        queries = build_search_queries(criteria)
+        intent_suffixes = ("", "contact", "supplier", "manufacturer", "factory", "distributor", "purchasing", "procurement")
+        suffix = intent_suffixes[round_index % len(intent_suffixes)]
+        if suffix:
+            queries = tuple(f"{query} {suffix}" for query in queries)
+        for query in queries:
             for page_start in range(0, candidate_limit, self._max_results):
                 request = Request(
                     f"https://{self._host}/search?q={quote_plus(query)}"
@@ -199,6 +236,11 @@ class GoogleSearchProvider:
                 "wiki",
                 "definition",
                 "terms",
+                "calendar",
+                "students",
+                "faculty",
+                "campus",
+                "courses",
             )
         )
         is_explanatory_path = any(
@@ -210,6 +252,28 @@ class GoogleSearchProvider:
             for marker in ("/how-", "/what-is-", "/why-")
         )
         normalized_title = title.casefold()
+        is_non_company_title = any(
+            marker in normalized_title
+            for marker in (
+                "school",
+                "elementary",
+                "university",
+                "college",
+                "academy",
+                "student",
+                "district",
+                "buyers list",
+                "import data",
+                "market data",
+                "financial technology",
+                "top suppliers",
+                "top plastic mold makers",
+                "portableapps",
+                "sourceforge",
+                "the manufacturer",
+                "manufacturer.com",
+            )
+        )
         is_explanatory_title = any(
             marker in normalized_title
             for marker in (
@@ -234,6 +298,7 @@ class GoogleSearchProvider:
             and not is_nested_explanatory_path
             and not is_public_institution
             and not is_explanatory_title
+            and not is_non_company_title
         )
 
     @staticmethod

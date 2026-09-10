@@ -27,6 +27,8 @@ class SourceDocument:
     text: str
     public_emails: tuple[PublicEmail, ...] = ()
     links: tuple[str, ...] = ()
+    phone_numbers: tuple[str, ...] = ()
+    social_links: tuple[str, ...] = ()
 
 
 class WebsiteFetcher:
@@ -58,6 +60,8 @@ class WebsiteFetcher:
             text=text,
             public_emails=self._extract_public_emails(html, url),
             links=self._extract_links(html, url),
+            phone_numbers=self._extract_phone_numbers(html),
+            social_links=self._extract_social_links(html, url),
         )
 
     def fetch_contact_pages(
@@ -152,14 +156,34 @@ class WebsiteFetcher:
     @staticmethod
     def _is_contact_path(url: str) -> bool:
         path = urlparse(url).path.lower()
-        return any(term in path for term in ("contact", "imprint", "impressum", "legal"))
+        return any(
+            term in path
+            for term in (
+                "contact",
+                "imprint",
+                "impressum",
+                "legal",
+                "sales",
+                "support",
+                "team",
+                "staff",
+                "people",
+            )
+        )
 
     @staticmethod
     def _is_product_path(url: str) -> bool:
         path = urlparse(url).path.lower()
         return any(
             term in path
-            for term in ("product", "power-station", "generator", "solution")
+            for term in (
+                "product",
+                "power-station",
+                "generator",
+                "solution",
+                "catalog",
+                "parts",
+            )
         )
 
     def _append_fallback_pages(
@@ -195,7 +219,11 @@ class WebsiteFetcher:
             "/impressum",
             "/about",
             "/company",
+            "/company-profile",
             "/products",
+            "/sales",
+            "/support",
+            "/team",
         )
         return tuple(
             parsed._replace(path=path, params="", query="", fragment="").geturl()
@@ -486,11 +514,15 @@ class WebsiteFetcher:
         keywords = (
             "contact",
             "about",
+            "team",
+            "staff",
+            "people",
             "imprint",
             "impressum",
             "legal",
             "company",
             "support",
+            "sales",
             "purchase",
             "sourcing",
             "product",
@@ -511,4 +543,51 @@ class WebsiteFetcher:
                 continue
             if candidate not in links:
                 links.append(candidate)
+        return tuple(links)
+
+    @staticmethod
+    def _extract_phone_numbers(html: str) -> tuple[str, ...]:
+        """Extract phone-shaped public text conservatively for evidence only."""
+        visible = WebsiteFetcher._to_text(html)
+        candidates = re.findall(
+            r"(?<![\w])(?:\+|00\s*)?[\d][\d\s()./-]{6,}[\d](?![\w])",
+            visible,
+        )
+        numbers: list[str] = []
+        seen: set[str] = set()
+        for candidate in candidates:
+            normalized = " ".join(candidate.split())
+            digits = re.sub(r"\D", "", normalized)
+            if not 7 <= len(digits) <= 15 or len(set(digits)) == 1:
+                continue
+            if normalized not in seen:
+                seen.add(normalized)
+                numbers.append(normalized)
+        return tuple(numbers)
+
+    @staticmethod
+    def _extract_social_links(html: str, base_url: str) -> tuple[str, ...]:
+        """Keep explicit social profile links; do not infer profiles from text."""
+        social_hosts = {
+            "linkedin.com", "facebook.com", "instagram.com", "x.com",
+            "twitter.com", "youtube.com", "tiktok.com",
+        }
+        matches = re.findall(
+            r"<a[^>]+href=[\"']([^\"']+)[\"'][^>]*>",
+            html,
+            flags=re.IGNORECASE | re.DOTALL,
+        )
+        links: list[str] = []
+        for href in matches:
+            candidate = urljoin(base_url, unescape(href).strip()).split("#", 1)[0]
+            parsed = urlparse(candidate)
+            host = (parsed.hostname or "").lower().removeprefix("www.")
+            if parsed.scheme not in {"http", "https"} or not any(
+                host == social_host or host.endswith(f".{social_host}")
+                for social_host in social_hosts
+            ):
+                continue
+            canonical = parsed._replace(query="", fragment="").geturl().rstrip("/")
+            if canonical not in links:
+                links.append(canonical)
         return tuple(links)

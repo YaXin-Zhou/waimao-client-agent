@@ -6,18 +6,35 @@ from concurrent.futures import ThreadPoolExecutor
 from threading import Lock
 
 from src.domain.discovery_run import DiscoveryRun, DiscoveryRunStep
+from src.domain.lead import is_search_source
+from src.application.acquisition_service import DEFAULT_QUALIFICATION_WEIGHTS
 
 
 class DiscoveryJobQueue:
-    def __init__(self, acquisition, runs, max_workers: int = 1, max_pending: int = 4):
+    def __init__(
+        self,
+        acquisition,
+        runs,
+        max_workers: int = 1,
+        max_pending: int = 4,
+        max_search_rounds: int = 6,
+        research_queue=None,
+    ):
         if max_workers <= 0 or max_pending <= 0:
             raise ValueError("discovery queue limits must be positive")
+        if max_search_rounds <= 0:
+            raise ValueError("max_search_rounds must be positive")
         self._acquisition = acquisition
         self._runs = runs
         self._executor = ThreadPoolExecutor(max_workers=max_workers)
         self._max_pending = max_pending
+        self._max_search_rounds = max_search_rounds
+        self._research_queue = research_queue
         self._jobs = {}
         self._lock = Lock()
+        recover = getattr(self._runs, "fail_running", None)
+        if callable(recover):
+            recover("本地服务已重新启动，上一轮搜索已停止，请重新搜索。")
 
     def submit(
         self, task_id: str, weights: dict[str, int], signals: dict[str, dict[str, int]]
@@ -37,21 +54,80 @@ class DiscoveryJobQueue:
 
     def _run(self, run, task_id, weights, signals):
         try:
-            self._acquisition.discover_and_assess(
-                task_id,
-                weights,
-                signals,
-                progress=lambda step, **counts: self._save_progress(run, step, **counts),
-            )
+            list_leads = getattr(self._acquisition, "list_leads", None)
+            task = self._acquisition._tasks.get(task_id)
+            multi_round = callable(list_leads) and task is not None
+            rounds = self._max_search_rounds if multi_round else 1
+            for round_index in range(rounds):
+                if multi_round:
+                    daily_target = getattr(
+                        task.criteria, "daily_limit", task.criteria.qualified_lead_limit
+                    )
+                if multi_round and self._qualified_count(task_id) >= daily_target:
+                    break
+                discovery_kwargs = {
+                    "progress": lambda step, **counts: self._save_progress(
+                        run, step, **counts
+                    )
+                }
+                if multi_round:
+                    discovery_kwargs["search_round"] = round_index
+                self._acquisition.discover_and_assess(
+                    task_id, weights, signals, **discovery_kwargs
+                )
+                if multi_round:
+                    counts = self._cumulative_counts(task_id)
+                    self._save_progress(run, "completed", **counts)
+            counts = self._cumulative_counts(task_id) if multi_round else {}
             latest = self._runs.get(run.id) or run
-            self._runs.save(latest.succeed())
+            self._enqueue_research(task_id, run.id, weights)
+            self._runs.save(latest.succeed(**counts))
         except Exception as error:
             self._runs.save((self._runs.get(run.id) or run).fail(str(error)))
+
+    def _qualified_count(self, task_id: str) -> int:
+        return sum(bool(item.qualified) for item in self._acquisition.list_leads(task_id))
+
+    def _cumulative_counts(self, task_id: str) -> dict[str, int]:
+        items = self._acquisition.list_leads(task_id)
+        return {
+            "candidate_count": len(items),
+            "website_count": sum(bool(item.lead.domain) for item in items),
+            "public_email_count": sum(bool(item.lead.emails) for item in items),
+            "qualified_count": sum(bool(item.qualified) for item in items),
+        }
 
     def _save_progress(self, run, step: DiscoveryRunStep | str, **counts: int):
         self._runs.save(
             (self._runs.get(run.id) or run).progress(DiscoveryRunStep(step), **counts)
         )
+
+    def _enqueue_research(self, task_id: str, run_id: str, weights: dict) -> None:
+        if self._research_queue is None:
+            return
+        for item in self._acquisition.list_leads(task_id):
+            if not item.qualified or not item.lead.domain or not item.lead.sources:
+                continue
+            source_url = next(
+                (
+                    url
+                    for url, _excerpt in item.lead.sources
+                    if url.strip() and not is_search_source(url)
+                ),
+                f"https://{item.lead.domain}",
+            )
+            try:
+                self._research_queue.submit(
+                    task_id,
+                    item.lead,
+                    source_url,
+                    weights or DEFAULT_QUALIFICATION_WEIGHTS,
+                    request_key=f"auto-discovery:{task_id}:{item.lead.domain}",
+                )
+            except Exception:
+                # Discovery delivery must not be marked failed because one
+                # optional background research job could not be queued.
+                continue
 
     def close(self) -> None:
         self._executor.shutdown(wait=False, cancel_futures=False)
