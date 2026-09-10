@@ -79,6 +79,8 @@ class EmailDraftService:
             raise ValueError("email subject is required")
         if not isinstance(body, str) or not body.strip():
             raise ValueError("email body is required")
+        subject = self._replace_sender_placeholders(subject, sender_company, sender_name, sender_position)
+        body = self._replace_sender_placeholders(body, sender_company, sender_name, sender_position)
         return EmailDraft.create(
             task_id=task_id,
             lead_domain=lead.domain,
@@ -90,3 +92,21 @@ class EmailDraftService:
             language_source=decision.source,
             language_requires_review=decision.requires_review,
         )
+
+    @staticmethod
+    def _replace_sender_placeholders(
+        content: str,
+        sender_company: str,
+        sender_name: str,
+        sender_position: str,
+    ) -> str:
+        """Ensure generated drafts never expose the template's sender placeholders."""
+        replacements = {
+            "[Our Company]": sender_company,
+            "[Your Company]": sender_company,
+            "[Your Name]": sender_name,
+            "[Your Position]": sender_position,
+        }
+        for placeholder, value in replacements.items():
+            content = content.replace(placeholder, value)
+        return content

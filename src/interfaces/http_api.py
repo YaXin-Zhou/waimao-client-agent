@@ -1262,7 +1262,30 @@ class ApiApplication:
         getter = getattr(self._drafts, "list_for_task", None)
         if not callable(getter):
             raise RuntimeError("email draft repository does not support task listing")
-        return 200, {"items": [self._draft(item) for item in getter(task_id)]}
+        return 200, {"items": [self._draft(self._normalize_draft(item, task_id)) for item in getter(task_id)]}
+
+    def _normalize_draft(self, draft, task_id: str):
+        """Remove legacy sender placeholders from drafts created before profile setup."""
+        task = self._tasks.get(task_id)
+        if draft is None or task is None:
+            return draft
+        company, name, position = task.sender_profile.prompt_values()
+        replacements = {
+            "[Our Company]": company,
+            "[Your Company]": company,
+            "[Your Name]": name,
+            "[Your Position]": position,
+        }
+        subject = draft.subject
+        body = draft.body
+        for placeholder, value in replacements.items():
+            subject = subject.replace(placeholder, value)
+            body = body.replace(placeholder, value)
+        if subject == draft.subject and body == draft.body:
+            return draft
+        normalized = replace(draft, subject=subject, body=body)
+        self._drafts.save(normalized)
+        return normalized
 
     def _batch_send_drafts(self, task_id: str, body: dict) -> tuple[int, dict]:
         """批量发送已人工审核的草稿；未确认时只返回预览，不执行发送。"""
@@ -1277,7 +1300,7 @@ class ApiApplication:
             raise ValueError("at least one draft is required")
         if len(draft_ids) > 30:
             raise ValueError("batch sending is limited to 30 drafts per operation")
-        drafts = [self._drafts.get(draft_id) for draft_id in draft_ids]
+        drafts = [self._normalize_draft(self._drafts.get(draft_id), task_id) for draft_id in draft_ids]
         if any(draft is None or draft.task_id != task_id for draft in drafts):
             raise ValueError("all drafts must belong to the current task")
         preview = [
@@ -1533,6 +1556,7 @@ class ApiApplication:
             if hasattr(self._drafts, "latest_for_lead")
             else None
         )
+        draft = self._normalize_draft(draft, task_id)
         send_history = []
         if self._email_send is not None:
             getter = getattr(self._email_send, "list_attempts_for_lead", None)
@@ -1550,6 +1574,7 @@ class ApiApplication:
         draft = self._drafts.get(draft_id)
         if draft is None:
             raise KeyError(f"Draft not found: {draft_id}")
+        draft = self._normalize_draft(draft, draft.task_id)
         return 200, self._draft(draft)
 
     def _draft_audit_events(self, draft_id: str) -> tuple[int, dict]:
