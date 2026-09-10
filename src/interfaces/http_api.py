@@ -454,6 +454,11 @@ class ApiApplication:
             "weather", "calculator", "university", "tripadvisor", "hotels.com",
             "百度知道", "知乎", "站酷", "google trends", "google traductor",
             "wikipedia", "worldometer", "population", "quiz", "whois",
+            # Search/article titles are evidence candidates, not company names.
+            "list of ", "top 10", "car manufacturers", "car manufacturing",
+            "precision machining for the ", "automotive moulding ",
+            "import your car", "private label ", "industrial equipment",
+            "manufacturing directory",
         )
         return not any(marker in raw_name.casefold() for marker in noise_markers)
 

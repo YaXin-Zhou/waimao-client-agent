@@ -562,6 +562,38 @@ def test_api_hides_legacy_school_or_directory_records_from_customer_views():
     assert all(item["lead"]["domain"] != "bsd405.org" for item in payload["items"])
 
 
+def test_api_hides_search_article_titles_from_customer_views():
+    app, task, _, _ = make_app()
+    result = app._leads.results[0]
+    app._leads.results.extend(
+        [
+            replace(
+                result,
+                lead=replace(
+                    result.lead,
+                    company_name="List of UK Car Manufacturers - Ezilon UK",
+                    domain="uk.ezilon.com",
+                ),
+            ),
+            replace(
+                result,
+                lead=replace(
+                    result.lead,
+                    company_name="Precision Machining for the UK Automotive Industry",
+                    domain="t2kcnc.co.uk",
+                ),
+            ),
+        ]
+    )
+
+    status, payload = app.handle("GET", f"/api/tasks/{task.id}/leads")
+
+    assert status == 200
+    domains = {item["lead"]["domain"] for item in payload["items"]}
+    assert "uk.ezilon.com" not in domains
+    assert "t2kcnc.co.uk" not in domains
+
+
 def test_api_lead_list_sanitizes_legacy_source_evidence():
     app, task, _, _ = make_app()
     result = app._leads.results[0]

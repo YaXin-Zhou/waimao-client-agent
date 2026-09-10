@@ -987,7 +987,7 @@ function DraftGenerator({ lead, taskConfig, loading, onGenerate }) {
   return <div className="review-controls draft-generator"><div className="section-title"><h3>{lead.draft ? '重新生成邮件' : '生成邮件'}</h3><span>{lead.draft ? '会创建新版本，不覆盖当前草稿' : '使用已整理的客户资料与发件人资料'}</span></div><label>产品或服务<input value={product} onChange={(event) => setProduct(event.target.value)} placeholder="填写本次推广产品" /></label><label>写作方向<textarea value={template} onChange={(event) => setTemplate(event.target.value)} rows="2" /></label><button className="primary-button full" disabled={loading || !product.trim() || !lead.research || !hasRecipient} onClick={() => onGenerate(template, product)}>{loading ? '生成中…' : lead.draft ? '生成新版本草稿' : '生成邮件草稿'} <Icon name="arrow" size={16}/></button>{!hasRecipient ? <p className="generator-hint">当前没有公开邮箱，补充收件人后才能生成。</p> : !lead.research && <p className="generator-hint">{researchState.message}</p>}</div>
 }
 
-function BatchMailPanel({ drafts, index, reviewer = '', onReviewerChange = () => {}, selectedIds, onToggle, onReview, translations, translationLoading, onTranslate, onPreview, onConfirm, loading, preview }) {
+function BatchMailPanel({ drafts, index, onIndexChange, selectedIds, onToggle, onReview, translations, translationLoading, onTranslate, onPreview, onConfirm, loading, preview }) {
   const current = drafts.length ? drafts[Math.min(index, drafts.length - 1)] : null
   const [showChinese, setShowChinese] = useState(false)
   useEffect(() => { if (current) setShowChinese(false) }, [current?.id])
