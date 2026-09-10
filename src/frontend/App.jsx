@@ -167,11 +167,19 @@ function App() {
   }, [activeNav, remoteTaskId])
   useEffect(() => {
     let cancelled = false
-    fetch('/api/settings/status')
-      .then((response) => response.ok ? response.json() : Promise.reject(new Error('settings status failed')))
-      .then((data) => { if (!cancelled) { setSettingsStatus(data); setSetupOpen(data.setup_required) } })
-      .catch(() => { if (!cancelled) setSettingsStatus(null) })
-    return () => { cancelled = true }
+    let retryTimer
+    let attempts = 0
+    const loadSettings = () => {
+      attempts += 1
+      fetch('/api/settings/status')
+        .then((response) => response.ok ? response.json() : Promise.reject(new Error('settings status failed')))
+        .then((data) => { if (!cancelled) { setSettingsStatus(data); setSetupOpen(data.setup_required) } })
+        .catch(() => {
+          if (!cancelled && attempts < 10) retryTimer = setTimeout(loadSettings, 500)
+        })
+    }
+    loadSettings()
+    return () => { cancelled = true; clearTimeout(retryTimer) }
   }, [])
   useEffect(() => {
     if (!remoteTaskId) return undefined
