@@ -781,7 +781,7 @@ function App() {
         <div className="page-heading"><div><h1>找客户</h1><p>输入目标条件，优先展示官网有公开邮箱的客户</p></div>{!remoteTaskId && <button className="primary-button" onClick={() => setShowTask(true)}><Icon name="plus" size={19}/>开始使用</button>}</div>
         <div className={`data-notice ${apiState}`}><span />{apiState === 'loading' ? '正在准备客户资料…' : apiState === 'connected' ? '客户资料已准备就绪' : apiState === 'empty' ? '当前还没有客户资料' : '客户资料暂时无法读取'}</div>
         <section className="search-panel panel"><div className="search-panel-heading"><div><h2>搜索条件</h2><p>常用条件放在这里，中文也可以直接输入</p></div><button type="button" className="primary-button" disabled={!remoteTaskId || discoverLoading || discoveryRun?.status === 'running'} onClick={discoverLeads}><Icon name="search" size={16}/>{discoverLoading || discoveryRun?.status === 'running' ? '正在搜索…' : '搜索可发送客户'}</button></div><div className="search-fields"><label>产品或业务<input value={searchProduct} onChange={(event) => setSearchProduct(event.target.value)} placeholder="例如：注塑件、精密零件" /></label><label>关键词<input value={searchKeywords} onChange={(event) => setSearchKeywords(event.target.value)} placeholder="例如：精密零件、注塑件" /></label><label>目标国家 / 地区<input value={searchCountries} onChange={(event) => setSearchCountries(event.target.value)} placeholder="例如：德国、墨西哥" /></label><label>行业<input value={searchIndustries} onChange={(event) => setSearchIndustries(event.target.value)} placeholder="例如：汽车、电子" /></label>{searchWarnings.length > 0 && <div className="criteria-hint">{searchWarnings.map((warning) => <span key={warning}>{warning}</span>)}</div>}{discoveryError && <div className="discovery-friendly-error">{discoveryError}</div>}</div><div className="search-panel-foot"><details className="maintenance-inline"><summary>维护工具（不常用）</summary><div className="maintenance-inline-body"><button type="button" className="outline-button" onClick={() => setShowRuleEditor(true)}>研究规则</button><button type="button" className="outline-button" onClick={() => setShowBrowserImport(true)}>备用导入</button></div></details></div></section>
-        {discoverySummary ? <DiscoveryFunnel summary={discoverySummary}/> : null}
+        {discoverySummary ? <DiscoveryFunnel summary={discoverySummary} visibleCount={filteredLeads.length}/> : null}
         <BatchMailPanel drafts={batchDrafts} index={batchIndex} onIndexChange={setBatchIndex} selectedIds={batchSelectedIds} onToggle={(id) => setBatchSelectedIds((items) => items.includes(id) ? items.filter((item) => item !== id) : items.length >= 30 ? items : [...items, id])} onReview={reviewBatchDraft} translations={batchTranslations} translationLoading={batchTranslationLoading} onTranslate={translateBatchDraft} onPreview={() => sendBatchDrafts(false)} onConfirm={() => sendBatchDrafts(true)} loading={batchLoading} preview={batchPreview}/>
         <ReplyCenter mailboxStatus={mailboxStatus} threads={mailThreads} analyses={replyAnalyses} followUpTasks={followUpTasks} loading={replyLoading} onTest={testMailbox} onSync={syncMailbox} onAnalyze={analyzeReplies} onGenerateDraft={generateReplyDraft} onFollowUpStatus={updateFollowUpStatus}/>
         <section className="workspace-grid">
@@ -862,9 +862,9 @@ function evidenceCheckStatus(value) {
   return { supported: '已找到', not_found: '未找到', not_configured: '未设置', not_checked: '未检查', conflicting: '信息不一致' }[value] || value
 }
 
-function DiscoveryFunnel({ summary }) {
-  const count = summary.qualified_count || 0
-  return <div className="discovery-funnel simple-funnel"><div><strong>本次搜索结果</strong><span>可发送客户</span></div><div className="qualified-result-count"><b>{count}</b><span>家</span></div><p className="funnel-note">这些客户已找到可用邮箱，可以直接进入人工发送。</p></div>
+function DiscoveryFunnel({ summary, visibleCount }) {
+  const count = Number.isFinite(visibleCount) ? visibleCount : (summary?.qualified_count || 0)
+  return <div className="discovery-funnel simple-funnel"><div><strong>当前客户池</strong><span>可发送客户</span></div><div className="qualified-result-count"><b>{count}</b><span>家</span></div><p className="funnel-note">这些客户已找到官网公开邮箱，可以直接进入人工发送。</p></div>
 }
 
 function Metric({ icon, label, value, note }) { return <div className="metric"><span className={`metric-icon ${icon}`}><Icon name={icon === 'researching' ? 'users' : icon} size={20}/></span><div><span>{label}</span><strong>{value}<Icon name="arrow" size={16}/></strong><small>{note}</small></div></div> }
