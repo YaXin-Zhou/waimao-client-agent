@@ -14,6 +14,27 @@ from src.domain.custom_research import (
 from src.domain.sender_profile import SenderProfile
 
 
+def normalize_criteria_values(values: tuple[str, ...] | list[str]) -> tuple[str, ...]:
+    """Normalize multi-value criteria, including legacy slash-separated input."""
+    normalized: list[str] = []
+    for value in values:
+        parts = (
+            str(value)
+            .replace("，", ",")
+            .replace("、", ",")
+            .replace("；", ",")
+            .replace(";", ",")
+            .replace("|", ",")
+            .replace("/", ",")
+            .split(",")
+        )
+        for part in parts:
+            item = part.strip()
+            if item and item not in normalized:
+                normalized.append(item)
+    return tuple(normalized)
+
+
 class TaskStatus(StrEnum):
     DRAFT = "draft"
     READY = "ready"
@@ -44,6 +65,10 @@ class AcquisitionCriteria:
     research_fields: tuple[ResearchFieldDefinition, ...] = ()
 
     def __post_init__(self) -> None:
+        object.__setattr__(self, "countries", normalize_criteria_values(self.countries))
+        object.__setattr__(self, "industries", normalize_criteria_values(self.industries))
+        object.__setattr__(self, "customer_types", normalize_criteria_values(self.customer_types))
+        object.__setattr__(self, "keywords", normalize_criteria_values(self.keywords))
         if not configured_research_terms(self):
             raise ValueError("at least one product, keyword, or business offering term is required")
         if self.daily_limit <= 0:

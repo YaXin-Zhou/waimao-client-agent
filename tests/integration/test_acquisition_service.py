@@ -73,6 +73,72 @@ def test_service_creates_task_and_assesses_imported_leads():
     assert service.list_leads(task.id) == results
 
 
+def test_repeat_search_does_not_erase_existing_email_country_or_evidence():
+    service = AcquisitionService(InMemoryTaskRepository(), InMemoryLeadRepository())
+    task = service.create_task(
+        "Preserve verified company data",
+        AcquisitionCriteria(product="plastic parts", countries=("Germany",)),
+    )
+    service.assess_leads(
+        task.id,
+        [
+            LeadRecord(
+                "Verified Plastics GmbH",
+                "https://verified.example",
+                "sales@verified.example",
+                "Germany",
+                source_url="https://verified.example/contact",
+                source_excerpt="Germany plastic parts supplier contact sales@verified.example",
+            )
+        ],
+        weights={"product_match": 30, "market_match": 20, "email_quality": 15},
+        signals_by_domain={},
+    )
+
+    repeated = service.assess_leads(
+        task.id,
+        [
+            LeadRecord(
+                "Plastic parts search result",
+                "https://verified.example",
+                source_url="https://www.bing.com/search?q=plastic+parts+Germany",
+                source_excerpt="Search result",
+            )
+        ],
+        weights={"product_match": 30, "market_match": 20, "email_quality": 15},
+        signals_by_domain={},
+    )
+
+    assert repeated[0].lead.company_name == "Verified Plastics GmbH"
+    assert repeated[0].lead.country == "Germany"
+    assert repeated[0].lead.emails == ("sales@verified.example",)
+    assert any("verified.example/contact" in source[0] for source in repeated[0].lead.sources)
+
+
+def test_list_leads_removes_persisted_placeholder_emails():
+    service = AcquisitionService(InMemoryTaskRepository(), InMemoryLeadRepository())
+    task = service.create_task(
+        "Clean persisted placeholders",
+        AcquisitionCriteria(product="plastic parts"),
+    )
+    service.assess_leads(
+        task.id,
+        [
+            LeadRecord(
+                "Example Plastics",
+                "https://example-plastics.test",
+                "utilisateur@domaine.com",
+                source_url="https://example-plastics.test/contact",
+                source_excerpt="Contact utilisateur@domaine.com",
+            )
+        ],
+        weights={"email_quality": 15},
+        signals_by_domain={},
+    )
+
+    assert service.list_leads(task.id)[0].lead.emails == ()
+
+
 def test_derived_score_reflects_partial_evidence_instead_of_fixed_buckets():
     service = AcquisitionService(InMemoryTaskRepository(), InMemoryLeadRepository())
     task = service.create_task(
@@ -576,14 +642,14 @@ def test_service_keeps_only_qualified_leads_marked_and_records_rejection_reasons
     assert "qualified_quota_exceeded" not in low_score.rejection_reasons
 
 
-def test_service_explains_missing_product_evidence_separately():
+def test_service_keeps_missing_product_evidence_as_non_blocking():
     service = AcquisitionService(InMemoryTaskRepository(), InMemoryLeadRepository())
     task = service.create_task(
         "Product evidence reason",
         AcquisitionCriteria(
             product="portable power station",
             minimum_qualification_score=0,
-            require_public_email=False,
+            require_public_email=True,
             candidate_limit=1,
             qualified_lead_limit=1,
         ),
@@ -591,16 +657,22 @@ def test_service_explains_missing_product_evidence_separately():
 
     result = service.assess_leads(
         task.id,
-        [LeadRecord("Unrelated", "https://unrelated.example")],
+        [LeadRecord(
+            "Alpine",
+            "https://alpine.example",
+            "sales@other.example",
+            source_url="https://alpine.example/about",
+            source_excerpt="Alpine company contact information.",
+        )],
         {"product_match": 30},
         {},
     )[0]
 
-    assert result.qualified is False
-    assert "missing_product_evidence" in result.rejection_reasons
+    assert result.qualified is True
+    assert "missing_product_evidence" not in result.rejection_reasons
 
 
-def test_service_keeps_conflicting_identity_records_out_of_qualified_results():
+def test_service_allows_public_cross_domain_email_when_identity_is_supported():
     service = AcquisitionService(InMemoryTaskRepository(), InMemoryLeadRepository())
     task = service.create_task(
         "Identity gate",
@@ -627,11 +699,11 @@ def test_service_keeps_conflicting_identity_records_out_of_qualified_results():
         signals_by_domain={},
     )[0]
 
-    assert not result.qualified
-    assert "email_domain_mismatch" in result.rejection_reasons
+    assert result.qualified is True
+    assert "missing_product_evidence" not in result.rejection_reasons
 
 
-def test_external_page_cannot_be_the_only_product_evidence():
+def test_external_page_is_not_used_as_product_evidence_but_does_not_block_email_pool():
     service = AcquisitionService(InMemoryTaskRepository(), InMemoryLeadRepository())
     task = service.create_task(
         "External evidence boundary",
@@ -657,7 +729,7 @@ def test_external_page_cannot_be_the_only_product_evidence():
     )[0]
 
     assert result.score.breakdown["product_match"] == 0
-    assert result.qualified is False
+    assert result.qualified is True
 
 
 def test_service_requalifies_legacy_assessments_when_reading_task_leads():

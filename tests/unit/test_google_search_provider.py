@@ -62,7 +62,9 @@ def test_google_provider_continues_after_a_page_with_only_filtered_results():
         start = int(request.full_url.split("start=")[-1])
         return FakeResponse(pages.get(start, ""))
 
-    provider = GoogleSearchProvider(opener=open_search, max_results_per_query=5)
+    provider = GoogleSearchProvider(
+        opener=open_search, max_results_per_query=5, max_pages_per_query=2
+    )
     results = provider.search(
         AcquisitionCriteria(
             product="portable power station",
@@ -124,6 +126,8 @@ def test_google_provider_excludes_job_boards_and_company_directories():
     assert not GoogleSearchProvider._is_candidate("https://www.indeed.com/viewjob?id=1")
     assert not GoogleSearchProvider._is_candidate("https://www.linkedin.com/company/example")
     assert not GoogleSearchProvider._is_candidate("https://www.zoominfo.com/c/example")
+    assert not GoogleSearchProvider._is_candidate("https://openai.com/index/chatgpt/")
+    assert not GoogleSearchProvider._is_candidate("https://chatgpt.com/")
     assert GoogleSearchProvider._is_candidate("https://www.example-manufacturer.com/contact")
 
 
@@ -140,6 +144,12 @@ def test_google_provider_excludes_school_marketplace_and_research_titles():
     assert not GoogleSearchProvider._is_candidate("https://tradeford.com/buyers", "Injection Mold Buyers List")
     assert not GoogleSearchProvider._is_candidate("https://nasdaq.com/", "Nasdaq - Listings, Market Data & Financial Technology")
     assert GoogleSearchProvider._is_candidate("https://real-mold-maker.example/", "Real Mold Maker")
+
+
+def test_google_provider_excludes_noncommercial_plastics_organizations():
+    assert not GoogleSearchProvider._is_candidate(
+        "https://wwf.sg/plastics/", "WWF-Singapore | Towards a plastic-lite Singapore"
+    )
 
 
 def test_google_provider_excludes_informational_paths_and_public_institutions():
@@ -216,3 +226,14 @@ def test_google_provider_rotates_buyer_intent_on_later_rounds():
     provider = GoogleSearchProvider(opener=open_search)
     provider.search_round(AcquisitionCriteria(product="solar generator", daily_limit=1), 2)
     assert "supplier" in captured[0]
+
+
+def test_country_signal_rejects_unrelated_search_result():
+    criteria = AcquisitionCriteria(product="plastic injection molding", countries=("Germany",))
+
+    assert not GoogleSearchProvider._has_country_signal(
+        criteria, "Plastic dictionary https://example.jp/plastic"
+    )
+    assert GoogleSearchProvider._has_country_signal(
+        criteria, "German injection molding company https://example.de"
+    )

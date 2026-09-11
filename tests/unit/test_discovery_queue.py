@@ -17,6 +17,9 @@ class Runs:
     def get(self, run_id):
         return self.items.get(run_id)
 
+    def list_for_task(self, task_id):
+        return [run for run in self.items.values() if run.task_id == task_id]
+
 
 class Tasks:
     def get(self, task_id):
@@ -37,7 +40,7 @@ class MultiRoundAcquisition:
     def __init__(self):
         self._tasks = SimpleNamespace(
             get=lambda task_id: SimpleNamespace(
-                criteria=SimpleNamespace(qualified_lead_limit=2)
+            criteria=SimpleNamespace(qualified_lead_limit=2)
             )
             if task_id == "task"
             else None
@@ -101,6 +104,25 @@ def test_discovery_queue_persists_progress_and_completion():
     queue.close()
 
 
+def test_discovery_queue_rotates_search_round_after_previous_success():
+    runs = Runs()
+    acquisition = MultiRoundAcquisition()
+    acquisition._tasks.get = lambda task_id: SimpleNamespace(
+        criteria=SimpleNamespace(qualified_lead_limit=10)
+    ) if task_id == "task" else None
+    queue = DiscoveryJobQueue(
+        acquisition, runs, max_workers=1, max_pending=1, max_search_rounds=1
+    )
+
+    first = queue.submit("task", {}, {})
+    wait_for_terminal(runs, first.id)
+    second = queue.submit("task", {}, {})
+    wait_for_terminal(runs, second.id)
+
+    assert acquisition.rounds == [0, 1]
+    queue.close()
+
+
 def test_discovery_queue_rejects_unknown_task():
     queue = DiscoveryJobQueue(Acquisition(), Runs(), max_workers=1, max_pending=1)
 
@@ -112,7 +134,9 @@ def test_discovery_queue_rejects_unknown_task():
 def test_discovery_queue_accumulates_rounds_until_qualified_target():
     runs = Runs()
     acquisition = MultiRoundAcquisition()
-    queue = DiscoveryJobQueue(acquisition, runs, max_workers=1, max_pending=1)
+    queue = DiscoveryJobQueue(
+        acquisition, runs, max_workers=1, max_pending=1, max_search_rounds=2
+    )
 
     queued = queue.submit("task", {}, {})
     finished = wait_for_terminal(runs, queued.id)
@@ -129,7 +153,12 @@ def test_discovery_queue_starts_background_research_for_qualified_leads():
     acquisition = MultiRoundAcquisition()
     research = ResearchQueue()
     queue = DiscoveryJobQueue(
-        acquisition, runs, max_workers=1, max_pending=1, research_queue=research
+        acquisition,
+        runs,
+        max_workers=1,
+        max_pending=1,
+        max_search_rounds=2,
+        research_queue=research,
     )
 
     queued = queue.submit("task", {}, {})

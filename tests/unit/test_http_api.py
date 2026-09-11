@@ -231,6 +231,77 @@ def make_app():
     return app, task, draft, audit
 
 
+def test_settings_persists_optional_brave_key_without_exposing_it(tmp_path, monkeypatch):
+    app, _, _, _ = make_app()
+    config_path = tmp_path / ".env"
+    template_path = tmp_path / ".env.example"
+    template_path.write_text(
+        "DEEPSEEK_API_KEY=\nBRAVE_SEARCH_API_KEY=\nSEARCH_BRAVE_API_ENABLED=false\n",
+        encoding="utf-8",
+    )
+    monkeypatch.setattr(
+        ApiApplication,
+        "_config_path",
+        staticmethod(lambda: config_path),
+    )
+
+    status, payload = app.handle(
+        "POST",
+        "/api/settings/config",
+        {
+            "deepseek_api_key": "deepseek-secret",
+            "brave_search_api_key": "brave-secret",
+            "ali_email": "sales@example.com",
+            "ali_password": "mail-secret",
+            "enable_sending": True,
+        },
+    )
+    assert status == 200
+    assert payload["saved"] is True
+    saved_config = config_path.read_text(encoding="utf-8")
+    assert "brave-secret" in saved_config
+    assert "SEARCH_BRAVE_API_ENABLED=true" in saved_config
+
+    status, payload = app.handle("GET", "/api/settings/status")
+    assert status == 200
+    assert payload["brave_search_configured"] is True
+    assert payload["brave_search_enabled"] is True
+    assert "brave-secret" not in json.dumps(payload)
+
+
+def test_settings_resave_preserves_existing_brave_key(tmp_path, monkeypatch):
+    app, _, _, _ = make_app()
+    config_path = tmp_path / ".env"
+    template_path = tmp_path / ".env.example"
+    template_path.write_text(
+        "DEEPSEEK_API_KEY=\nBRAVE_SEARCH_API_KEY=\nSEARCH_BRAVE_API_ENABLED=false\n",
+        encoding="utf-8",
+    )
+    monkeypatch.setattr(ApiApplication, "_config_path", staticmethod(lambda: config_path))
+
+    first = {
+        "deepseek_api_key": "deepseek-secret",
+        "brave_search_api_key": "brave-secret",
+        "ali_email": "sales@example.com",
+        "ali_password": "mail-secret",
+        "enable_sending": True,
+    }
+    status, _ = app.handle("POST", "/api/settings/config", first)
+    assert status == 200
+
+    second = {
+        "deepseek_api_key": "deepseek-secret-2",
+        "ali_email": "sales@example.com",
+        "ali_password": "mail-secret-2",
+        "enable_sending": True,
+    }
+    status, _ = app.handle("POST", "/api/settings/config", second)
+    assert status == 200
+    saved_config = config_path.read_text(encoding="utf-8")
+    assert "BRAVE_SEARCH_API_KEY=brave-secret" in saved_config
+    assert "SEARCH_BRAVE_API_ENABLED=true" in saved_config
+
+
 def test_api_returns_leads_and_research_detail():
     app, task, _, _ = make_app()
 

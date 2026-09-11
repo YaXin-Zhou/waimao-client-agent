@@ -1,0 +1,41 @@
+{
+  "manifest_version": 3,
+  "name": "NORTHSTAR 客户导入助手",
+  "description": "把当前 Google 或 Bing 搜索页中的公开官网导入本地客户工作台。",
+  "version": "0.2.1",
+  "permissions": ["activeTab", "scripting", "storage", "alarms", "tabs"],
+  "host_permissions": [
+    "http://127.0.0.1:8002/*",
+    "https://www.google.com/*",
+    "https://www.google.com.hk/*",
+    "https://www.google.co.uk/*",
+    "https://www.google.fr/*",
+    "https://www.google.de/*",
+    "https://www.google.it/*",
+    "https://www.google.es/*",
+    "https://www.bing.com/*"
+  ],
+  "content_scripts": [
+    {
+      "matches": [
+        "https://www.google.com/search*",
+        "https://www.google.com.hk/search*",
+        "https://www.google.co.uk/search*",
+        "https://www.google.fr/search*",
+        "https://www.google.de/search*",
+        "https://www.google.it/search*",
+        "https://www.google.es/search*",
+        "https://www.bing.com/search*"
+      ],
+      "js": ["content.js"],
+      "run_at": "document_idle"
+    }
+  ],
+  "action": {
+    "default_title": "导入当前搜索结果",
+    "default_popup": "popup.html"
+  },
+  "background": {
+    "service_worker": "background.js"
+  }
+}

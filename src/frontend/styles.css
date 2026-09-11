@@ -104,6 +104,12 @@ h1 { color: #132238; font-size: 29px; font-weight: 700; letter-spacing: -.8px; }
 .browser-import-modal textarea { width: 100%; margin-top: 6px; resize: vertical; border: 1px solid #d6e1eb; border-radius: 6px; padding: 10px 11px; outline: 0; color: #263a51; background: #fbfcfd; font: 12px/1.55 ui-monospace, SFMono-Regular, Consolas, monospace; }
 .browser-import-modal textarea:focus { border-color: #62b4f3; box-shadow: 0 0 0 3px rgba(98, 180, 243, .13); }
 .browser-import-boundary { margin-top: 12px; padding: 9px 10px; border: 1px solid #dbeaf4; border-radius: 6px; color: #58748e; background: #f6fbfe; font-size: 11px; line-height: 1.5; }
+.browser-search-action { margin-right: 10px; }
+.search-auto-note { display: inline-flex; align-items: center; margin-right: 12px; color: #718298; font-size: 11px; }
+.browser-search-link { display: inline-flex; align-items: center; justify-content: center; margin-bottom: 4px; text-decoration: none; }
+.browser-import-format { margin-top: 10px; padding: 9px 10px; border-radius: 6px; color: #58748e; background: #f6fbfe; font-size: 11px; line-height: 1.6; }
+.browser-json-fallback { margin-top: 12px; color: #718298; font-size: 11px; }
+.browser-json-fallback .text-button { margin-top: 8px; }
 .form-error { margin-top: 9px; color: #b34a43; font-size: 11px; }
 @media (prefers-reduced-motion: reduce) { *, *:before, *:after { scroll-behavior: auto !important; animation-duration: .01ms !important; animation-iteration-count: 1 !important; transition-duration: .01ms !important; } }
 

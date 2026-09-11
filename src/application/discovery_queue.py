@@ -17,7 +17,9 @@ class DiscoveryJobQueue:
         runs,
         max_workers: int = 1,
         max_pending: int = 4,
-        max_search_rounds: int = 6,
+        # One click is one bounded discovery pass. Later clicks rotate the
+        # intent and accumulate leads without burst traffic.
+        max_search_rounds: int = 1,
         research_queue=None,
     ):
         if max_workers <= 0 or max_pending <= 0:
@@ -58,6 +60,7 @@ class DiscoveryJobQueue:
             task = self._acquisition._tasks.get(task_id)
             multi_round = callable(list_leads) and task is not None
             rounds = self._max_search_rounds if multi_round else 1
+            prior_successes = self._successful_run_count(task_id)
             for round_index in range(rounds):
                 if multi_round:
                     daily_target = getattr(
@@ -71,7 +74,10 @@ class DiscoveryJobQueue:
                     )
                 }
                 if multi_round:
-                    discovery_kwargs["search_round"] = round_index
+                    # Each successful click advances the search rotation. This
+                    # lets repeated daily searches discover new query variants
+                    # instead of replaying the first four queries forever.
+                    discovery_kwargs["search_round"] = prior_successes + round_index
                 self._acquisition.discover_and_assess(
                     task_id, weights, signals, **discovery_kwargs
                 )
@@ -84,6 +90,15 @@ class DiscoveryJobQueue:
             self._runs.save(latest.succeed(**counts))
         except Exception as error:
             self._runs.save((self._runs.get(run.id) or run).fail(str(error)))
+
+    def _successful_run_count(self, task_id: str) -> int:
+        list_for_task = getattr(self._runs, "list_for_task", None)
+        if not callable(list_for_task):
+            return 0
+        return sum(
+            getattr(run.status, "value", run.status) == "succeeded"
+            for run in list_for_task(task_id)
+        )
 
     def _qualified_count(self, task_id: str) -> int:
         return sum(bool(item.qualified) for item in self._acquisition.list_leads(task_id))

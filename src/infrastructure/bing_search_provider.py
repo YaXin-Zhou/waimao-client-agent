@@ -3,13 +3,14 @@
 from __future__ import annotations
 
 import base64
+import re
 from html import unescape
 from html.parser import HTMLParser
 from typing import Callable
 from urllib.parse import parse_qs, quote_plus, urlsplit
 from urllib.request import Request, urlopen
 
-from src.application.search_queries import build_search_queries
+from src.application.search_queries import build_search_queries_for_round
 from src.domain.lead import LeadRecord, canonical_website_domain
 from src.domain.task import AcquisitionCriteria, effective_candidate_limit
 from src.infrastructure.google_search_provider import GoogleSearchProvider, SearchProviderError
@@ -83,7 +84,7 @@ class BingSearchProvider:
         candidate_limit = effective_candidate_limit(criteria)
         records: list[LeadRecord] = []
         seen_domains: set[str] = set()
-        queries = build_search_queries(criteria)
+        queries = build_search_queries_for_round(criteria, round_index)
         intent_suffixes = ("", "contact", "supplier", "manufacturer", "factory", "distributor", "purchasing", "procurement")
         suffix = intent_suffixes[round_index % len(intent_suffixes)]
         if suffix:
@@ -118,6 +119,12 @@ class BingSearchProvider:
                     domain = canonical_website_domain(resolved)
                     if (
                         not GoogleSearchProvider._is_candidate(resolved, title)
+                        or not GoogleSearchProvider._has_country_signal(
+                            criteria, f"{title} {resolved}"
+                        )
+                        or GoogleSearchProvider._has_obvious_country_mismatch(
+                            criteria, resolved
+                        )
                         or not self._is_query_relevant(query, title, resolved)
                         or not parsed.hostname
                         or not domain
@@ -194,9 +201,47 @@ class BingSearchProvider:
             "percent",
             "festival",
             "synchrony account",
+            # Proxy/search-page drift can return unrelated consumer content
+            # for a B2B query. Keep these out before they reach the lead pool.
+            "recipe",
+            "cooking",
+            "food network",
+            "cocktail",
+            "forum",
+            "question",
+            "answer",
+            "chat",
+            "social",
+            # Non-commercial organizations and editorial pages can contain
+            # product words without being potential buyers.
+            "wildlife",
+            "wwf",
+            "conservation",
+            "charity",
+            "foundation",
+            "nonprofit",
+            "non-profit",
+            "ngo",
+            "environmental",
+            "climate action",
+            "campaign",
         )
         if any(marker in text for marker in blocked):
             return False
+        # The local network can occasionally return a completely unrelated
+        # result page while still using a valid HTTP response. Require at
+        # least one meaningful query token in the title or URL so consumer
+        # results cannot become business candidates. Website enrichment still
+        # performs the authoritative product/industry verification later.
+        query_terms = {
+            token
+            for token in re.findall(r"[a-z0-9]{4,}", query.lower())
+            if token not in {"united", "kingdom", "states", "country", "area"}
+        }
+        if query_terms and not any(token in text for token in query_terms):
+            return False
+        # Genuine suppliers often use a brand-only domain/title. Industry and
+        # country are verified later from fetched website evidence.
         return True
 
     @staticmethod

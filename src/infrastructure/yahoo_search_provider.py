@@ -9,7 +9,7 @@ from typing import Callable
 from urllib.parse import quote_plus, unquote, urlsplit
 from urllib.request import Request, urlopen
 
-from src.application.search_queries import build_search_queries
+from src.application.search_queries import build_search_queries_for_round
 from src.domain.lead import LeadRecord, canonical_website_domain
 from src.domain.task import effective_candidate_limit
 from src.infrastructure.google_search_provider import GoogleSearchProvider, SearchProviderError
@@ -80,7 +80,7 @@ class YahooSearchProvider:
         candidate_limit = effective_candidate_limit(criteria)
         records: list[LeadRecord] = []
         seen_domains: set[str] = set()
-        queries = build_search_queries(criteria)
+        queries = build_search_queries_for_round(criteria, round_index)
         intent_suffixes = ("", "contact", "supplier", "manufacturer", "factory", "distributor")
         suffix = intent_suffixes[round_index % len(intent_suffixes)]
         if suffix:
@@ -97,6 +97,9 @@ class YahooSearchProvider:
                 domain = canonical_website_domain(resolved)
                 if (
                     not GoogleSearchProvider._is_candidate(resolved, title)
+                    or not GoogleSearchProvider._has_country_signal(
+                        criteria, f"{title} {resolved}"
+                    )
                     or not self._is_query_relevant(title, resolved)
                     or not domain
                     or domain in seen_domains

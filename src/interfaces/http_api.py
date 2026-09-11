@@ -570,6 +570,9 @@ class ApiApplication:
         return 200, {
             "config_file_present": config_path.exists(),
             "deepseek_configured": configured("DEEPSEEK_API_KEY"),
+            "brave_search_configured": configured("BRAVE_SEARCH_API_KEY"),
+            "brave_search_enabled": configured("BRAVE_SEARCH_API_KEY")
+            and values.get("SEARCH_BRAVE_API_ENABLED", "false").strip().lower() == "true",
             "ali_imap_configured": configured("ALI_IMAP_USERNAME") and configured("ALI_IMAP_PASSWORD"),
             "ali_smtp_enabled": self._sending_enabled and configured("ALI_SMTP_USERNAME") and configured("ALI_SMTP_PASSWORD"),
             "setup_required": not configured("DEEPSEEK_API_KEY") or not configured("ALI_IMAP_USERNAME") or not configured("ALI_IMAP_PASSWORD"),
@@ -586,6 +589,7 @@ class ApiApplication:
         api_key = str(body.get("deepseek_api_key", "")).strip()
         email = str(body.get("ali_email", "")).strip()
         password = str(body.get("ali_password", ""))
+        brave_search_api_key = str(body.get("brave_search_api_key", "")).strip()
         if not api_key:
             raise ValueError("请填写 DeepSeek API Key")
         if not email or "@" not in email:
@@ -595,8 +599,16 @@ class ApiApplication:
 
         config_path = self._config_path()
         config_path.parent.mkdir(parents=True, exist_ok=True)
+        existing_values = {}
+        if config_path.exists():
+            for raw_line in config_path.read_text(encoding="utf-8").splitlines():
+                line = raw_line.strip()
+                if line and not line.startswith("#") and "=" in line:
+                    key, value = line.split("=", 1)
+                    existing_values[key.strip()] = value.strip()
         template_path = config_path.with_name(".env.example")
         lines = template_path.read_text(encoding="utf-8").splitlines() if template_path.exists() else []
+        saved_brave_key = brave_search_api_key or existing_values.get("BRAVE_SEARCH_API_KEY", "").strip()
         values = {
             "DEEPSEEK_API_KEY": api_key,
             "ALI_IMAP_USERNAME": email,
@@ -604,7 +616,9 @@ class ApiApplication:
             "ALI_SMTP_USERNAME": email,
             "ALI_SMTP_PASSWORD": password,
             "ALI_SMTP_SENDING_ENABLED": "true" if body.get("enable_sending", True) else "false",
+            "SEARCH_BRAVE_API_ENABLED": "true" if saved_brave_key else "false",
         }
+        values["BRAVE_SEARCH_API_KEY"] = saved_brave_key
         seen = set()
         output = []
         for line in lines:
@@ -857,29 +871,21 @@ class ApiApplication:
                 item for item in assessments if self._is_displayable_lead(item.lead)
             ]
             assessments = self._apply_research_country(task.id, task, assessments)
-            target_countries = {
-                _country_key(country)
-                for country in task.criteria.countries
-                if str(country).strip()
-            }
-            # 客户可见数据库不展示无法确认国家或不属于本次目标市场的记录。
-            # 记录仍保存在本地候选库，后续重新核验后可再次进入展示范围。
+            # Legacy rows may retain a historical qualified flag from before
+            # the country/email/industry gates were tightened. Re-evaluate on
+            # read so database counters and customer-pool counters agree.
             assessments = [
-                item
+                AcquisitionService._qualify([item], task.criteria)[0]
                 for item in assessments
-                if item.lead.country.strip()
-                and item.lead.country.casefold() != "unknown"
-                and (
-                    not target_countries
-                    or _country_key(item.lead.country) in target_countries
-                )
             ]
+            # 本地数据库展示“已抓到的候选”，不与“可发送客户”共用严格筛选。
+            # 国家未确认、产品证据不足的记录仍然是可追溯的采集结果，不能
+            # 因为尚未合格就让数据库看起来像空的；严格条件只影响 sendable。
             eligible = [
                 item for item in assessments
                 if item.qualified
                 and item.lead.emails
                 and not (set(email.lower() for email in item.lead.emails) & contacted_emails)
-                and "email_domain_mismatch" not in item.lead.flags
                 and bool(item.lead.domain)
             ]
             today_domains = {
@@ -929,13 +935,18 @@ class ApiApplication:
 
     def _apply_research_country(self, task_id, task, assessments):
         """让数据库页使用背调补充的国家重新计算合格状态。"""
+        # Load all reports for the task in one repository call. The previous
+        # implementation opened a database connection once per lead, which
+        # made the database page appear stuck when historical candidates were
+        # numerous.
+        reports = {}
+        if self._research is not None:
+            list_reports = getattr(self._research, "list_for_task", None)
+            if callable(list_reports):
+                reports = list_reports(task_id)
         effective = []
         for item in assessments:
-            report = (
-                self._research.get(task_id, item.lead.domain)
-                if self._research is not None and item.lead.domain
-                else None
-            )
+            report = reports.get(item.lead.domain) if item.lead.domain else None
             candidate = item
             if report is not None and report.country and not item.lead.country:
                 candidate = replace(
@@ -986,11 +997,23 @@ class ApiApplication:
             "decision_maker_linkedin": "决策人 LinkedIn",
             "historical_sourcing_categories": "过往采购品类",
         }
+        reports_by_task = {}
+        if self._research is not None:
+            list_reports = getattr(self._research, "list_for_task", None)
+            if callable(list_reports):
+                task_ids = {item["task_id"] for item in overview["items"]}
+                reports_by_task = {
+                    task_id: list_reports(task_id) for task_id in task_ids
+                }
         reports = {}
         field_keys = list(field_labels)
         for item in overview["items"]:
             lead = item["lead"]
-            report = self._research.get(item["task_id"], lead.get("domain", "")) if lead.get("domain") else None
+            report = (
+                reports_by_task.get(item["task_id"], {}).get(lead.get("domain", ""))
+                if lead.get("domain")
+                else None
+            )
             reports[id(item)] = report
             for key in (report.custom_fields if report else {}):
                 if key not in field_keys:
@@ -1793,7 +1816,7 @@ class ApiApplication:
             )
             checks["industry"] = (
                 "supported"
-                if any(AcquisitionService._term_in_evidence(term, text) for term in industry_terms)
+                if industry_terms and AcquisitionService.has_industry_evidence(lead, criteria)
                 else "not_found"
                 if industry_terms
                 else "not_configured"

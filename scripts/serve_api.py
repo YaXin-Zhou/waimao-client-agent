@@ -9,8 +9,13 @@ import sys
 import time
 from http.server import BaseHTTPRequestHandler, ThreadingHTTPServer
 from pathlib import Path
+from urllib.request import ProxyHandler, build_opener
 
-ROOT = Path(__file__).resolve().parents[1]
+ROOT = (
+    Path(sys.executable).resolve().parent
+    if getattr(sys, "frozen", False)
+    else Path(__file__).resolve().parents[1]
+)
 sys.path.insert(0, str(ROOT))
 
 from src.application.acquisition_service import AcquisitionService  # noqa: E402
@@ -29,9 +34,13 @@ from src.application.translation_service import TranslationService  # noqa: E402
 from src.infrastructure.ali_imap import AliImapConfig, AliImapMailbox  # noqa: E402
 from src.infrastructure.ali_smtp import AliSmtpConfig, AliSmtpMailer  # noqa: E402
 from src.infrastructure.bing_search_provider import BingSearchProvider  # noqa: E402
+from src.infrastructure.brave_search_provider import BraveSearchProvider  # noqa: E402
+from src.infrastructure.brave_api_search_provider import BraveApiSearchProvider  # noqa: E402
 from src.infrastructure.deepseek_provider import DeepSeekConfig, DeepSeekProvider  # noqa: E402
+from src.infrastructure.duckduckgo_search_provider import DuckDuckGoSearchProvider  # noqa: E402
 from src.infrastructure.fallback_search_provider import FallbackSearchProvider  # noqa: E402
 from src.infrastructure.google_search_provider import GoogleSearchProvider  # noqa: E402
+from src.infrastructure.tavily_search_provider import TavilySearchProvider  # noqa: E402
 from src.infrastructure.machine_translation_provider import (  # noqa: E402
     LocalArgosTranslationProvider,
 )
@@ -71,6 +80,53 @@ def _config_values(path: Path) -> dict[str, str]:
 
 
 config_values = _config_values(ROOT / "config" / ".env")
+
+
+def _system_proxy() -> str:
+    """Use the configured app proxy for Python requests when available.
+
+    Browsers on Windows commonly inherit the WinINet proxy while Python's
+    urllib does not. Keeping the detection here makes every search adapter
+    follow the same network route without storing credentials.
+    """
+    configured = (
+        config_values.get("SEARCH_PROXY", "").strip()
+        or config_values.get("HTTPS_PROXY", "").strip()
+        or os.environ.get("HTTPS_PROXY", "").strip()
+    )
+    if configured:
+        return configured
+    if os.name != "nt":
+        return ""
+    try:
+        import winreg
+
+        with winreg.OpenKey(
+            winreg.HKEY_CURRENT_USER,
+            r"Software\Microsoft\Windows\CurrentVersion\Internet Settings",
+        ) as key:
+            enabled = winreg.QueryValueEx(key, "ProxyEnable")[0]
+            server = str(winreg.QueryValueEx(key, "ProxyServer")[0]).strip()
+        if not enabled or not server:
+            return ""
+        if "=" in server:
+            values = dict(
+                part.split("=", 1)
+                for part in server.split(";")
+                if "=" in part
+            )
+            server = values.get("https") or values.get("http") or ""
+        return server if server.startswith(("http://", "https://", "socks5://")) else f"http://{server}"
+    except (OSError, ImportError, ValueError):
+        return ""
+
+
+proxy_server = _system_proxy()
+search_opener = (
+    build_opener(ProxyHandler({"http": proxy_server, "https": proxy_server}))
+    if proxy_server
+    else build_opener()
+)
 language_policy_path = ROOT / "config" / "language_policy.json"
 language_policy = (
     json.loads(language_policy_path.read_text(encoding="utf-8"))
@@ -89,24 +145,49 @@ email_send_attempt_repository = SQLiteEmailSendAttemptRepository(DATABASE)
 follow_up_task_repository = SQLiteFollowUpTaskRepository(DATABASE)
 audit_repository = SQLiteAuditEventRepository(DATABASE)
 static_search_provider = GoogleSearchProvider(
+    opener=search_opener.open,
     timeout=float(config_values.get("SEARCH_TIMEOUT_SECONDS", "15")),
     max_results_per_query=int(config_values.get("SEARCH_RESULTS_PER_QUERY", "10")),
+    max_pages_per_query=int(config_values.get("SEARCH_PAGES_PER_QUERY", "1")),
     host=config_values.get("SEARCH_GOOGLE_HOST", "www.google.com.hk"),
 )
+tavily_search_provider = None
+tavily_api_key = config_values.get("TAVILY_API_KEY", "").strip()
+if (
+    tavily_api_key
+    and config_values.get("SEARCH_TAVILY_ENABLED", "true").lower() == "true"
+):
+    tavily_search_provider = TavilySearchProvider(
+        api_key=tavily_api_key,
+        opener=search_opener.open,
+        timeout=float(config_values.get("SEARCH_TAVILY_TIMEOUT_SECONDS", "20")),
+        max_results_per_query=min(
+            20, int(config_values.get("SEARCH_TAVILY_RESULTS_PER_QUERY", "20"))
+        ),
+        max_queries_per_round=min(
+            24, int(config_values.get("SEARCH_TAVILY_QUERIES_PER_ROUND", "8"))
+        ),
+        endpoint=config_values.get(
+            "SEARCH_TAVILY_ENDPOINT", "https://api.tavily.com/search"
+        ),
+    )
 browser_search_provider = None
 if config_values.get("SEARCH_BROWSER_ENABLED", "true").lower() == "true":
     browser_search_provider = PlaywrightSearchProvider(
         timeout=float(config_values.get("SEARCH_BROWSER_TIMEOUT_SECONDS", "30")),
         max_results_per_query=int(config_values.get("SEARCH_RESULTS_PER_QUERY", "10")),
+        max_pages_per_query=int(config_values.get("SEARCH_PAGES_PER_QUERY", "1")),
         host=config_values.get("SEARCH_GOOGLE_HOST", "www.google.com.hk"),
         executable_path=config_values.get("SEARCH_BROWSER_EXECUTABLE", ""),
         headless=config_values.get("SEARCH_BROWSER_HEADLESS", "true").lower() == "true",
-        proxy=config_values.get(
-            "SEARCH_BROWSER_PROXY", config_values.get("HTTPS_PROXY", "")
-        ),
+        # Keep the automated browser on the same route as the HTTP crawler.
+        # An explicitly configured browser proxy wins; otherwise reuse the
+        # detected FlClash/WinINet proxy instead of silently going direct.
+        proxy=(config_values.get("SEARCH_BROWSER_PROXY", "").strip() or proxy_server),
     )
 bing_search_provider = (
     BingSearchProvider(
+        opener=search_opener.open,
         timeout=float(config_values.get("SEARCH_TIMEOUT_SECONDS", "15")),
         max_results_per_query=int(config_values.get("SEARCH_RESULTS_PER_QUERY", "10")),
         host=config_values.get("SEARCH_BING_HOST", "www.bing.com"),
@@ -114,8 +195,35 @@ bing_search_provider = (
     if config_values.get("SEARCH_BING_ENABLED", "true").lower() == "true"
     else None
 )
+brave_search_provider = (
+    BraveSearchProvider(
+        timeout=float(config_values.get("SEARCH_TIMEOUT_SECONDS", "15")),
+        max_results_per_query=int(config_values.get("SEARCH_RESULTS_PER_QUERY", "10")),
+        host=config_values.get("SEARCH_BRAVE_HOST", "search.brave.com"),
+    )
+    if config_values.get("SEARCH_BRAVE_ENABLED", "false").lower() == "true"
+    else None
+)
+brave_api_search_provider = None
+brave_api_key = config_values.get("BRAVE_SEARCH_API_KEY", "").strip()
+if (
+    brave_api_key
+    and config_values.get("SEARCH_BRAVE_API_ENABLED", "false").lower() == "true"
+):
+    brave_api_search_provider = BraveApiSearchProvider(
+        api_key=brave_api_key,
+        timeout=float(config_values.get("SEARCH_TIMEOUT_SECONDS", "15")),
+        max_results_per_query=min(
+            20, int(config_values.get("SEARCH_RESULTS_PER_QUERY", "10"))
+        ),
+        endpoint=config_values.get(
+            "SEARCH_BRAVE_API_ENDPOINT",
+            "https://api.search.brave.com/res/v1/web/search",
+        ),
+    )
 yahoo_search_provider = (
     YahooSearchProvider(
+        opener=search_opener.open,
         timeout=float(config_values.get("SEARCH_TIMEOUT_SECONDS", "15")),
         max_results_per_query=int(config_values.get("SEARCH_RESULTS_PER_QUERY", "10")),
         host=config_values.get("SEARCH_YAHOO_HOST", "search.yahoo.com"),
@@ -123,11 +231,27 @@ yahoo_search_provider = (
     if config_values.get("SEARCH_YAHOO_ENABLED", "true").lower() == "true"
     else None
 )
+duckduckgo_search_provider = (
+    DuckDuckGoSearchProvider(
+        opener=search_opener.open,
+        timeout=float(config_values.get("SEARCH_TIMEOUT_SECONDS", "15")),
+        max_results_per_query=int(config_values.get("SEARCH_RESULTS_PER_QUERY", "10")),
+        host=config_values.get("SEARCH_DDG_HOST", "html.duckduckgo.com"),
+    )
+    if config_values.get("SEARCH_DDG_ENABLED", "true").lower() == "true"
+    else None
+)
 # Bing is the first live source because it provides a bounded HTML result page
-# in the current local network; Google remains available as a fallback when it
-# is reachable, without making a blocked Google session delay every search.
+# in the current local network. Yahoo and Google remain fallbacks, while the
+# browser adapter is used only after the bounded HTTP sources are exhausted.
 search_provider = FallbackSearchProvider(
-    yahoo_search_provider, bing_search_provider, static_search_provider, browser_search_provider
+    tavily_search_provider, brave_api_search_provider, bing_search_provider, brave_search_provider, duckduckgo_search_provider,
+    yahoo_search_provider, static_search_provider, browser_search_provider,
+    failure_cooldown_seconds=float(config_values.get("SEARCH_FAILURE_COOLDOWN_SECONDS", "300")),
+    # A successful Tavily pass is already a bounded, supported search result.
+    # Keep later sources for Tavily outages only, avoiding unnecessary Google
+    # and browser requests that increase rate-limit risk.
+    stop_after_first_success=tavily_search_provider is not None,
 )
 try:
     deepseek_provider = DeepSeekProvider(DeepSeekConfig.from_env_file(ROOT / "config" / ".env"))
@@ -218,6 +342,7 @@ discovery_queue = DiscoveryJobQueue(
     discovery_run_repository,
     max_workers=int(config_values.get("DISCOVERY_QUEUE_WORKERS", "1")),
     max_pending=int(config_values.get("DISCOVERY_QUEUE_MAX_PENDING", "2")),
+    # One click is one bounded pass; repeat later to accumulate leads safely.
     max_search_rounds=int(config_values.get("DISCOVERY_MAX_SEARCH_ROUNDS", "1")),
     research_queue=research_queue,
 )
@@ -251,6 +376,12 @@ application = ApiApplication(
 
 
 class Handler(BaseHTTPRequestHandler):
+    def _cors_origin(self):
+        origin = self.headers.get("Origin", "")
+        if origin.startswith("chrome-extension://") or origin.startswith("moz-extension://"):
+            return origin
+        return "http://127.0.0.1:5174"
+
     def _handle(self, method, body=None):
         started = time.perf_counter()
         status, payload = application.handle(method, self.path, body)
@@ -273,8 +404,21 @@ class Handler(BaseHTTPRequestHandler):
         self.send_response(status)
         self.send_header("Content-Type", "application/json; charset=utf-8")
         self.send_header("Content-Length", str(len(encoded)))
+        self.send_header("Access-Control-Allow-Origin", self._cors_origin())
+        self.send_header("Access-Control-Allow-Methods", "GET, POST, PATCH, OPTIONS")
+        self.send_header("Access-Control-Allow-Headers", "Content-Type")
+        self.send_header("Vary", "Origin")
         self.end_headers()
         self.wfile.write(encoded)
+
+    def do_OPTIONS(self):
+        self.send_response(204)
+        self.send_header("Access-Control-Allow-Origin", self._cors_origin())
+        self.send_header("Access-Control-Allow-Methods", "GET, POST, PATCH, OPTIONS")
+        self.send_header("Access-Control-Allow-Headers", "Content-Type")
+        self.send_header("Access-Control-Max-Age", "600")
+        self.send_header("Vary", "Origin")
+        self.end_headers()
 
     def do_GET(self):
         self._handle("GET")

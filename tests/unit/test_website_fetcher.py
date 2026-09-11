@@ -147,6 +147,21 @@ def test_fetcher_ignores_asset_filenames_and_placeholder_addresses():
     ]
 
 
+def test_fetcher_ignores_french_form_placeholder_address():
+    fetcher = WebsiteFetcher(
+        opener=lambda _url, _timeout: (
+            b"<span>ex: utilisateur@domaine.com</span>"
+            b"<a href='mailto:contact@alpine.example'>Contact</a>"
+        )
+    )
+
+    document = fetcher.fetch("https://alpine.example/contact")
+
+    assert [item.address for item in document.public_emails] == [
+        "contact@alpine.example"
+    ]
+
+
 def test_fetcher_deduplicates_mailto_and_visible_email_forms():
     fetcher = WebsiteFetcher(
         opener=lambda url, timeout: (

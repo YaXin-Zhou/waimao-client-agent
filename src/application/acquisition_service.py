@@ -24,6 +24,7 @@ from src.domain.lead import (
     clean_leads,
     identity_consistency,
     is_credible_source_excerpt,
+    is_plausible_email,
     is_search_source,
     score_lead,
 )
@@ -135,6 +136,23 @@ class AcquisitionService:
         if self._tasks.get(task_id) is None:
             raise KeyError(f"Task not found: {task_id}")
         cleaned = clean_leads(records)
+        # A later search round may only contain a bare search-result URL while
+        # an earlier round already collected an email, country, and website
+        # evidence for the same company. Merge before re-qualifying so a weak
+        # repeat result cannot erase useful public evidence from the local
+        # customer database.
+        existing_items = getattr(self._leads, "list_assessments", lambda _task_id: [])(
+            task_id
+        )
+        existing_by_domain = {
+            item.lead.domain: item.lead
+            for item in existing_items
+            if item.lead.domain
+        }
+        cleaned = [
+            self._merge_existing_lead(lead, existing_by_domain.get(lead.domain))
+            for lead in cleaned
+        ]
         results = [
             AssessedLead(
                 lead=lead,
@@ -152,6 +170,51 @@ class AcquisitionService:
         qualified = self._qualify(results, task.criteria)
         self._leads.save_assessments(task_id, qualified)
         return qualified
+
+    @staticmethod
+    def _merge_existing_lead(lead: CleanLead, previous: CleanLead | None) -> CleanLead:
+        if previous is None:
+            return lead
+
+        def unique(values: tuple[str, ...] | list[str]) -> tuple[str, ...]:
+            output: list[str] = []
+            seen: set[str] = set()
+            for value in values:
+                item = str(value).strip()
+                key = item.casefold()
+                if item and key not in seen:
+                    seen.add(key)
+                    output.append(item)
+            return tuple(output)
+
+        sources = tuple(
+            dict.fromkeys(
+                (*previous.sources, *lead.sources)
+            )
+        )
+        company_name = lead.company_name
+        if (
+            not company_name
+            or clean_company_name(company_name, lead.domain).casefold()
+            == lead.domain.casefold()
+            or (
+                previous.company_name
+                and lead.sources
+                and all(is_search_source(source[0]) for source in lead.sources)
+            )
+        ):
+            company_name = previous.company_name or company_name
+        quality = "complete" if "complete" in {lead.quality, previous.quality} else lead.quality
+        return replace(
+            lead,
+            company_name=company_name,
+            emails=unique((*previous.emails, *lead.emails)),
+            country=lead.country or previous.country,
+            quality=quality,
+            flags=unique((*previous.flags, *lead.flags)),
+            sources=sources,
+            status=previous.status if lead.status == LeadStatus.NEW else lead.status,
+        )
 
     def _derive_signals(
         self, lead: CleanLead, task_id: str, weights: dict[str, int]
@@ -203,7 +266,7 @@ class AcquisitionService:
 
     @classmethod
     def has_product_evidence(cls, lead: CleanLead, criteria: AcquisitionCriteria) -> bool:
-        """Check configured product terms against non-search-page source text."""
+        """Check exact or closely related business evidence on the website."""
         terms = tuple(
             term.strip().lower()
             for term in configured_product_evidence_terms(criteria)
@@ -212,9 +275,52 @@ class AcquisitionService:
         searchable = " ".join(
             source[1] for source in cls._same_domain_sources(lead)
         ).lower()
-        return bool(terms) and any(
-            cls._term_in_evidence(term, searchable) for term in terms
+        if not searchable:
+            return False
+        if terms and any(cls._term_in_evidence(term, searchable) for term in terms):
+            return True
+        # A website may describe the same business with a nearby English
+        # expression after the user enters Chinese or a short product label.
+        # Keep this deliberately narrow: generic words such as supplier or
+        # manufacturer alone are not enough.
+        related_business_terms = (
+            "product", "products", "plastic", "injection", "molding", "moulding",
+            "mold", "mould", "cnc", "machining", "tooling", "components",
+            "parts", "manufacturing", "engineering",
         )
+        return sum(cls._term_in_evidence(term, searchable) for term in related_business_terms) >= 2
+
+    @classmethod
+    def has_industry_evidence(cls, lead: CleanLead, criteria: AcquisitionCriteria) -> bool:
+        """Check the target industry using exact terms or common synonyms."""
+        industry_terms = tuple(
+            term.strip().lower() for term in criteria.industries if term.strip()
+        )
+        if not industry_terms:
+            return True
+        searchable = " ".join(
+            source[1] for source in cls._same_domain_sources(lead)
+        ).lower()
+        if not searchable:
+            return False
+        synonyms = {
+            "汽车": ("automotive", "automobile", "vehicle", "auto parts", "mobility"),
+            "电子": ("electronics", "electronic", "semiconductor", "electrical"),
+            "医疗": ("medical", "healthcare", "medtech", "pharmaceutical"),
+            "工业": ("industrial", "machinery", "engineering"),
+            "新能源": ("renewable energy", "solar", "battery", "energy storage"),
+        }
+        evidence_terms: list[str] = []
+        for term in industry_terms:
+            evidence_terms.append(term)
+            # Users naturally enter specific labels such as “汽车零部件” or
+            # “新能源汽车”.  Match those labels to their broader industry
+            # family, then still require a matching term on the official-site
+            # evidence rather than accepting the label by itself.
+            for family, family_terms in synonyms.items():
+                if family in term or term in family:
+                    evidence_terms.extend(family_terms)
+        return any(cls._term_in_evidence(term, searchable) for term in evidence_terms)
 
     @staticmethod
     def _term_in_evidence(term: str, text: str) -> bool:
@@ -254,11 +360,8 @@ class AcquisitionService:
                 and not AcquisitionService._same_domain_sources(item.lead)
             ):
                 reasons.append("missing_website_evidence")
-            # 有邮箱不等于符合业务需求；至少要在官网同域来源中找到用户配置的产品/业务证据。
-            if configured_research_terms(criteria) and not AcquisitionService.has_product_evidence(
-                item.lead, criteria
-            ):
-                reasons.append("missing_product_evidence")
+            # 产品证据用于展示和排序；国家、行业、邮箱和公司主体则是
+            # 可发送客户的硬条件。
             target_countries = {
                 _country_key(country)
                 for country in criteria.countries
@@ -275,6 +378,11 @@ class AcquisitionService:
                 and detected_country not in target_countries
             ):
                 reasons.append("country_not_target")
+            # Product and industry evidence are relevance signals, not hard
+            # gates. A buyer may need our products without publishing the
+            # exact wording on the public site. Country, public email, and
+            # company identity remain the delivery gates; relevant evidence
+            # is still collected and used for ordering/details.
             # 公司主体必须能被官网同域内容支持。搜索标题、目录页或仅有
             # 一个孤立域名的记录不能进入可发送列表。
             identity_status = identity_consistency(item.lead).get("status")
@@ -288,12 +396,10 @@ class AcquisitionService:
             )
             if identity_status in {"unknown", "weak"} or title_only:
                 reasons.append("company_identity_unconfirmed")
-            # 产品证据、目标国家和邮箱归属都是交付前硬条件；评分只用于
-            # 排序，不会把缺少关键证据的记录“抬”进可发送列表。
+            # 国家、邮箱和公司主体是交付前硬条件；产品证据用于排序，
+            # 不会因为官网没有完整产品词就丢弃一个可联系客户。
             if "conflicting_country" in item.lead.flags:
                 reasons.append("conflicting_country")
-            if "email_domain_mismatch" in item.lead.flags:
-                reasons.append("email_domain_mismatch")
             if "company_identity_unconfirmed" in item.lead.flags:
                 reasons.append("company_identity_unconfirmed")
             evaluated.append(
@@ -319,6 +425,9 @@ class AcquisitionService:
                 item,
                 lead=replace(
                     item.lead,
+                    emails=tuple(
+                        email for email in item.lead.emails if is_plausible_email(email)
+                    ),
                     company_name=clean_company_name(
                         item.lead.company_name, item.lead.domain
                     ),
@@ -560,6 +669,15 @@ class AcquisitionService:
             raise KeyError(f"Task not found: {task_id}")
         if self._search is None:
             raise RuntimeError("Search provider is not configured")
+        remember_domains = getattr(self._search, "remember_domains", None)
+        if callable(remember_domains):
+            remember_domains(
+                {
+                    item.lead.domain
+                    for item in self.list_leads(task_id)
+                    if item.lead.domain
+                }
+            )
         if progress:
             progress("searching")
         search_pass = getattr(self._search, "search_round", None)
