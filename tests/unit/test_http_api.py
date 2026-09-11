@@ -836,9 +836,9 @@ def test_api_discovers_and_assesses_using_configured_search_provider():
     assert payload["items"][0]["lead"]["domain"] == "discovered.example"
     assert payload["items"][0]["lead"]["sources"][0][0] == "https://www.google.com.hk/search?q=power+station"
     assert payload["summary"]["candidate_count"] == 1
-    assert payload["summary"]["qualified_count"] == 0
-    assert payload["summary"]["shortfall"] == task.criteria.daily_limit
-    assert "missing_website_evidence" in payload["items"][0]["rejection_reasons"]
+    assert payload["summary"]["qualified_count"] == 1
+    assert payload["summary"]["shortfall"] == task.criteria.daily_limit - 1
+    assert "missing_website_evidence" not in payload["items"][0]["rejection_reasons"]
     assert payload["summary"]["funnel"] == {
         "website_count": 1,
         "public_email_count": 1,

@@ -29,7 +29,7 @@ def test_qualification_rejects_candidate_without_public_email_even_with_high_sco
     assert "missing_public_email" in result.rejection_reasons
 
 
-def test_qualification_rejects_search_only_email_without_website_evidence():
+def test_qualification_accepts_public_email_without_same_domain_evidence():
     criteria = AcquisitionCriteria(product="CNC machining")
     result = AcquisitionService._qualify(
         [
@@ -46,8 +46,8 @@ def test_qualification_rejects_search_only_email_without_website_evidence():
         criteria,
     )[0]
 
-    assert result.qualified is False
-    assert "missing_website_evidence" in result.rejection_reasons
+    assert result.qualified is True
+    assert "missing_website_evidence" not in result.rejection_reasons
 
 
 def test_qualification_accepts_email_and_configured_product_evidence_from_same_domain():
@@ -129,7 +129,7 @@ def test_qualification_accepts_specific_chinese_industry_label_with_official_syn
     assert result.qualified is True
 
 
-def test_qualification_accepts_candidate_without_exact_target_industry_evidence():
+def test_qualification_rejects_candidate_without_target_industry_evidence():
     criteria = AcquisitionCriteria(
         product="CNC machining",
         countries=("德国",),
@@ -151,8 +151,8 @@ def test_qualification_accepts_candidate_without_exact_target_industry_evidence(
         criteria,
     )[0]
 
-    assert result.qualified is True
-    assert "missing_industry_evidence" not in result.rejection_reasons
+    assert result.qualified is False
+    assert "missing_industry_evidence" in result.rejection_reasons
 
 
 def test_qualification_accepts_approximate_product_evidence_for_target_industry():
@@ -170,7 +170,7 @@ def test_qualification_accepts_approximate_product_evidence_for_target_industry(
                     "info@french-plastics.example",
                     country="FR",
                     source_url="https://french-plastics.example/products",
-                    source_excerpt="French Plastics Manufacturer provides plastic injection molding and molded components.",
+                    source_excerpt="French Plastics Manufacturer provides plastic injection molding and molded components for automotive suppliers.",
                 )
             )
         ],
@@ -247,7 +247,7 @@ def test_qualification_accepts_public_cross_domain_email_when_site_has_product_t
     assert "email_domain_mismatch" not in result.rejection_reasons
 
 
-def test_qualification_rejects_weak_company_identity_instead_of_sending_a_title():
+def test_qualification_keeps_weak_company_identity_as_a_review_signal():
     criteria = AcquisitionCriteria(product="CNC machining", countries=("德国",))
     result = AcquisitionService._qualify(
         [
@@ -265,8 +265,8 @@ def test_qualification_rejects_weak_company_identity_instead_of_sending_a_title(
         criteria,
     )[0]
 
-    assert result.qualified is False
-    assert "company_identity_unconfirmed" in result.rejection_reasons
+    assert result.qualified is True
+    assert "company_identity_unconfirmed" not in result.rejection_reasons
 
 
 def test_qualification_normalizes_country_names_and_abbreviations():

@@ -354,14 +354,8 @@ class AcquisitionService:
                 reasons.append("missing_website")
             if criteria.require_public_email and not item.lead.emails:
                 reasons.append("missing_public_email")
-            if (
-                criteria.require_public_email
-                and item.lead.emails
-                and not AcquisitionService._same_domain_sources(item.lead)
-            ):
-                reasons.append("missing_website_evidence")
-            # 产品证据用于展示和排序；国家、行业、邮箱和公司主体则是
-            # 可发送客户的硬条件。
+            # 邮箱只要是公开、格式有效的地址即可进入候选；它是否与
+            # 官网同域只作为风险信息，不再因为外部企业邮箱直接淘汰。
             target_countries = {
                 _country_key(country)
                 for country in criteria.countries
@@ -378,30 +372,16 @@ class AcquisitionService:
                 and detected_country not in target_countries
             ):
                 reasons.append("country_not_target")
-            # Product and industry evidence are relevance signals, not hard
-            # gates. A buyer may need our products without publishing the
-            # exact wording on the public site. Country, public email, and
-            # company identity remain the delivery gates; relevant evidence
-            # is still collected and used for ordering/details.
-            # 公司主体必须能被官网同域内容支持。搜索标题、目录页或仅有
-            # 一个孤立域名的记录不能进入可发送列表。
-            identity_status = identity_consistency(item.lead).get("status")
-            raw_name = " ".join(str(item.lead.company_name or "").split()).strip()
-            cleaned_name = clean_company_name(raw_name, item.lead.domain)
-            title_only = bool(
-                raw_name
-                and item.lead.domain
-                and cleaned_name.casefold() == item.lead.domain.casefold()
-                and raw_name.casefold() != item.lead.domain.casefold()
-            )
-            if identity_status in {"unknown", "weak"} or title_only:
-                reasons.append("company_identity_unconfirmed")
-            # 国家、邮箱和公司主体是交付前硬条件；产品证据用于排序，
-            # 不会因为官网没有完整产品词就丢弃一个可联系客户。
+            # 行业必须有一个官网上的大致证据，但不要求完整产品词或
+            # 精确行业标签；产品匹配继续作为排序和展示信号。
+            if criteria.industries and not AcquisitionService.has_industry_evidence(
+                item.lead, criteria
+            ):
+                reasons.append("missing_industry_evidence")
+            # 公司名称、邮箱域名和主体一致性只保留为风险标记，避免把
+            # 品牌名、集团邮箱或搜索标题差异误判为不可联系客户。
             if "conflicting_country" in item.lead.flags:
                 reasons.append("conflicting_country")
-            if "company_identity_unconfirmed" in item.lead.flags:
-                reasons.append("company_identity_unconfirmed")
             evaluated.append(
                 replace(
                     item,
