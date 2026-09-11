@@ -12,12 +12,32 @@ from src.domain.task import AcquisitionCriteria, configured_research_terms
 
 _TRANSLATION_CACHE: dict[str, str] = {}
 
+# Keep common manufacturing terms precise. Generic machine translation turns
+# "注塑件" into "mold", which produces unrelated mold-removal results.
+_DOMAIN_TRANSLATIONS = {
+    "注塑件": "injection molded parts",
+    "注塑": "injection molding",
+    "塑料件": "plastic parts",
+    "塑料零件": "plastic parts",
+    "CNC机加工": "CNC machining",
+    "模具": "molds tooling",
+    "汽车": "automotive",
+    "汽车零部件": "automotive parts",
+    "德国": "Germany",
+    "法国": "France",
+    "英国": "United Kingdom",
+    "美国": "United States",
+    "意大利": "Italy",
+}
+
 
 def _search_term(value: str) -> str:
     """将中文输入转换为英文搜索词，转换只发生在后端查询构建阶段。"""
     value = value.strip()
     if not value or not any("\u3400" <= char <= "\u9fff" for char in value):
         return value
+    if value in _DOMAIN_TRANSLATIONS:
+        return _DOMAIN_TRANSLATIONS[value]
     if value in _TRANSLATION_CACHE:
         return _TRANSLATION_CACHE[value]
     try:

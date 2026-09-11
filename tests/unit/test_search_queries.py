@@ -54,21 +54,35 @@ def test_build_search_queries_has_a_product_only_fallback():
 
 
 def test_build_search_queries_translates_chinese_input_without_changing_the_criteria(monkeypatch):
-    import json
     from src.application import search_queries
 
-    class Response:
-        def read(self):
-            return json.dumps([[['injection molded parts', '']]]).encode('utf-8')
-
     search_queries._TRANSLATION_CACHE.clear()
-    monkeypatch.setattr(search_queries, 'urlopen', lambda *_args, **_kwargs: Response())
 
     queries = build_search_queries(
         AcquisitionCriteria(product='注塑件', countries=('德国',), industries=('汽车',))
     )
 
-    assert queries == ('injection molded parts injection molded parts injection molded parts',)
+    assert queries == ('injection molded parts automotive Germany',)
+
+
+def test_build_search_queries_keeps_manufacturing_terms_searchable(monkeypatch):
+    from src.application import search_queries
+
+    search_queries._TRANSLATION_CACHE.clear()
+    queries = build_search_queries(
+        AcquisitionCriteria(
+            product='注塑件',
+            countries=('法国',),
+            industries=('汽车零部件',),
+            keywords=('CNC机加工', '模具'),
+        )
+    )
+
+    assert queries == (
+        'injection molded parts automotive parts France',
+        'CNC machining automotive parts France',
+        'molds tooling automotive parts France',
+    )
 
 
 def test_build_search_queries_bounds_large_condition_combinations():
