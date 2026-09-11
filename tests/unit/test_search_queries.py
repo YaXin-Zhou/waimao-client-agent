@@ -1,4 +1,4 @@
-from src.application.search_queries import build_search_queries, build_search_queries_for_round
+from src.application.search_queries import build_search_queries
 from src.domain.task import AcquisitionCriteria
 
 
@@ -13,7 +13,7 @@ def test_build_search_queries_uses_user_configured_business_conditions():
 
     queries = build_search_queries(criteria)
 
-    assert queries[:12] == (
+    assert queries == (
         "portable solar generator outdoor equipment distributor Germany",
         "portable solar generator outdoor equipment wholesaler Germany",
         "portable solar generator outdoor equipment distributor France",
@@ -27,7 +27,6 @@ def test_build_search_queries_uses_user_configured_business_conditions():
         "solar generator supplier outdoor equipment distributor France",
         "solar generator supplier outdoor equipment wholesaler France",
     )
-    assert "portable solar generator Germany" in queries
 
 
 def test_build_search_queries_can_use_business_offering_terms_without_fixed_product():
@@ -44,9 +43,10 @@ def test_build_search_queries_can_use_business_offering_terms_without_fixed_prod
         ),
     )
 
-    queries = build_search_queries(criteria)
-    assert queries[:2] == ("CNC machining Mexico", "precision machining Mexico")
-    assert "CNC machining" in queries
+    assert build_search_queries(criteria) == (
+        "CNC machining Mexico",
+        "precision machining Mexico",
+    )
 
 
 def test_build_search_queries_has_a_product_only_fallback():
@@ -68,21 +68,7 @@ def test_build_search_queries_translates_chinese_input_without_changing_the_crit
         AcquisitionCriteria(product='注塑件', countries=('德国',), industries=('汽车',))
     )
 
-    assert queries[:3] == (
-        'injection molded parts injection molded parts injection molded parts',
-        'injection molded parts injection molded parts',
-        'injection molded parts',
-    )
-
-
-def test_country_slash_input_is_treated_as_multiple_countries():
-    criteria = AcquisitionCriteria(
-        product="注塑件",
-        countries=("法国/美国",),
-        industries=("汽车",),
-    )
-
-    assert criteria.countries == ("法国", "美国")
+    assert queries == ('injection molded parts injection molded parts injection molded parts',)
 
 
 def test_build_search_queries_bounds_large_condition_combinations():
@@ -98,30 +84,3 @@ def test_build_search_queries_bounds_large_condition_combinations():
 
     assert len(queries) == 24
     assert queries[0].startswith("plastic parts automotive manufacturer country-0")
-
-
-def test_search_query_rounds_rotate_a_small_non_repeating_slice():
-    criteria = AcquisitionCriteria(
-        product="plastic parts",
-        countries=("Germany", "France", "Italy"),
-        industries=("automotive", "electronics"),
-        customer_types=("manufacturer", "distributor"),
-    )
-
-    first = build_search_queries_for_round(criteria, 0, max_queries=4)
-    second = build_search_queries_for_round(criteria, 1, max_queries=4)
-
-    assert len(first) == len(second) == 4
-    assert set(first).isdisjoint(second)
-
-
-def test_search_query_rounds_never_drops_user_country_constraint():
-    criteria = AcquisitionCriteria(
-        product="plastic injection molding",
-        countries=("Germany",),
-    )
-
-    queries = build_search_queries_for_round(criteria, 0, max_queries=20)
-
-    assert queries
-    assert all("germany" in query.casefold() for query in queries)

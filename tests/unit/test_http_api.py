@@ -231,77 +231,6 @@ def make_app():
     return app, task, draft, audit
 
 
-def test_settings_persists_optional_brave_key_without_exposing_it(tmp_path, monkeypatch):
-    app, _, _, _ = make_app()
-    config_path = tmp_path / ".env"
-    template_path = tmp_path / ".env.example"
-    template_path.write_text(
-        "DEEPSEEK_API_KEY=\nBRAVE_SEARCH_API_KEY=\nSEARCH_BRAVE_API_ENABLED=false\n",
-        encoding="utf-8",
-    )
-    monkeypatch.setattr(
-        ApiApplication,
-        "_config_path",
-        staticmethod(lambda: config_path),
-    )
-
-    status, payload = app.handle(
-        "POST",
-        "/api/settings/config",
-        {
-            "deepseek_api_key": "deepseek-secret",
-            "brave_search_api_key": "brave-secret",
-            "ali_email": "sales@example.com",
-            "ali_password": "mail-secret",
-            "enable_sending": True,
-        },
-    )
-    assert status == 200
-    assert payload["saved"] is True
-    saved_config = config_path.read_text(encoding="utf-8")
-    assert "brave-secret" in saved_config
-    assert "SEARCH_BRAVE_API_ENABLED=true" in saved_config
-
-    status, payload = app.handle("GET", "/api/settings/status")
-    assert status == 200
-    assert payload["brave_search_configured"] is True
-    assert payload["brave_search_enabled"] is True
-    assert "brave-secret" not in json.dumps(payload)
-
-
-def test_settings_resave_preserves_existing_brave_key(tmp_path, monkeypatch):
-    app, _, _, _ = make_app()
-    config_path = tmp_path / ".env"
-    template_path = tmp_path / ".env.example"
-    template_path.write_text(
-        "DEEPSEEK_API_KEY=\nBRAVE_SEARCH_API_KEY=\nSEARCH_BRAVE_API_ENABLED=false\n",
-        encoding="utf-8",
-    )
-    monkeypatch.setattr(ApiApplication, "_config_path", staticmethod(lambda: config_path))
-
-    first = {
-        "deepseek_api_key": "deepseek-secret",
-        "brave_search_api_key": "brave-secret",
-        "ali_email": "sales@example.com",
-        "ali_password": "mail-secret",
-        "enable_sending": True,
-    }
-    status, _ = app.handle("POST", "/api/settings/config", first)
-    assert status == 200
-
-    second = {
-        "deepseek_api_key": "deepseek-secret-2",
-        "ali_email": "sales@example.com",
-        "ali_password": "mail-secret-2",
-        "enable_sending": True,
-    }
-    status, _ = app.handle("POST", "/api/settings/config", second)
-    assert status == 200
-    saved_config = config_path.read_text(encoding="utf-8")
-    assert "BRAVE_SEARCH_API_KEY=brave-secret" in saved_config
-    assert "SEARCH_BRAVE_API_ENABLED=true" in saved_config
-
-
 def test_api_returns_leads_and_research_detail():
     app, task, _, _ = make_app()
 
@@ -346,7 +275,7 @@ def test_api_reviews_custom_research_field_and_persists_status():
     assert app._audit.events[0].note == "buyer_role: verified"
 
 
-def test_api_accepts_research_field_review_without_actor_for_local_use():
+def test_api_rejects_research_field_review_without_actor_before_persisting_report():
     app, task, _, audit = make_app()
     before = app._research.get(task.id, "alpine.example").custom_fields["buyer_role"]
 
@@ -356,10 +285,10 @@ def test_api_accepts_research_field_review_without_actor_for_local_use():
         {"status": "verified", "value": "Strategic Sourcing Manager"},
     )
 
-    assert status == 200
-    assert payload["custom_fields"]["buyer_role"]["status"] == "verified"
-    assert app._research.report.custom_fields["buyer_role"] != before
-    assert audit.events[0].actor == "本地用户"
+    assert status == 400
+    assert payload["error"] == "research field reviewer is required"
+    assert app._research.report.custom_fields["buyer_role"] == before
+    assert audit.events == []
 
 
 def test_api_updates_existing_task_criteria():
@@ -523,16 +452,6 @@ def test_api_returns_lead_list():
     assert payload["summary"]["funnel"]["public_email_count"] == 1
 
 
-def test_api_summary_lead_list_omits_large_source_excerpts():
-    app, task, _, _ = make_app()
-
-    status, payload = app.handle("GET", f"/api/tasks/{task.id}/leads?view=summary")
-
-    assert status == 200
-    assert "sources" not in payload["items"][0]["lead"]
-    assert "source_summary" in payload["items"][0]["lead"]
-
-
 def test_api_marks_external_sources_as_linked_but_requiring_review():
     lead = clean_leads(
         [
@@ -631,38 +550,6 @@ def test_api_hides_legacy_school_or_directory_records_from_customer_views():
 
     assert status == 200
     assert all(item["lead"]["domain"] != "bsd405.org" for item in payload["items"])
-
-
-def test_api_hides_search_article_titles_from_customer_views():
-    app, task, _, _ = make_app()
-    result = app._leads.results[0]
-    app._leads.results.extend(
-        [
-            replace(
-                result,
-                lead=replace(
-                    result.lead,
-                    company_name="List of UK Car Manufacturers - Ezilon UK",
-                    domain="uk.ezilon.com",
-                ),
-            ),
-            replace(
-                result,
-                lead=replace(
-                    result.lead,
-                    company_name="Precision Machining for the UK Automotive Industry",
-                    domain="t2kcnc.co.uk",
-                ),
-            ),
-        ]
-    )
-
-    status, payload = app.handle("GET", f"/api/tasks/{task.id}/leads")
-
-    assert status == 200
-    domains = {item["lead"]["domain"] for item in payload["items"]}
-    assert "uk.ezilon.com" not in domains
-    assert "t2kcnc.co.uk" not in domains
 
 
 def test_api_lead_list_sanitizes_legacy_source_evidence():
@@ -836,9 +723,9 @@ def test_api_discovers_and_assesses_using_configured_search_provider():
     assert payload["items"][0]["lead"]["domain"] == "discovered.example"
     assert payload["items"][0]["lead"]["sources"][0][0] == "https://www.google.com.hk/search?q=power+station"
     assert payload["summary"]["candidate_count"] == 1
-    assert payload["summary"]["qualified_count"] == 1
-    assert payload["summary"]["shortfall"] == task.criteria.daily_limit - 1
-    assert "missing_website_evidence" not in payload["items"][0]["rejection_reasons"]
+    assert payload["summary"]["qualified_count"] == 0
+    assert payload["summary"]["shortfall"] == task.criteria.daily_limit
+    assert "missing_website_evidence" in payload["items"][0]["rejection_reasons"]
     assert payload["summary"]["funnel"] == {
         "website_count": 1,
         "public_email_count": 1,

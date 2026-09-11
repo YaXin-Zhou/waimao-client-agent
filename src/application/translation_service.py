@@ -32,8 +32,5 @@ class TranslationService:
     def _translate(self, text: str, target: str) -> str:
         key = (text, "auto", target)
         if key not in self._cache:
-            translated = self._provider.translate(text, "auto", target)
-            if not translated or "Error 500 (Server Error)" in translated:
-                raise RuntimeError("machine translation provider returned an invalid result")
-            self._cache[key] = translated
+            self._cache[key] = self._provider.translate(text, "auto", target)
         return self._cache[key]

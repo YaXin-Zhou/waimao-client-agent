@@ -5,9 +5,6 @@ from __future__ import annotations
 import base64
 import io
 import json
-import sys
-from pathlib import Path
-from concurrent.futures import ThreadPoolExecutor
 from dataclasses import replace
 from datetime import datetime, timezone
 from urllib.parse import parse_qs, unquote, urlsplit
@@ -99,8 +96,6 @@ class ApiApplication:
         self._website_reader = website_reader
         self._sending_enabled = sending_enabled
         self._reviews = EmailReviewService(drafts, audit)
-        self._auto_draft_executor = ThreadPoolExecutor(max_workers=2)
-        self._auto_draft_jobs = {}
 
     def handle(self, method: str, path: str, body=None) -> tuple[int, dict]:
         try:
@@ -113,14 +108,9 @@ class ApiApplication:
                 task_id = parse_qs(urlsplit(path).query).get("task_id", [""])[0]
                 return self._database_overview(task_id)
             if method == "GET" and segments == ["api", "database", "export"]:
-                task_id = parse_qs(urlsplit(path).query).get("task_id", [""])[0]
-                return self._database_export(task_id)
+                return self._database_export()
             if method == "GET" and segments == ["api", "mailbox", "status"]:
                 return self._mailbox_status()
-            if method == "GET" and segments == ["api", "settings", "status"]:
-                return self._settings_status()
-            if method == "POST" and segments == ["api", "settings", "config"]:
-                return self._save_settings(self._parse_body(body))
             if method == "POST" and segments == ["api", "mailbox", "test"]:
                 return self._test_mailbox()
             if (
@@ -261,20 +251,6 @@ class ApiApplication:
             ):
                 return self._create_draft(segments[2], segments[4], self._parse_body(body))
             if (
-                method == "GET"
-                and len(segments) == 4
-                and segments[:2] == ["api", "tasks"]
-                and segments[3] == "drafts"
-            ):
-                return self._task_drafts(segments[2])
-            if (
-                method == "POST"
-                and len(segments) == 5
-                and segments[:2] == ["api", "tasks"]
-                and segments[3:5] == ["drafts", "batch-send"]
-            ):
-                return self._batch_send_drafts(segments[2], self._parse_body(body))
-            if (
                 method == "POST"
                 and len(segments) == 4
                 and segments[:2] == ["api", "tasks"]
@@ -333,8 +309,7 @@ class ApiApplication:
                 and segments[:2] == ["api", "tasks"]
                 and segments[3] == "leads"
             ):
-                compact = parse_qs(urlsplit(path).query).get("view", [""])[0] == "summary"
-                return self._lead_list(segments[2], compact=compact)
+                return self._lead_list(segments[2])
             if method == "GET" and len(segments) == 3 and segments[:2] == ["api", "drafts"]:
                 return self._draft_detail(segments[2])
             if (
@@ -382,7 +357,7 @@ class ApiApplication:
         except (TypeError, ValueError, json.JSONDecodeError) as error:
             return 400, {"error": str(error)}
 
-    def _lead_list(self, task_id: str, compact: bool = False) -> tuple[int, dict]:
+    def _lead_list(self, task_id: str) -> tuple[int, dict]:
         self._require_task(task_id)
         # Route reads through the application service so legacy records receive
         # the same evidence sanitization and qualification refresh as other reads.
@@ -395,18 +370,12 @@ class ApiApplication:
         items = []
         effective_assessed = []
         contacted_emails = self._contacted_emails()
-        research_by_domain = (
-            self._research.list_for_task(task_id)
-            if self._research is not None and hasattr(self._research, "list_for_task")
-            else {}
-        )
         for item in displayable_assessed:
-            if item.lead.domain:
-                report = research_by_domain.get(item.lead.domain)
-                if not research_by_domain and self._research is not None:
-                    report = self._research.get(task_id, item.lead.domain)
-            else:
-                report = None
+            report = (
+                self._research.get(task_id, item.lead.domain)
+                if self._research is not None and item.lead.domain
+                else None
+            )
             effective_item = item
             if report is not None and report.country and not item.lead.country:
                 effective_item = replace(
@@ -417,7 +386,7 @@ class ApiApplication:
                 [effective_item], task.criteria
             )[0]
             effective_assessed.append(effective_item)
-            payload = self._assessed(effective_item, task.criteria, include_sources=not compact)
+            payload = self._assessed(effective_item, task.criteria)
             payload["contacted"] = bool(
                 set(email.lower() for email in effective_item.lead.emails)
                 & contacted_emails
@@ -431,7 +400,6 @@ class ApiApplication:
                 if not payload["lead"]["country"] and report.country:
                     payload["lead"]["country"] = report.country
             items.append(payload)
-        self._schedule_missing_drafts(task_id, effective_assessed)
         return 200, {
             "items": items,
             "summary": self._discovery_summary(task_id, effective_assessed),
@@ -457,59 +425,8 @@ class ApiApplication:
             "weather", "calculator", "university", "tripadvisor", "hotels.com",
             "百度知道", "知乎", "站酷", "google trends", "google traductor",
             "wikipedia", "worldometer", "population", "quiz", "whois",
-            # Search/article titles are evidence candidates, not company names.
-            "list of ", "top 10", "car manufacturers", "car manufacturing",
-            "precision machining for the ", "automotive moulding ",
-            "import your car", "private label ", "industrial equipment",
-            "manufacturing directory",
         )
         return not any(marker in raw_name.casefold() for marker in noise_markers)
-
-    def _schedule_missing_drafts(self, task_id: str, assessed) -> None:
-        """后台为已核验、合格且有邮箱的客户自动生成邮件草稿。"""
-        if self._email_drafts is None or self._research is None:
-            return
-        task = self._tasks.get(task_id)
-        if task is None:
-            return
-        product = str(getattr(task.criteria, "product", "") or "").strip()
-        profile = task.sender_profile
-        if not product or not all(
-            str(getattr(profile, key, "") or "").strip()
-            for key in ("company_name", "contact_name", "position")
-        ):
-            return
-        self._auto_draft_jobs = {
-            key: job for key, job in self._auto_draft_jobs.items() if not job.done()
-        }
-        for item in assessed:
-            if not item.qualified or not item.lead.domain or not item.lead.emails:
-                continue
-            research = self._research.get(task_id, item.lead.domain)
-            if research is None or self._drafts.latest_for_lead(task_id, item.lead.domain):
-                continue
-            key = (task_id, item.lead.domain)
-            if key in self._auto_draft_jobs:
-                continue
-            self._auto_draft_jobs[key] = self._auto_draft_executor.submit(
-                self._generate_auto_draft, task_id, item.lead, research, product, profile,
-                str(getattr(task.criteria, "language", "English") or "English")
-            )
-
-    def _generate_auto_draft(self, task_id, lead, research, product, profile, language) -> None:
-        try:
-            draft = self._email_drafts.generate(
-                task_id,
-                lead,
-                research,
-                "Introduce {product} to {company} based on their published product range.",
-                product,
-                profile,
-                language,
-            )
-            self._drafts.save(draft)
-        except Exception:
-            return None
 
     def _contacted_emails(self) -> set[str]:
         if self._email_send is None:
@@ -552,87 +469,6 @@ class ApiApplication:
             "mode": "read_only",
             "sending_enabled": self._sending_enabled,
         }
-
-    def _settings_status(self) -> tuple[int, dict]:
-        """Expose integration readiness without returning credentials or account values."""
-        config_path = self._config_path()
-        values = {}
-        if config_path.exists():
-            for raw_line in config_path.read_text(encoding="utf-8").splitlines():
-                line = raw_line.strip()
-                if line and not line.startswith("#") and "=" in line:
-                    key, value = line.split("=", 1)
-                    values[key.strip()] = value.strip()
-        def configured(key: str) -> bool:
-            value = values.get(key, "").strip().lower()
-            return bool(value) and not value.startswith(("replace-with", "your-", "<"))
-
-        return 200, {
-            "config_file_present": config_path.exists(),
-            "deepseek_configured": configured("DEEPSEEK_API_KEY"),
-            "brave_search_configured": configured("BRAVE_SEARCH_API_KEY"),
-            "brave_search_enabled": configured("BRAVE_SEARCH_API_KEY")
-            and values.get("SEARCH_BRAVE_API_ENABLED", "false").strip().lower() == "true",
-            "ali_imap_configured": configured("ALI_IMAP_USERNAME") and configured("ALI_IMAP_PASSWORD"),
-            "ali_smtp_enabled": self._sending_enabled and configured("ALI_SMTP_USERNAME") and configured("ALI_SMTP_PASSWORD"),
-            "setup_required": not configured("DEEPSEEK_API_KEY") or not configured("ALI_IMAP_USERNAME") or not configured("ALI_IMAP_PASSWORD"),
-            "config_path": "config/.env",
-        }
-
-    @staticmethod
-    def _config_path() -> Path:
-        root = Path(sys.executable).resolve().parent if getattr(sys, "frozen", False) else Path(__file__).resolve().parents[2]
-        return root / "config" / ".env"
-
-    def _save_settings(self, body: dict) -> tuple[int, dict]:
-        """Save only the small set of customer-facing credentials locally."""
-        api_key = str(body.get("deepseek_api_key", "")).strip()
-        email = str(body.get("ali_email", "")).strip()
-        password = str(body.get("ali_password", ""))
-        brave_search_api_key = str(body.get("brave_search_api_key", "")).strip()
-        if not api_key:
-            raise ValueError("请填写 DeepSeek API Key")
-        if not email or "@" not in email:
-            raise ValueError("请填写正确的阿里邮箱地址")
-        if not password:
-            raise ValueError("请填写阿里邮箱密码")
-
-        config_path = self._config_path()
-        config_path.parent.mkdir(parents=True, exist_ok=True)
-        existing_values = {}
-        if config_path.exists():
-            for raw_line in config_path.read_text(encoding="utf-8").splitlines():
-                line = raw_line.strip()
-                if line and not line.startswith("#") and "=" in line:
-                    key, value = line.split("=", 1)
-                    existing_values[key.strip()] = value.strip()
-        template_path = config_path.with_name(".env.example")
-        lines = template_path.read_text(encoding="utf-8").splitlines() if template_path.exists() else []
-        saved_brave_key = brave_search_api_key or existing_values.get("BRAVE_SEARCH_API_KEY", "").strip()
-        values = {
-            "DEEPSEEK_API_KEY": api_key,
-            "ALI_IMAP_USERNAME": email,
-            "ALI_IMAP_PASSWORD": password,
-            "ALI_SMTP_USERNAME": email,
-            "ALI_SMTP_PASSWORD": password,
-            "ALI_SMTP_SENDING_ENABLED": "true" if body.get("enable_sending", True) else "false",
-            "SEARCH_BRAVE_API_ENABLED": "true" if saved_brave_key else "false",
-        }
-        values["BRAVE_SEARCH_API_KEY"] = saved_brave_key
-        seen = set()
-        output = []
-        for line in lines:
-            key = line.split("=", 1)[0].strip() if "=" in line and not line.lstrip().startswith("#") else ""
-            if key in values:
-                output.append(f"{key}={values[key]}")
-                seen.add(key)
-            else:
-                output.append(line)
-        for key, value in values.items():
-            if key not in seen:
-                output.append(f"{key}={value}")
-        config_path.write_text("\n".join(output) + "\n", encoding="utf-8")
-        return 200, {"saved": True, "restart_required": True, "config_path": "config/.env"}
 
     def _test_mailbox(self) -> tuple[int, dict]:
         if self._mailbox is None:
@@ -871,21 +707,29 @@ class ApiApplication:
                 item for item in assessments if self._is_displayable_lead(item.lead)
             ]
             assessments = self._apply_research_country(task.id, task, assessments)
-            # Legacy rows may retain a historical qualified flag from before
-            # the country/email/industry gates were tightened. Re-evaluate on
-            # read so database counters and customer-pool counters agree.
+            target_countries = {
+                _country_key(country)
+                for country in task.criteria.countries
+                if str(country).strip()
+            }
+            # 客户可见数据库不展示无法确认国家或不属于本次目标市场的记录。
+            # 记录仍保存在本地候选库，后续重新核验后可再次进入展示范围。
             assessments = [
-                AcquisitionService._qualify([item], task.criteria)[0]
+                item
                 for item in assessments
+                if item.lead.country.strip()
+                and item.lead.country.casefold() != "unknown"
+                and (
+                    not target_countries
+                    or _country_key(item.lead.country) in target_countries
+                )
             ]
-            # 本地数据库展示“已抓到的候选”，不与“可发送客户”共用严格筛选。
-            # 国家未确认、产品证据不足的记录仍然是可追溯的采集结果，不能
-            # 因为尚未合格就让数据库看起来像空的；严格条件只影响 sendable。
             eligible = [
                 item for item in assessments
                 if item.qualified
                 and item.lead.emails
                 and not (set(email.lower() for email in item.lead.emails) & contacted_emails)
+                and "email_domain_mismatch" not in item.lead.flags
                 and bool(item.lead.domain)
             ]
             today_domains = {
@@ -935,18 +779,13 @@ class ApiApplication:
 
     def _apply_research_country(self, task_id, task, assessments):
         """让数据库页使用背调补充的国家重新计算合格状态。"""
-        # Load all reports for the task in one repository call. The previous
-        # implementation opened a database connection once per lead, which
-        # made the database page appear stuck when historical candidates were
-        # numerous.
-        reports = {}
-        if self._research is not None:
-            list_reports = getattr(self._research, "list_for_task", None)
-            if callable(list_reports):
-                reports = list_reports(task_id)
         effective = []
         for item in assessments:
-            report = reports.get(item.lead.domain) if item.lead.domain else None
+            report = (
+                self._research.get(task_id, item.lead.domain)
+                if self._research is not None and item.lead.domain
+                else None
+            )
             candidate = item
             if report is not None and report.country and not item.lead.country:
                 candidate = replace(
@@ -967,9 +806,9 @@ class ApiApplication:
                         domains.add(message.lead_domain)
         return domains
 
-    def _database_export(self, task_id: str = "") -> tuple[int, dict]:
+    def _database_export(self) -> tuple[int, dict]:
         """将本机客户资料导出为真实 XLSX；只导出已保存信息，不补造字段。"""
-        overview_status, overview = self._database_overview(task_id)
+        overview_status, overview = self._database_overview()
         if overview_status != 200:
             return overview_status, overview
         from openpyxl import Workbook
@@ -977,61 +816,15 @@ class ApiApplication:
         workbook = Workbook()
         sheet = workbook.active
         sheet.title = "客户资料"
-        base_headers = (
+        headers = (
             "公司名称", "官网域名", "国家/地区", "客户类型", "公开邮箱",
             "发送安排", "业务简介", "产品", "来源数量",
         )
-        field_labels = {
-            "company_full_name": "公司全称",
-            "registered_address": "注册地址",
-            "founded_date": "成立时间",
-            "legal_entity_type": "公司类型",
-            "social_profiles": "社媒链接",
-            "public_phone": "电话",
-            "main_products": "主营产品",
-            "business_positioning": "业务定位",
-            "industry": "所在行业",
-            "product_need_evidence": "产品需求证据",
-            "key_contacts": "核心岗位及联系人",
-            "decision_maker_email": "决策人邮箱",
-            "decision_maker_linkedin": "决策人 LinkedIn",
-            "historical_sourcing_categories": "过往采购品类",
-        }
-        reports_by_task = {}
-        if self._research is not None:
-            list_reports = getattr(self._research, "list_for_task", None)
-            if callable(list_reports):
-                task_ids = {item["task_id"] for item in overview["items"]}
-                reports_by_task = {
-                    task_id: list_reports(task_id) for task_id in task_ids
-                }
-        reports = {}
-        field_keys = list(field_labels)
-        for item in overview["items"]:
-            lead = item["lead"]
-            report = (
-                reports_by_task.get(item["task_id"], {}).get(lead.get("domain", ""))
-                if lead.get("domain")
-                else None
-            )
-            reports[id(item)] = report
-            for key in (report.custom_fields if report else {}):
-                if key not in field_keys:
-                    field_keys.append(key)
-        headers = base_headers + tuple(field_labels.get(key, key) for key in field_keys) + ("字段证据来源",)
         sheet.append(headers)
         for item in overview["items"]:
             lead = item["lead"]
-            report = reports[id(item)]
+            report = self._research.get(item["task_id"], lead.get("domain", "")) if lead.get("domain") else None
             research = self._research_result(report) if report else {}
-            custom_fields = report.custom_fields if report else {}
-            field_sources = []
-            custom_values = []
-            for key in field_keys:
-                field = custom_fields.get(key)
-                custom_values.append(field.value if field else "")
-                if field:
-                    field_sources.extend(field.sources)
             sheet.append((
                 lead.get("company_name") or lead.get("domain", ""),
                 lead.get("domain", ""),
@@ -1042,8 +835,6 @@ class ApiApplication:
                 research.get("business_summary", ""),
                 "; ".join(research.get("products", [])),
                 lead.get("source_summary", {}).get("website_count", 0),
-                *custom_values,
-                "; ".join(dict.fromkeys(field_sources)),
             ))
         sheet.freeze_panes = "A2"
         sheet.auto_filter.ref = sheet.dimensions
@@ -1365,108 +1156,6 @@ class ApiApplication:
         self._drafts.save(draft)
         return 201, self._draft(draft)
 
-    def _task_drafts(self, task_id: str) -> tuple[int, dict]:
-        """列出当前任务可供批量审核的外贸邮件草稿。"""
-        self._require_task(task_id)
-        getter = getattr(self._drafts, "list_for_task", None)
-        if not callable(getter):
-            raise RuntimeError("email draft repository does not support task listing")
-        return 200, {"items": [self._draft(self._normalize_draft(item, task_id)) for item in getter(task_id)]}
-
-    def _normalize_draft(self, draft, task_id: str):
-        """Remove legacy sender placeholders from drafts created before profile setup."""
-        task = self._tasks.get(task_id)
-        if draft is None or task is None:
-            return draft
-        company, name, position = task.sender_profile.prompt_values()
-        replacements = {
-            "[Our Company]": company,
-            "[Your Company]": company,
-            "[Your Name]": name,
-            "[Your Position]": position,
-        }
-        subject = draft.subject
-        body = draft.body
-        for placeholder, value in replacements.items():
-            subject = subject.replace(placeholder, value)
-            body = body.replace(placeholder, value)
-        if subject == draft.subject and body == draft.body:
-            return draft
-        normalized = replace(draft, subject=subject, body=body)
-        self._drafts.save(normalized)
-        return normalized
-
-    def _batch_send_drafts(self, task_id: str, body: dict) -> tuple[int, dict]:
-        """批量发送已人工审核的草稿；未确认时只返回预览，不执行发送。"""
-        if self._email_send is None:
-            raise RuntimeError("email send service is not configured")
-        self._require_task(task_id)
-        draft_ids = body.get("draft_ids", [])
-        if not isinstance(draft_ids, list):
-            raise ValueError("draft_ids must be an array")
-        draft_ids = list(dict.fromkeys(str(item).strip() for item in draft_ids if str(item).strip()))
-        if not draft_ids:
-            raise ValueError("at least one draft is required")
-        if len(draft_ids) > 30:
-            raise ValueError("batch sending is limited to 30 drafts per operation")
-        drafts = [self._normalize_draft(self._drafts.get(draft_id), task_id) for draft_id in draft_ids]
-        if any(draft is None or draft.task_id != task_id for draft in drafts):
-            raise ValueError("all drafts must belong to the current task")
-        preview = [
-            {
-                "id": draft.id,
-                "recipient_email": draft.recipient_email,
-                "subject": draft.subject,
-                "status": draft.status.value,
-                "approved": draft.status.value == "approved",
-            }
-            for draft in drafts
-        ]
-        if not bool(body.get("confirmed", False)):
-            return 200, {
-                "requires_confirmation": True,
-                "sending_performed": False,
-                "count": len(preview),
-                "items": preview,
-            }
-        if not all(item["approved"] for item in preview):
-            raise ValueError("all selected drafts must be approved before batch sending")
-        if not self._sending_enabled:
-            raise RuntimeError(
-                "SMTP sending is disabled; enable it explicitly for a controlled test"
-            )
-        task = self._tasks.get(task_id)
-        sent_count = 0
-        results = []
-        for draft in drafts:
-            policy = SendPolicy(
-                daily_limit=task.criteria.daily_limit,
-                sent_today=sent_count,
-                recent_contact_days=7,
-            )
-            try:
-                attempt = self._email_send.send(
-                    draft.id,
-                    policy,
-                    True,
-                    draft.recipient_email,
-                    draft.subject,
-                    draft.body,
-                    f"batch-{task_id}-{draft.id}",
-                )
-                sent_count += 1
-                results.append({"draft_id": draft.id, "success": True, "attempt": self._send_attempt(attempt)})
-            except Exception as error:
-                results.append({"draft_id": draft.id, "success": False, "error": str(error)})
-        return 200, {
-            "requires_confirmation": False,
-            "sending_performed": bool(sent_count),
-            "count": len(results),
-            "sent_count": sent_count,
-            "failed_count": len(results) - sent_count,
-            "items": results,
-        }
-
     def _update_contact(self, task_id: str, domain: str, body: dict) -> tuple[int, dict]:
         result = self._acquisition.update_contact(
             task_id,
@@ -1556,7 +1245,9 @@ class ApiApplication:
     def _review_research_field(
         self, task_id: str, domain: str, field_key: str, body: dict
     ) -> tuple[int, dict]:
-        actor = str(body.get("actor") or "本地用户").strip()
+        actor = str(body.get("actor", "")).strip()
+        if not actor:
+            raise ValueError("research field reviewer is required")
         report = self._research.get(task_id, domain)
         if report is None:
             raise KeyError(f"Research report not found: {domain}")
@@ -1665,7 +1356,6 @@ class ApiApplication:
             if hasattr(self._drafts, "latest_for_lead")
             else None
         )
-        draft = self._normalize_draft(draft, task_id)
         send_history = []
         if self._email_send is not None:
             getter = getattr(self._email_send, "list_attempts_for_lead", None)
@@ -1683,7 +1373,6 @@ class ApiApplication:
         draft = self._drafts.get(draft_id)
         if draft is None:
             raise KeyError(f"Draft not found: {draft_id}")
-        draft = self._normalize_draft(draft, draft.task_id)
         return 200, self._draft(draft)
 
     def _draft_audit_events(self, draft_id: str) -> tuple[int, dict]:
@@ -1702,7 +1391,7 @@ class ApiApplication:
         return 200, self._translation.preview(draft, str(body.get("target_language", "zh-CN")))
 
     def _review(self, draft_id: str, action: str, body: dict) -> tuple[int, dict]:
-        reviewer = str(body.get("reviewer") or "本地用户").strip()
+        reviewer = body.get("reviewer", "")
         if action == "approve":
             draft = self._reviews.approve(draft_id, reviewer)
         elif action == "request-revision":
@@ -1755,8 +1444,8 @@ class ApiApplication:
         }
 
     @staticmethod
-    def _lead(lead, criteria=None, include_sources: bool = True) -> dict:
-        payload = {
+    def _lead(lead, criteria=None) -> dict:
+        return {
             # Keep raw search titles in evidence, but expose a cleaned name in
             # customer-facing lists and the local database.
             "company_name": clean_company_name(lead.company_name, lead.domain),
@@ -1767,14 +1456,12 @@ class ApiApplication:
             "quality": lead.quality,
             "status": lead.status.value,
             "flags": list(lead.flags),
+            "sources": [list(source) for source in lead.sources],
             "evidence_level": evidence_level(lead),
             "identity_consistency": identity_consistency(lead),
             "source_summary": ApiApplication._source_summary(lead),
             "evidence_checks": ApiApplication._evidence_checks(lead, criteria),
         }
-        if include_sources:
-            payload["sources"] = [list(source) for source in lead.sources]
-        return payload
 
     @staticmethod
     def _evidence_checks(lead, criteria=None) -> dict:
@@ -1816,7 +1503,7 @@ class ApiApplication:
             )
             checks["industry"] = (
                 "supported"
-                if industry_terms and AcquisitionService.has_industry_evidence(lead, criteria)
+                if any(AcquisitionService._term_in_evidence(term, text) for term in industry_terms)
                 else "not_found"
                 if industry_terms
                 else "not_configured"
@@ -1848,9 +1535,9 @@ class ApiApplication:
         return {"total": score.total, "priority": score.priority, "breakdown": score.breakdown}
 
     @staticmethod
-    def _assessed(item, criteria=None, include_sources: bool = True) -> dict:
+    def _assessed(item, criteria=None) -> dict:
         return {
-            "lead": ApiApplication._lead(item.lead, criteria, include_sources=include_sources),
+            "lead": ApiApplication._lead(item.lead, criteria),
             "score": ApiApplication._score(item.score),
             "qualified": item.qualified,
             "rejection_reasons": list(item.rejection_reasons),

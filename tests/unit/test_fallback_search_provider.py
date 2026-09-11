@@ -28,15 +28,6 @@ class Fallback:
         return self.result
 
 
-class CountingFailure:
-    def __init__(self):
-        self.calls = 0
-
-    def search(self, criteria):
-        self.calls += 1
-        raise SearchProviderError("temporary block")
-
-
 def test_fallback_is_not_used_when_static_search_succeeds():
     fallback = Fallback(["static"])
 
@@ -85,17 +76,6 @@ def test_fallback_supplements_short_primary_results_until_candidate_limit():
     assert fallback.called
 
 
-def test_fallback_can_stop_after_first_successful_provider():
-    fallback = Fallback(["second"])
-
-    result = FallbackSearchProvider(
-        Primary(["first"]), fallback, stop_after_first_success=True
-    ).search(object())
-
-    assert result == ["first"]
-    assert fallback.called is False
-
-
 def test_fallback_deduplicates_same_domain_across_sources():
     fallback = Fallback([LeadRecord("Duplicate", "https://www.first.example/about")])
     criteria = AcquisitionCriteria(
@@ -107,19 +87,3 @@ def test_fallback_deduplicates_same_domain_across_sources():
     ).search(criteria)
 
     assert len(result) == 1
-
-
-def test_fallback_cools_down_failed_sources_between_retries():
-    primary = CountingFailure()
-    fallback = CountingFailure()
-    provider = FallbackSearchProvider(
-        primary, fallback, failure_cooldown_seconds=60
-    )
-
-    with pytest.raises(SearchProviderError, match="all configured search providers failed"):
-        provider.search(object())
-    with pytest.raises(SearchProviderError, match="cooling down"):
-        provider.search(object())
-
-    assert primary.calls == 1
-    assert fallback.calls == 1

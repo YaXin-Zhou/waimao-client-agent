@@ -11,7 +11,7 @@ from typing import Callable
 from urllib.parse import parse_qs, quote_plus, urlsplit
 from urllib.request import Request, urlopen
 
-from src.application.search_queries import build_search_queries_for_round
+from src.application.search_queries import build_search_queries
 from src.domain.lead import LeadRecord, canonical_website_domain
 from src.domain.task import AcquisitionCriteria, effective_candidate_limit
 
@@ -50,54 +50,6 @@ class _GoogleResultParser(HTMLParser):
 
 
 class GoogleSearchProvider:
-    _COUNTRY_MARKERS = {
-        "china": ("china", ".cn"),
-        "中国": ("china", ".cn"),
-        "singapore": ("singapore", ".sg"),
-        "新加坡": ("singapore", ".sg"),
-        "germany": ("germany", ".de"),
-        "德国": ("germany", ".de"),
-        "france": ("france", ".fr"),
-        "法国": ("france", ".fr"),
-        "italy": ("italy", ".it"),
-        "意大利": ("italy", ".it"),
-        "india": ("india",),
-        "印度": ("india",),
-        "united states": ("united-states", ".us"),
-        "美国": ("united-states", ".us"),
-    }
-
-    @classmethod
-    def _has_obvious_country_mismatch(cls, criteria, url: str) -> bool:
-        configured = {str(value).strip().casefold() for value in criteria.countries}
-        if not configured:
-            return False
-        allowed_markers = set()
-        for country in configured:
-            allowed_markers.update(cls._COUNTRY_MARKERS.get(country, (country,)))
-        parsed = urlsplit(url)
-        location = f"{parsed.hostname or ''}{parsed.path}".casefold()
-        for country, markers in cls._COUNTRY_MARKERS.items():
-            if country in configured:
-                continue
-            if any(marker in location for marker in markers) and not any(
-                marker in location for marker in allowed_markers
-            ):
-                return True
-        return False
-
-    @classmethod
-    def _has_country_signal(cls, criteria, text: str) -> bool:
-        """Require a visible target-country signal when country is configured."""
-        configured = tuple(str(value).strip().casefold() for value in criteria.countries)
-        if not configured:
-            return True
-        haystack = str(text).casefold()
-        return any(
-            any(marker in haystack for marker in cls._COUNTRY_MARKERS.get(country, (country,)))
-            for country in configured
-        )
-
     """通过 Google 的公开 HTML 结果页获取有限数量候选官网。"""
 
     _NON_COMPANY_RESULT_HOSTS = frozenset(
@@ -157,25 +109,6 @@ class GoogleSearchProvider:
             "microsoft.com",
             "office.com",
             "live.com",
-            # AI/productivity and general directory pages are frequent false
-            # positives for broad B2B product queries.
-            "openai.com",
-            "chatgpt.com",
-            "crunchbase.com",
-            "glassdoor.com",
-            "mapquest.com",
-            "github.com",
-            "gitlab.com",
-            "zhihu.com",
-            "csdn.net",
-            "stackoverflow.com",
-            "medium.com",
-            "cellphones.com.vn",
-            "gamer.com.tw",
-            "bilibili.com",
-            "weibo.com",
-            "baidu.com",
-            "daum.net",
             # Software/project and generic industry-information sites that
             # frequently rank for broad product terms but are not buyers.
             "portableapps.com",
@@ -183,12 +116,6 @@ class GoogleSearchProvider:
             "sourceforge.net",
             "themanufacturer.com",
             "manufacturer.com",
-            # Non-commercial environmental organizations are not prospects
-            # for manufacturing outreach, even when their pages mention
-            # plastics or injection-related topics.
-            "wwf.org",
-            "wwf.sg",
-            "wwf.panda.org",
         }
     )
 
@@ -197,21 +124,17 @@ class GoogleSearchProvider:
         opener: Callable[..., object] = urlopen,
         timeout: float = 15.0,
         max_results_per_query: int = 10,
-        max_pages_per_query: int = 1,
         host: str = "www.google.com.hk",
     ) -> None:
         if timeout <= 0:
             raise ValueError("timeout must be positive")
         if max_results_per_query <= 0:
             raise ValueError("max_results_per_query must be positive")
-        if max_pages_per_query <= 0:
-            raise ValueError("max_pages_per_query must be positive")
         if not host.strip() or "/" in host:
             raise ValueError("Google search host must be a hostname")
         self._opener = opener
         self._timeout = timeout
         self._max_results = max_results_per_query
-        self._max_pages = max_pages_per_query
         self._host = host.strip()
 
     def search(self, criteria: AcquisitionCriteria) -> list[LeadRecord]:
@@ -223,22 +146,13 @@ class GoogleSearchProvider:
         results: list[LeadRecord] = []
         seen_domains: set[str] = set()
         candidate_limit = effective_candidate_limit(criteria)
-        queries = build_search_queries_for_round(criteria, round_index)
+        queries = build_search_queries(criteria)
         intent_suffixes = ("", "contact", "supplier", "manufacturer", "factory", "distributor", "purchasing", "procurement")
         suffix = intent_suffixes[round_index % len(intent_suffixes)]
         if suffix:
             queries = tuple(f"{query} {suffix}" for query in queries)
         for query in queries:
-            # Search engines treat deep pagination as automated scraping very
-            # quickly.  Broad query variants are more useful than repeatedly
-            # turning pages for one variant, and discovery is accumulated over
-            # multiple runs during the day.  Keep the per-query request budget
-            # explicit so one click cannot cause dozens of Google requests.
-            page_count = min(
-                self._max_pages,
-                max(1, (candidate_limit + self._max_results - 1) // self._max_results),
-            )
-            for page_start in range(0, page_count * self._max_results, self._max_results):
+            for page_start in range(0, candidate_limit, self._max_results):
                 request = Request(
                     f"https://{self._host}/search?q={quote_plus(query)}"
                     f"&num={self._max_results}&start={page_start}",
@@ -300,9 +214,8 @@ class GoogleSearchProvider:
     def _is_candidate(url: str, title: str = "") -> bool:
         parsed = urlsplit(url)
         hostname = parsed.hostname or ""
+        is_google = hostname.endswith("google.com") or hostname.endswith("google.com.hk")
         normalized_host = hostname.lower().removeprefix("www.")
-        # Regional search hosts such as google.co.jp are not customer sites.
-        is_google = normalized_host.startswith("google.") or ".google." in normalized_host
         normalized_path = parsed.path.lower()
         is_non_company_result = any(
             normalized_host == host or normalized_host.endswith(f".{host}")

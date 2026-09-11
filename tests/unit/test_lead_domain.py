@@ -68,10 +68,6 @@ def test_generic_domain_needs_explicit_location_context_for_country_inference():
         "precision-parts.com",
         (("https://precision-parts.com/contact", "Registered office: Milan, Italy."),),
     ) == "Italy"
-    assert infer_country_from_public_evidence(
-        "plastic-parts.com",
-        (("https://plastic-parts.com/about", "Our manufacturing facilities are in the USA."),),
-    ) == "United States"
 
 
 def test_clean_company_name_removes_search_title_prefixes():
@@ -84,12 +80,6 @@ def test_clean_company_name_removes_search_title_prefixes():
     assert clean_company_name(
         "Top 10 Automotive Plastic Injection Molding Companies", "example.com"
     ) == "example.com"
-    assert clean_company_name("enISOCO Plastics Technology GmbH", "isoco.de") == (
-        "ISOCO Plastics Technology GmbH"
-    )
-    assert clean_company_name(
-        "enRKT - Leading supplier of plastics technology", "rkt.de"
-    ) == "RKT - Leading supplier of plastics technology"
 
 
 def test_clean_company_name_replaces_information_page_titles_with_domain():

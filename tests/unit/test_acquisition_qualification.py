@@ -29,7 +29,7 @@ def test_qualification_rejects_candidate_without_public_email_even_with_high_sco
     assert "missing_public_email" in result.rejection_reasons
 
 
-def test_qualification_accepts_public_email_without_same_domain_evidence():
+def test_qualification_rejects_search_only_email_without_website_evidence():
     criteria = AcquisitionCriteria(product="CNC machining")
     result = AcquisitionService._qualify(
         [
@@ -46,8 +46,8 @@ def test_qualification_accepts_public_email_without_same_domain_evidence():
         criteria,
     )[0]
 
-    assert result.qualified is True
-    assert "missing_website_evidence" not in result.rejection_reasons
+    assert result.qualified is False
+    assert "missing_website_evidence" in result.rejection_reasons
 
 
 def test_qualification_accepts_email_and_configured_product_evidence_from_same_domain():
@@ -77,108 +77,6 @@ def test_qualification_accepts_email_and_configured_product_evidence_from_same_d
     )[0]
 
     assert result.qualified is True
-
-
-def test_qualification_requires_target_industry_evidence_but_accepts_synonyms():
-    criteria = AcquisitionCriteria(
-        product="CNC machining",
-        countries=("德国",),
-        industries=("汽车",),
-    )
-    result = AcquisitionService._qualify(
-        [
-            assessed(
-                LeadRecord(
-                    "German Auto Parts",
-                    "https://german-auto-parts.example",
-                    "sales@public-mail.example",
-                    country="DE",
-                    source_url="https://german-auto-parts.example/about",
-                    source_excerpt="German Auto Parts is an automotive vehicle components supplier.",
-                )
-            )
-        ],
-        criteria,
-    )[0]
-
-    assert result.qualified is True
-
-
-def test_qualification_accepts_specific_chinese_industry_label_with_official_synonym():
-    criteria = AcquisitionCriteria(
-        product="注塑件",
-        countries=("德国",),
-        industries=("汽车零部件",),
-    )
-    result = AcquisitionService._qualify(
-        [
-            assessed(
-                LeadRecord(
-                    "German Components GmbH",
-                    "https://german-components.example",
-                    "sales@german-components.example",
-                    country="DE",
-                    source_url="https://german-components.example/about",
-                    source_excerpt="German Components GmbH develops automotive vehicle components.",
-                )
-            )
-        ],
-        criteria,
-    )[0]
-
-    assert result.qualified is True
-
-
-def test_qualification_rejects_candidate_without_industry_or_product_evidence():
-    criteria = AcquisitionCriteria(
-        product="CNC machining",
-        countries=("德国",),
-        industries=("汽车",),
-    )
-    result = AcquisitionService._qualify(
-        [
-            assessed(
-                LeadRecord(
-                    "German Medical Parts",
-                    "https://medical-parts.example",
-                    "sales@public-mail.example",
-                    country="DE",
-                    source_url="https://medical-parts.example/about",
-                    source_excerpt="Medical healthcare components supplier.",
-                )
-            )
-        ],
-        criteria,
-    )[0]
-
-    assert result.qualified is False
-    assert "missing_industry_evidence" in result.rejection_reasons
-
-
-def test_qualification_accepts_approximate_product_evidence_for_target_industry():
-    criteria = AcquisitionCriteria(
-        product="plastic injection molding",
-        countries=("法国",),
-        industries=("汽车",),
-    )
-    result = AcquisitionService._qualify(
-        [
-            assessed(
-                LeadRecord(
-                    "French Plastics Manufacturer",
-                    "https://french-plastics.example",
-                    "info@french-plastics.example",
-                    country="FR",
-                    source_url="https://french-plastics.example/products",
-                    source_excerpt="French Plastics Manufacturer provides plastic injection molding and molded components for automotive suppliers.",
-                )
-            )
-        ],
-        criteria,
-    )[0]
-
-    assert result.qualified is True
-    assert "missing_industry_evidence" not in result.rejection_reasons
 
 
 def test_qualification_rejects_unknown_country_when_targets_are_configured():
@@ -225,7 +123,7 @@ def test_qualification_rejects_known_country_outside_target_markets():
     assert "country_not_target" in result.rejection_reasons
 
 
-def test_qualification_accepts_public_cross_domain_email_when_site_has_product_text():
+def test_qualification_rejects_cross_domain_email_even_when_site_has_product_text():
     criteria = AcquisitionCriteria(product="CNC machining", countries=("德国",))
     result = AcquisitionService._qualify(
         [
@@ -243,11 +141,11 @@ def test_qualification_accepts_public_cross_domain_email_when_site_has_product_t
         criteria,
     )[0]
 
-    assert result.qualified is True
-    assert "email_domain_mismatch" not in result.rejection_reasons
+    assert result.qualified is False
+    assert "email_domain_mismatch" in result.rejection_reasons
 
 
-def test_qualification_keeps_weak_company_identity_as_a_review_signal():
+def test_qualification_rejects_weak_company_identity_instead_of_sending_a_title():
     criteria = AcquisitionCriteria(product="CNC machining", countries=("德国",))
     result = AcquisitionService._qualify(
         [
@@ -265,8 +163,8 @@ def test_qualification_keeps_weak_company_identity_as_a_review_signal():
         criteria,
     )[0]
 
-    assert result.qualified is True
-    assert "company_identity_unconfirmed" not in result.rejection_reasons
+    assert result.qualified is False
+    assert "company_identity_unconfirmed" in result.rejection_reasons
 
 
 def test_qualification_normalizes_country_names_and_abbreviations():

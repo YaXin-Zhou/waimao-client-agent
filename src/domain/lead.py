@@ -100,7 +100,6 @@ _PLACEHOLDER_EMAIL_DOMAINS = {
     "example.org",
     "example.net",
     "domain.com",
-    "domaine.com",
     "contoso.com",
     "test.com",
 }
@@ -134,11 +133,11 @@ def infer_country_from_public_evidence(
         if url.strip() and not is_search_source(url)
     )
     patterns = {
-        "France": r"(?:based|located|headquartered|registered|office|address)[^.!?]{0,80}\bfrance\b|\bfrance\b[^.!?]{0,80}(?:address|office|location|registered)|(?:facility|facilities|manufacturing|plant|operations)[^.!?]{0,40}\b(?:in|across|throughout)\s+(?:the\s+)?france\b",
-        "Italy": r"(?:based|located|headquartered|registered|office|address)[^.!?]{0,80}\bitaly\b|\bitaly\b[^.!?]{0,80}(?:address|office|location|registered)|(?:facility|facilities|manufacturing|plant|operations)[^.!?]{0,40}\b(?:in|across|throughout)\s+(?:the\s+)?italy\b",
-        "Germany": r"(?:based|located|headquartered|registered|office|address)[^.!?]{0,80}\bgermany\b|\bgermany\b[^.!?]{0,80}(?:address|office|location|registered)|(?:facility|facilities|manufacturing|plant|operations)[^.!?]{0,40}\b(?:in|across|throughout)\s+(?:the\s+)?germany\b",
-        "United Kingdom": r"(?:based|located|headquartered|registered|office|address)[^.!?]{0,80}\b(?:united kingdom|uk)\b|\b(?:united kingdom|uk)\b[^.!?]{0,80}(?:address|office|location|registered)|(?:facility|facilities|manufacturing|plant|operations)[^.!?]{0,40}\b(?:in|across|throughout)\s+(?:the\s+)?(?:united kingdom|uk)\b",
-        "United States": r"(?:based|located|headquartered|registered|office|address)[^.!?]{0,80}\b(?:united states|usa|u\.s\.a\.)\b|\b(?:united states|usa|u\.s\.a\.)\b[^.!?]{0,80}(?:address|office|location|registered)|(?:facility|facilities|manufacturing|plant|operations)[^.!?]{0,40}\b(?:in|across|throughout)\s+(?:the\s+)?(?:united states|usa|u\.s\.a\.)\b",
+        "France": r"(?:based|located|headquartered|registered|office|address)[^.!?]{0,80}\bfrance\b|\bfrance\b[^.!?]{0,80}(?:address|office|location|registered)",
+        "Italy": r"(?:based|located|headquartered|registered|office|address)[^.!?]{0,80}\bitaly\b|\bitaly\b[^.!?]{0,80}(?:address|office|location|registered)",
+        "Germany": r"(?:based|located|headquartered|registered|office|address)[^.!?]{0,80}\bgermany\b|\bgermany\b[^.!?]{0,80}(?:address|office|location|registered)",
+        "United Kingdom": r"(?:based|located|headquartered|registered|office|address)[^.!?]{0,80}\b(?:united kingdom|uk)\b|\b(?:united kingdom|uk)\b[^.!?]{0,80}(?:address|office|location|registered)",
+        "United States": r"(?:based|located|headquartered|registered|office|address)[^.!?]{0,80}\b(?:united states|usa)\b|\b(?:united states|usa)\b[^.!?]{0,80}(?:address|office|location|registered)",
     }
     matches = [country for country, pattern in patterns.items() if re.search(pattern, website_text)]
     return matches[0] if len(set(matches)) == 1 else ""
@@ -151,9 +150,6 @@ def clean_company_name(value: str, domain: str = "") -> str:
         return ""
     cleaned = re.sub(r"^.*https?://[^\s]+?(?=[A-Z])", "", cleaned).strip(" -|·")
     cleaned = re.sub(r"^[a-z0-9][a-z0-9.-]*(?=[A-Z][a-z])", "", cleaned).strip(" -|·")
-    # Search engines can glue a two-letter locale breadcrumb to the title,
-    # such as ``enISOCO`` or ``enRKT``. Remove only the lowercase marker.
-    cleaned = re.sub(r"^(?:en|de|fr|it|es|uk)(?=[A-Z])", "", cleaned).strip(" -|·")
     cleaned = re.sub(r"\s+(?:duplicate|copy)\b$", "", cleaned, flags=re.IGNORECASE).strip()
     cleaned = re.sub(r"^startseite\s*[-|:]\s*", "", cleaned, flags=re.IGNORECASE).strip()
     # Search engines often put the actual legal/company name after a marketing
@@ -297,12 +293,7 @@ def is_credible_source_excerpt(excerpt: str) -> bool:
 def is_search_source(source_url: str) -> bool:
     """Search result pages are discovery provenance, not company evidence."""
     host = (urlparse(source_url).hostname or "").lower().removeprefix("www.")
-    return (
-        host == "google.com.hk"
-        or host.endswith("google.com")
-        or host.endswith("bing.com")
-        or host == "api.tavily.com"
-    )
+    return host == "google.com.hk" or host.endswith("google.com") or host.endswith("bing.com")
 
 
 def evidence_level(lead: CleanLead) -> str:

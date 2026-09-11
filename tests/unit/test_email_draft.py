@@ -61,12 +61,9 @@ def test_generate_draft_uses_configured_template_and_requires_review():
 
 
 def test_generate_draft_uses_configured_sender_profile():
-    provider = FakeProvider({
-        "subject": "Connect with [Your Company]",
-        "body": "Hello from [Our Company]. I am [Your Name], [Your Position].",
-    })
+    provider = FakeProvider({"subject": "Subject", "body": "Body"})
 
-    draft = EmailDraftService(provider).generate(
+    EmailDraftService(provider).generate(
         "task-1", sample_lead(), sample_research(), "Hello {company}", "product",
         SenderProfile("Northstar Trading", "Li Ming", "Sales Manager"),
     )
@@ -74,8 +71,6 @@ def test_generate_draft_uses_configured_sender_profile():
     assert "Sender company: Northstar Trading" in provider.prompts[0]
     assert "Sender name: Li Ming" in provider.prompts[0]
     assert "Sender position: Sales Manager" in provider.prompts[0]
-    assert draft.subject == "Connect with Northstar Trading"
-    assert draft.body == "Hello from Northstar Trading. I am Li Ming, Sales Manager."
 
 
 def test_generate_draft_rejects_missing_recipient():

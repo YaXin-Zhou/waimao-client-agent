@@ -21,7 +21,6 @@ __pycache__/
 node_modules/
 dist/
 build/
-release/
 
 # Local IDE files
 .vscode/

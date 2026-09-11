@@ -23,7 +23,7 @@ def call(base_url: str, method: str, path: str) -> dict:
 def main() -> int:
     parser = argparse.ArgumentParser()
     parser.add_argument("--task-id", required=True)
-    parser.add_argument("--base-url", default="http://127.0.0.1:8002")
+    parser.add_argument("--base-url", default="http://127.0.0.1:8001")
     args = parser.parse_args()
     try:
         status = call(args.base_url, "GET", "/api/mailbox/status")

@@ -2,11 +2,6 @@
 
 数据库、搜索、网页、AI、阿里邮箱和任务队列等外部系统的适配器。
 
-`tavily_search_provider.py` 使用 Tavily 的 JSON Search API 作为首选搜索来源：每次请求
-只使用基础搜索和有限结果，不调用答案生成或原始全文，返回的官网候选仍会进入统一的
-公司名称、国家、行业、产品和公开邮箱核验流程。Tavily 不可用时由
-`fallback_search_provider.py` 继续尝试其他来源；它不会绕过验证码，也不会伪造客户资料。
-
 `google_search_provider.py` 是当前 Google HTML 搜索适配器：只返回公开官网链接和
 来源标识，不猜测邮箱。网络失败或 Google 返回 JavaScript/同意页时会抛出明确的
 `SearchProviderError`，不会伪装成空结果；此时应切换浏览器适配器。

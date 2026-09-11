@@ -10,7 +10,7 @@ from pathlib import Path
 from typing import Any
 from urllib.parse import quote_plus, urlsplit
 
-from src.application.search_queries import build_search_queries_for_round
+from src.application.search_queries import build_search_queries
 from src.domain.lead import LeadRecord, canonical_website_domain
 from src.domain.task import AcquisitionCriteria, effective_candidate_limit
 from src.infrastructure.google_search_provider import GoogleSearchProvider, SearchProviderError
@@ -24,19 +24,17 @@ class PlaywrightSearchProvider:
         host: str = "www.google.com.hk",
         timeout: float = 30.0,
         max_results_per_query: int = 10,
-        max_pages_per_query: int = 1,
         executable_path: str = "",
         headless: bool = True,
         proxy: str = "",
     ) -> None:
         if not host.strip() or "/" in host:
             raise ValueError("Google search host must be a hostname")
-        if timeout <= 0 or max_results_per_query <= 0 or max_pages_per_query <= 0:
+        if timeout <= 0 or max_results_per_query <= 0:
             raise ValueError("browser search timeout and page size must be positive")
         self._host = host.strip()
         self._timeout_ms = int(timeout * 1000)
         self._max_results = max_results_per_query
-        self._max_pages = max_pages_per_query
         self._executable_path = executable_path.strip() or self._find_chrome()
         self._headless = headless
         self._proxy = proxy.strip()
@@ -67,20 +65,13 @@ class PlaywrightSearchProvider:
                 raise SearchProviderError("Unable to launch the configured browser") from error
             try:
                 page = browser.new_page()
-                queries = build_search_queries_for_round(criteria, round_index)
+                queries = build_search_queries(criteria)
                 intent_suffixes = ("", "contact", "supplier", "manufacturer", "factory", "distributor", "purchasing", "procurement")
                 suffix = intent_suffixes[round_index % len(intent_suffixes)]
                 if suffix:
                     queries = tuple(f"{query} {suffix}" for query in queries)
                 for query in queries:
-                    # A browser fallback must be especially conservative: a
-                    # deep page loop is likely to trigger Google verification.
-                    # Later discovery rounds vary the search intent instead.
-                    page_count = min(
-                        self._max_pages,
-                        max(1, (candidate_limit + self._max_results - 1) // self._max_results),
-                    )
-                    for page_start in range(0, page_count * self._max_results, self._max_results):
+                    for page_start in range(0, candidate_limit, self._max_results):
                         url = (
                             f"https://{self._host}/search?q={quote_plus(query)}"
                             f"&num={self._max_results}&start={page_start}"

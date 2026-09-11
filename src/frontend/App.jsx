@@ -7,11 +7,6 @@ const navItems = [
   ['database', '本地数据库'],
 ]
 
-const accountNavItems = [
-  ['users', '发件人资料'],
-  ['settings', '设置'],
-]
-
 function Icon({ name, size = 18 }) {
   const paths = {
     users: <><path d="M16 21v-2a4 4 0 0 0-4-4H6a4 4 0 0 0-4 4v2"/><circle cx="9" cy="7" r="4"/><path d="M22 21v-2a4 4 0 0 0-3-3.87M16 3.13a4 4 0 0 1 0 7.75"/></>,
@@ -37,9 +32,7 @@ function Status({ status }) {
 }
 
 function splitSearchValues(value) {
-  // Accept the separators customers commonly paste between countries or
-  // keywords. A slash must mean two values here, not one literal country.
-  return [...new Set(String(value || '').replace(/[，、；;|/]/g, ',').split(',').map((item) => item.trim()).filter(Boolean))]
+  return [...new Set(String(value || '').replace(/[，、；;|]/g, ',').split(',').map((item) => item.trim()).filter(Boolean))]
 }
 
 function countryMatchesTarget(country, targets) {
@@ -84,13 +77,6 @@ function App() {
   const [replyLoading, setReplyLoading] = useState(false)
   const [selectedResearch, setSelectedResearch] = useState(null)
   const [selectedDraft, setSelectedDraft] = useState(null)
-  const [batchDrafts, setBatchDrafts] = useState([])
-  const [batchIndex, setBatchIndex] = useState(0)
-  const [batchSelectedIds, setBatchSelectedIds] = useState([])
-  const [batchTranslations, setBatchTranslations] = useState({})
-  const [batchTranslationLoading, setBatchTranslationLoading] = useState(false)
-  const [batchPreview, setBatchPreview] = useState(null)
-  const [batchLoading, setBatchLoading] = useState(false)
   const [selectedSendHistory, setSelectedSendHistory] = useState([])
   const [selectedLeadAudit, setSelectedLeadAudit] = useState([])
   const [leadTransitionLoading, setLeadTransitionLoading] = useState(false)
@@ -121,15 +107,7 @@ function App() {
   const [databaseOverview, setDatabaseOverview] = useState(null)
   const [databaseLoading, setDatabaseLoading] = useState(false)
   const [databaseExportLoading, setDatabaseExportLoading] = useState(false)
-  const [settingsStatus, setSettingsStatus] = useState(null)
-  const [setupOpen, setSetupOpen] = useState(false)
   const searchWarnings = searchCriteriaWarnings({ product: searchProduct, keywords: searchKeywords, countries: searchCountries, industries: searchIndustries })
-  const browserSearchUrl = useMemo(() => {
-    const terms = [searchProduct, searchKeywords, searchIndustries, searchCountries]
-      .flatMap((value) => splitSearchValues(value))
-      .filter(Boolean)
-    return `https://www.google.com/search?q=${encodeURIComponent(terms.join(' '))}`
-  }, [searchProduct, searchKeywords, searchIndustries, searchCountries])
   useEffect(() => {
     let cancelled = false
     const load = async () => {
@@ -164,55 +142,20 @@ function App() {
     if (activeNav !== '本地数据库') return undefined
     let cancelled = false
     setDatabaseLoading(true)
-    // The database page is the cross-task local archive. It must not inherit
-    // the active search task, otherwise a task with zero new matches makes
-    // the whole local database appear empty.
-    fetch('/api/database/overview')
+    const suffix = remoteTaskId ? `?task_id=${encodeURIComponent(remoteTaskId)}` : ''
+    fetch(`/api/database/overview${suffix}`)
       .then((response) => response.ok ? response.json() : Promise.reject(new Error('database overview failed')))
       .then((data) => { if (!cancelled) setDatabaseOverview(data) })
       .catch(() => { if (!cancelled) setDatabaseOverview(null) })
       .finally(() => { if (!cancelled) setDatabaseLoading(false) })
     return () => { cancelled = true }
-  }, [activeNav, remoteTaskId])
-  useEffect(() => {
-    let cancelled = false
-    let retryTimer
-    let attempts = 0
-    const loadSettings = () => {
-      attempts += 1
-      fetch('/api/settings/status')
-        .then((response) => response.ok ? response.json() : Promise.reject(new Error('settings status failed')))
-        .then((data) => { if (!cancelled) { setSettingsStatus(data); setSetupOpen(data.setup_required) } })
-        .catch(() => {
-          if (!cancelled && attempts < 10) retryTimer = setTimeout(loadSettings, 500)
-        })
-    }
-    loadSettings()
-    return () => { cancelled = true; clearTimeout(retryTimer) }
-  }, [])
-  useEffect(() => {
-    if (!remoteTaskId) return undefined
-    let cancelled = false
-    const loadDrafts = () => fetch(`/api/tasks/${remoteTaskId}/drafts`)
-      .then((response) => response.ok ? response.json() : Promise.reject(new Error('draft list failed')))
-      .then((data) => {
-        if (!cancelled) {
-          const drafts = data.items || []
-          setBatchDrafts(drafts)
-          setBatchSelectedIds((ids) => ids.filter((id) => drafts.some((draft) => draft.id === id)))
-        }
-      })
-      .catch(() => { if (!cancelled) setBatchDrafts([]) })
-    loadDrafts()
-    const timer = window.setInterval(loadDrafts, 1800)
-    return () => { cancelled = true; window.clearInterval(timer) }
-  }, [remoteTaskId, selectedDraft?.id, selectedDraft?.status])
+  }, [activeNav, remoteLeads, remoteTaskId])
   useEffect(() => {
     if (!remoteTaskId) return undefined
     let cancelled = false
     const loadLeads = async () => {
       try {
-        const leadResponse = await fetch(`/api/tasks/${remoteTaskId}/leads?view=summary`)
+        const leadResponse = await fetch(`/api/tasks/${remoteTaskId}/leads`)
         if (!leadResponse.ok) throw new Error('leads request failed')
         const data = await leadResponse.json()
         const loaded = (data.items || []).map(mapRemoteLead)
@@ -247,7 +190,7 @@ function App() {
         }
         if (latest?.status === 'succeeded') {
           setDiscoveryError(null)
-          const leadResponse = await fetch(`/api/tasks/${remoteTaskId}/leads?view=summary`)
+          const leadResponse = await fetch(`/api/tasks/${remoteTaskId}/leads`)
           if (!leadResponse.ok) return
           const leads = await leadResponse.json()
           setRemoteLeads((leads.items || []).map(mapRemoteLead))
@@ -291,7 +234,7 @@ function App() {
           if (runs.some((run) => run.status === 'running')) {
             timer = window.setTimeout(loadRuns, 1200)
           } else if (runs.some((run) => ['succeeded', 'review_required'].includes(run.status))) {
-            const leadResponse = await fetch(`/api/tasks/${remoteTaskId}/leads?view=summary`)
+            const leadResponse = await fetch(`/api/tasks/${remoteTaskId}/leads`)
             if (!leadResponse.ok) throw new Error('leads refresh request failed')
             const leads = await leadResponse.json()
             const loaded = (leads.items || []).map(mapRemoteLead)
@@ -351,9 +294,7 @@ function App() {
   const exportDatabase = async () => {
     setDatabaseExportLoading(true)
     try {
-      const activeTaskId = remoteTaskId || remoteTaskConfig?.id || ''
-      const suffix = activeTaskId ? `?task_id=${encodeURIComponent(activeTaskId)}` : ''
-      const response = await fetch(`/api/database/export${suffix}`)
+      const response = await fetch('/api/database/export')
       const payload = await response.json()
       if (!response.ok) throw new Error(payload.error || '导出失败')
       const bytes = Uint8Array.from(atob(payload.content_base64), (character) => character.charCodeAt(0))
@@ -407,29 +348,27 @@ function App() {
     try {
       const response = await fetch(`/api/drafts/${selectedDraft.id}/translate`, { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ target_language: 'zh-CN' }) })
       if (!response.ok) throw new Error('translation failed')
-      const payload = await response.json()
-      if (!payload?.body || /Error 500|Server Error|That’s an error/i.test(payload.body)) throw new Error('translation failed')
-      setTranslatedDraft(payload)
+      setTranslatedDraft(await response.json())
       setLanguage('中文')
       notify('中文预览已生成，英文邮件内容未改变')
     } catch { notify('翻译失败，请检查本地翻译服务或网络') } finally { setTranslationLoading(false) }
   }
-  const reviewDraft = async (action, note) => {
-    if (!selectedDraft?.id) return
+  const reviewDraft = async (action, note, reviewer) => {
+    if (!selectedDraft?.id || !reviewer.trim()) { notify('请先填写审核人'); return }
     if ((action === 'request-revision' || action === 'reject') && !note.trim()) { notify('请填写处理意见'); return }
     setReviewLoading(true)
     try {
-      const response = await fetch(`/api/drafts/${selectedDraft.id}/${action}`, { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ note: note.trim() }) })
+      const response = await fetch(`/api/drafts/${selectedDraft.id}/${action}`, { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ reviewer: reviewer.trim(), note: note.trim() }) })
       if (!response.ok) throw new Error('review failed')
       setSelectedDraft(await response.json())
       setSendSafety(null)
       notify(action === 'approve' ? '草稿已批准，等待发送' : action === 'request-revision' ? '草稿已退回修改' : '草稿已拒绝')
     } catch { notify('审核操作失败，请稍后重试') } finally { setReviewLoading(false) }
   }
-  const reviewResearchField = async (fieldKey, value) => {
-    if (!remoteTaskId || !selected?.domain) return
+  const reviewResearchField = async (fieldKey, value, reviewer) => {
+    if (!remoteTaskId || !selected?.domain || !reviewer?.trim()) { notify('请先填写字段复核人'); return }
     try {
-      const response = await fetch(`/api/tasks/${remoteTaskId}/leads/${selected.domain}/research-fields/${fieldKey}`, { method: 'PATCH', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ status: 'verified', value }) })
+      const response = await fetch(`/api/tasks/${remoteTaskId}/leads/${selected.domain}/research-fields/${fieldKey}`, { method: 'PATCH', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ status: 'verified', value, actor: reviewer.trim() }) })
       const data = await response.json()
       if (!response.ok) throw new Error(data.error || 'research field review failed')
       setSelectedResearch(data)
@@ -448,41 +387,6 @@ function App() {
       notify('邮件草稿已生成，请人工审核')
     } catch { notify('邮件生成失败，请确认客户资料已整理完成') } finally { setReviewLoading(false) }
   }
-  const reviewBatchDraft = async (draftId, action = 'approve') => {
-    setBatchLoading(true)
-    try {
-      const response = await fetch(`/api/drafts/${draftId}/${action}`, { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ note: '' }) })
-      const payload = await response.json()
-      if (!response.ok) throw new Error(payload.error || 'batch review failed')
-      setBatchDrafts((items) => items.map((draft) => draft.id === draftId ? payload : draft))
-      notify(action === 'approve' ? '邮件已批准' : '邮件已退回修改')
-    } catch (error) { notify(error.message || '批量审核失败') } finally { setBatchLoading(false) }
-  }
-  const translateBatchDraft = async (draftId) => {
-    if (!draftId || batchTranslationLoading) return
-    if (batchTranslations[draftId]) return
-    setBatchTranslationLoading(true)
-    try {
-      const response = await fetch(`/api/drafts/${draftId}/translate`, { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ target_language: 'zh-CN' }) })
-      const payload = await response.json()
-      if (!response.ok || !payload?.body || /Error 500|Server Error|That’s an error/i.test(payload.body)) throw new Error('translation failed')
-      setBatchTranslations((items) => ({ ...items, [draftId]: payload }))
-      notify('中文预览已生成，英文邮件内容未改变')
-    } catch { notify('中文预览暂时生成失败，请稍后重试') } finally { setBatchTranslationLoading(false) }
-  }
-  const sendBatchDrafts = async (confirmed = false) => {
-    if (!remoteTaskId || !batchSelectedIds.length) { notify('请先选择要发送的邮件'); return }
-    setBatchLoading(true)
-    try {
-      const response = await fetch(`/api/tasks/${remoteTaskId}/drafts/batch-send`, { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ draft_ids: batchSelectedIds, confirmed }) })
-      const payload = await response.json()
-      if (!response.ok) throw new Error(payload.error || 'batch send failed')
-      if (!confirmed) { setBatchPreview(payload); return }
-      setBatchPreview(null)
-      notify(`批量发送完成：${payload.sent_count || 0} 封成功，${payload.failed_count || 0} 封失败`)
-      setBatchSelectedIds([])
-    } catch (error) { notify(error.message || '批量发送失败') } finally { setBatchLoading(false) }
-  }
   const runSendSafetyCheck = async () => {
     if (!selectedDraft?.id) return
     setSafetyLoading(true)
@@ -500,7 +404,7 @@ function App() {
   const refreshAfterSend = async () => {
     if (!remoteTaskId) return
     const [leadResponse, databaseResponse] = await Promise.all([
-      fetch(`/api/tasks/${remoteTaskId}/leads?view=summary`),
+      fetch(`/api/tasks/${remoteTaskId}/leads`),
       fetch('/api/database/overview'),
     ])
     if (!leadResponse.ok || !databaseResponse.ok) return
@@ -727,8 +631,7 @@ function App() {
       const response = await fetch(`/api/tasks/${remoteTaskId}/sender-profile`, { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify(profile) })
       if (!response.ok) throw new Error('sender profile update failed')
       setRemoteTaskConfig(await response.json())
-      await fetch(`/api/tasks/${remoteTaskId}/leads?view=summary`)
-      notify('发件人资料已保存，符合条件的邮件会自动生成')
+      notify('发件人资料已保存，重新生成时会创建新草稿版本')
     } catch { notify('发件人资料保存失败，请稍后重试') }
   }
   const createTask = async (event) => {
@@ -788,36 +691,24 @@ function App() {
     } catch (error) { notify(error.message || '研究规则保存失败，请检查配置') }
   }
 
-  const saveSettings = async (settings) => {
-    try {
-      const response = await fetch('/api/settings/config', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify(settings) })
-      const payload = await response.json()
-      if (!response.ok) throw new Error(payload.error || '设置保存失败')
-      setSettingsStatus((current) => ({ ...(current || {}), config_file_present: true, setup_required: false, deepseek_configured: true, brave_search_configured: Boolean(settings.brave_search_api_key) || current?.brave_search_configured, ali_imap_configured: true, ali_smtp_enabled: Boolean(settings.enable_sending) }))
-      setSetupOpen(false)
-      notify('设置已保存，请重启程序后生效')
-    } catch (error) { notify(error.message || '设置保存失败，请检查填写内容') }
-  }
-
   return <div className="app-shell">
     <aside className="sidebar">
       <div className="brand"><span className="brand-mark">✦</span><span>NORTHSTAR OPS</span></div>
-      <nav>{navItems.map(([icon, label]) => <button key={label} className={`nav-item ${activeNav === label ? 'active' : ''}`} onClick={() => setActiveNav(label)}><Icon name={icon} /><span>{label}</span></button>)}<div className="nav-divider"/><div className="nav-group-label">工作配置</div>{accountNavItems.map(([icon, label]) => <button key={label} className={`nav-item nav-item-sub ${activeNav === label ? 'active' : ''}`} onClick={() => setActiveNav(label)}><Icon name={icon} /><span>{label}</span></button>)}</nav>
+      <nav>{navItems.map(([icon, label]) => <button key={label} className={`nav-item ${activeNav === label ? 'active' : ''}`} onClick={() => setActiveNav(label)}><Icon name={icon} /><span>{label}</span></button>)}</nav>
       <div className="sidebar-bottom"><div className="sidebar-rule"/><p>让中国制造<br/>连接全球真实需求</p><small>NORTHSTAR OPS</small></div>
     </aside>
     <main className="main-shell">
       <header className="topbar"><div className="top-actions"><button className="icon-button" onClick={() => notify('暂无新的系统通知')} aria-label="通知"><Icon name="bell" size={20}/><i className="notification-dot"/></button></div></header>
       <div className="content">
-      {activeNav === '本地数据库' ? <DatabasePanel overview={databaseOverview} loading={databaseLoading} exportLoading={databaseExportLoading} onExport={exportDatabase} onSelect={selectDatabaseLead} searchCountries={searchCountries}/> : activeNav === '发件人资料' ? <SenderProfilePage taskConfig={remoteTaskConfig} onSave={saveSenderProfile}/> : activeNav === '设置' ? <SettingsPanel status={settingsStatus} mailboxStatus={mailboxStatus} onSave={saveSettings}/> : <>
+      {activeNav === '本地数据库' ? <DatabasePanel overview={databaseOverview} loading={databaseLoading} exportLoading={databaseExportLoading} onExport={exportDatabase} onSelect={selectDatabaseLead} searchCountries={searchCountries}/> : <>
         <div className="page-heading"><div><h1>找客户</h1><p>输入目标条件，优先展示官网有公开邮箱的客户</p></div>{!remoteTaskId && <button className="primary-button" onClick={() => setShowTask(true)}><Icon name="plus" size={19}/>开始使用</button>}</div>
         <div className={`data-notice ${apiState}`}><span />{apiState === 'loading' ? '正在准备客户资料…' : apiState === 'connected' ? '客户资料已准备就绪' : apiState === 'empty' ? '当前还没有客户资料' : '客户资料暂时无法读取'}</div>
-        <section className="search-panel panel"><div className="search-panel-heading"><div><h2>搜索条件</h2><p>常用条件放在这里，中文也可以直接输入</p></div><button type="button" className="primary-button" disabled={!remoteTaskId || discoverLoading || discoveryRun?.status === 'running'} onClick={discoverLeads}><Icon name="search" size={16}/>{discoverLoading || discoveryRun?.status === 'running' ? '正在搜索…' : '搜索可发送客户'}</button></div><div className="search-fields"><label>产品或业务<input value={searchProduct} onChange={(event) => setSearchProduct(event.target.value)} placeholder="例如：注塑件、精密零件" /></label><label>关键词<input value={searchKeywords} onChange={(event) => setSearchKeywords(event.target.value)} placeholder="例如：精密零件、注塑件" /></label><label>目标国家 / 地区<input value={searchCountries} onChange={(event) => setSearchCountries(event.target.value)} placeholder="例如：德国、墨西哥" /></label><label>行业<input value={searchIndustries} onChange={(event) => setSearchIndustries(event.target.value)} placeholder="例如：汽车、电子" /></label>{searchWarnings.length > 0 && <div className="criteria-hint">{searchWarnings.map((warning) => <span key={warning}>{warning}</span>)}</div>}{discoveryError && <div className="discovery-friendly-error">{discoveryError}</div>}</div><div className="search-panel-foot"><span className="search-auto-note">系统会自动尝试多个搜索来源，必要时切换浏览器搜索</span><button type="button" className="outline-button browser-search-action" onClick={() => setShowBrowserImport(true)} disabled={!remoteTaskId}>浏览器补充搜索</button><details className="maintenance-inline"><summary>维护工具（不常用）</summary><div className="maintenance-inline-body"><button type="button" className="outline-button" onClick={() => setShowRuleEditor(true)}>研究规则</button></div></details></div></section>
-        {discoverySummary ? <DiscoveryFunnel summary={discoverySummary} visibleCount={filteredLeads.length}/> : null}
-        <BatchMailPanel drafts={batchDrafts} index={batchIndex} onIndexChange={setBatchIndex} selectedIds={batchSelectedIds} onToggle={(id) => setBatchSelectedIds((items) => items.includes(id) ? items.filter((item) => item !== id) : items.length >= 30 ? items : [...items, id])} onReview={reviewBatchDraft} translations={batchTranslations} translationLoading={batchTranslationLoading} onTranslate={translateBatchDraft} onPreview={() => sendBatchDrafts(false)} onConfirm={() => sendBatchDrafts(true)} loading={batchLoading} preview={batchPreview}/>
+        <section className="search-panel panel"><div className="search-panel-heading"><div><h2>搜索条件</h2><p>常用条件放在这里，中文也可以直接输入</p></div><button type="button" className="primary-button" disabled={!remoteTaskId || discoverLoading || discoveryRun?.status === 'running'} onClick={discoverLeads}><Icon name="search" size={16}/>{discoverLoading || discoveryRun?.status === 'running' ? '正在搜索…' : '搜索可发送客户'}</button></div><div className="search-fields"><label>产品或业务<input value={searchProduct} onChange={(event) => setSearchProduct(event.target.value)} placeholder="例如：注塑件、精密零件" /></label><label>关键词<input value={searchKeywords} onChange={(event) => setSearchKeywords(event.target.value)} placeholder="例如：精密零件、注塑件" /></label><label>目标国家 / 地区<input value={searchCountries} onChange={(event) => setSearchCountries(event.target.value)} placeholder="例如：德国、墨西哥" /></label><label>行业<input value={searchIndustries} onChange={(event) => setSearchIndustries(event.target.value)} placeholder="例如：汽车、电子" /></label>{searchWarnings.length > 0 && <div className="criteria-hint">{searchWarnings.map((warning) => <span key={warning}>{warning}</span>)}</div>}{discoveryError && <div className="discovery-friendly-error">{discoveryError}</div>}</div><div className="search-panel-foot"><details className="maintenance-inline"><summary>维护工具（不常用）</summary><div className="maintenance-inline-body"><button type="button" className="outline-button" onClick={() => setShowRuleEditor(true)}>研究规则</button><button type="button" className="outline-button" onClick={() => setShowBrowserImport(true)}>备用导入</button></div></details></div></section>
+        {discoverySummary ? <DiscoveryFunnel summary={discoverySummary}/> : null}
         <ReplyCenter mailboxStatus={mailboxStatus} threads={mailThreads} analyses={replyAnalyses} followUpTasks={followUpTasks} loading={replyLoading} onTest={testMailbox} onSync={syncMailbox} onAnalyze={analyzeReplies} onGenerateDraft={generateReplyDraft} onFollowUpStatus={updateFollowUpStatus}/>
         <section className="workspace-grid">
           <div className="lead-panel panel"><div className="panel-heading"><div><h2>可发送客户 <span>共 {filteredLeads.length} 个</span></h2><p>已找到官网公开邮箱，可以直接联系</p></div></div><div className="table-head"><span className="checkbox"/><span>公司名称</span><span>国家 / 地区</span><span>客户类型</span><span>状态</span><span/></div><div className="lead-list">{filteredLeads.length ? filteredLeads.map((lead) => <button className={`lead-row ${selected?.name === lead.name ? 'selected' : ''}`} key={lead.name} onClick={() => selectLead(lead)}><span className={`checkbox ${selected?.name === lead.name ? 'checked' : ''}`}>{selected?.name === lead.name && <Icon name="check" size={13}/>}</span><strong>{lead.name}</strong><span className="country"><span>{lead.flag}</span>{lead.country}</span><span>{lead.type}</span><Status status={lead.status}/><span className="more">···</span></button>) : <div className="empty-results">{remoteLeads.length ? '这次没有找到合格客户，请换一组条件' : '搜索后，合格客户会显示在这里'}</div>}</div><div className="table-footer"><span>当前显示 {filteredLeads.length} 个客户</span></div></div>
-          <aside className={`detail-panel panel ${filteredLeads.length && activeLead ? '' : 'detail-empty'}`}>{filteredLeads.length && activeLead ? <><div className="detail-top"><div className="company-symbol">◎</div><div className="company-title"><div><h2>{activeLead.name} <a href={activeLead.website} target="_blank" rel="noreferrer"><Icon name="external" size={14}/></a></h2><p>{activeLead.country} <i/> {activeLead.type} <i/> {activeLead.research ? '已完成官网背调' : '资料待整理'}</p></div><Status status={activeLead.status}/></div></div><div className="detail-tabs">{['概览', '来源证据', '邮件草稿'].map((tab) => <button className={detailTab === tab ? 'active' : ''} key={tab} onClick={() => setDetailTab(tab)}>{tab}</button>)}</div>{detailTab === '概览' && <><Overview lead={activeLead} onEvidence={() => setDetailTab('来源证据')} onDraft={() => setDetailTab('邮件草稿')}/><ResearchPanel lead={activeLead} loading={researchLoading} onStart={startResearch} onReview={reviewResearchField}/><LeadTimeline lead={activeLead} events={activeLead.auditEvents} onTransition={transitionLead} loading={leadTransitionLoading}/></>} {detailTab === '来源证据' && <Evidence lead={activeLead} onRefresh={refreshContacts} refreshing={contactRefreshLoading}/>} {detailTab === '邮件草稿' && <><Draft lead={activeLead} language={language} setLanguage={setLanguage} translatedDraft={translatedDraft} translationLoading={translationLoading} onTranslate={translateDraft} onReview={reviewDraft} reviewLoading={reviewLoading} status={draftStatus} setStatus={setDraftStatus} notify={notify}/><ContactForm lead={activeLead} onUpdate={updateContact} onRefresh={refreshContacts} refreshing={contactRefreshLoading}/><DraftGenerator lead={activeLead} taskConfig={remoteTaskConfig} loading={reviewLoading} onGenerate={generateDraft}/><ReviewControls lead={activeLead} sendingEnabled={mailboxStatus?.sending_enabled} onReview={reviewDraft} onSafetyCheck={runSendSafetyCheck} safetyLoading={safetyLoading} safetyResult={sendSafety} onSend={sendDraft} sendLoading={sendLoading} loading={reviewLoading}/></>}</> : <div className="detail-empty-state"><strong>没有选中的客户</strong><span>调整搜索词后选择一条客户记录</span></div>}</aside>
+          <aside className={`detail-panel panel ${filteredLeads.length && activeLead ? '' : 'detail-empty'}`}>{filteredLeads.length && activeLead ? <><div className="detail-top"><div className="company-symbol">◎</div><div className="company-title"><div><h2>{activeLead.name} <a href={activeLead.website} target="_blank" rel="noreferrer"><Icon name="external" size={14}/></a></h2><p>{activeLead.country} <i/> {activeLead.type} <i/> {activeLead.research ? '已完成官网背调' : '资料待整理'}</p></div><Status status={activeLead.status}/></div></div><div className="detail-tabs">{['概览', '来源证据', '邮件草稿'].map((tab) => <button className={detailTab === tab ? 'active' : ''} key={tab} onClick={() => setDetailTab(tab)}>{tab}</button>)}</div>{detailTab === '概览' && <><Overview lead={activeLead} onEvidence={() => setDetailTab('来源证据')} onDraft={() => setDetailTab('邮件草稿')}/><ResearchPanel lead={activeLead} loading={researchLoading} onStart={startResearch} onReview={reviewResearchField}/><LeadTimeline lead={activeLead} events={activeLead.auditEvents} onTransition={transitionLead} loading={leadTransitionLoading}/></>} {detailTab === '来源证据' && <Evidence lead={activeLead} onRefresh={refreshContacts} refreshing={contactRefreshLoading}/>} {detailTab === '邮件草稿' && <><Draft lead={activeLead} language={language} setLanguage={setLanguage} translatedDraft={translatedDraft} translationLoading={translationLoading} onTranslate={translateDraft} onReview={reviewDraft} reviewLoading={reviewLoading} status={draftStatus} setStatus={setDraftStatus} notify={notify}/><ContactForm lead={activeLead} onUpdate={updateContact} onRefresh={refreshContacts} refreshing={contactRefreshLoading}/><SenderProfileEditor taskConfig={remoteTaskConfig} onSave={saveSenderProfile}/><DraftGenerator lead={activeLead} taskConfig={remoteTaskConfig} loading={reviewLoading} onGenerate={generateDraft}/><ReviewControls lead={activeLead} sendingEnabled={mailboxStatus?.sending_enabled} onReview={reviewDraft} onSafetyCheck={runSendSafetyCheck} safetyLoading={safetyLoading} safetyResult={sendSafety} onSend={sendDraft} sendLoading={sendLoading} loading={reviewLoading}/></>}</> : <div className="detail-empty-state"><strong>没有选中的客户</strong><span>调整搜索词后选择一条客户记录</span></div>}</aside>
         </section>
       </>}
       </div>
@@ -826,9 +717,8 @@ function App() {
     {showTask && <div className="modal-backdrop" onClick={() => setShowTask(false)}><form className="task-modal" onSubmit={createTask} onClick={(event) => event.stopPropagation()}><button type="button" className="modal-close" onClick={() => setShowTask(false)}>×</button><span className="modal-icon"><Icon name="search"/></span><h2>开始找客户</h2><p>只填写这次搜索需要的条件，系统会自动保存设置。</p><input type="hidden" name="name" value="默认获客工作区" readOnly/><label>产品或业务<input name="product" placeholder="例如：注塑件、精密零件" /></label><label>关键词（逗号分隔）<input name="keywords" placeholder="例如：塑料件、产品制造商、采购" /></label><div className="modal-grid"><label>目标国家 / 地区<input name="countries" placeholder="例如：德国、墨西哥" /></label><label>行业<input name="industries" placeholder="例如：汽车、电子" /></label></div><button type="submit" className="primary-button full">进入搜索 <Icon name="arrow" size={16}/></button></form></div>}
     {showRuleEditor && remoteTaskConfig && <RuleEditorModal task={remoteTaskConfig} onClose={() => setShowRuleEditor(false)} onSave={saveCriteria}/>}
     {showBrowserImport && (
-      <BrowserImportModal onClose={() => setShowBrowserImport(false)} onImport={importBrowserResults} loading={browserImportLoading} searchUrl={browserSearchUrl} defaultCountry={splitSearchValues(searchCountries)[0] || ''}/>
+      <BrowserImportModal onClose={() => setShowBrowserImport(false)} onImport={importBrowserResults} loading={browserImportLoading}/>
     )}
-    {setupOpen && <SetupWizard onSave={saveSettings} onLater={() => setSetupOpen(false)}/>} 
   </div>
 }
 
@@ -867,7 +757,7 @@ function fallbackRejectionReasons(lead) {
 }
 
 function rejectionReasonLabel(reason) {
-  return { missing_website: '缺少官网', missing_public_email: '没有公开邮箱', missing_website_evidence: '缺少官网来源证据', missing_product_evidence: '缺少官网产品证据', missing_industry_evidence: '行业与目标不匹配或缺少行业信息', score_below_threshold: '评分低于门槛', conflicting_country: '国家来源冲突', country_not_target: '不属于目标国家/地区', country_unconfirmed: '国家/地区未能核验', qualified_quota_exceeded: '超过合格客户配额', email_domain_mismatch: '邮箱域名与官网不同', company_identity_unconfirmed: '官网未确认公司名' }[reason] || reason
+  return { missing_website: '缺少官网', missing_public_email: '没有官网公开邮箱', missing_website_evidence: '缺少官网来源证据', missing_product_evidence: '缺少官网产品证据', score_below_threshold: '评分低于门槛', conflicting_country: '国家来源冲突', country_not_target: '不属于目标国家/地区', country_unconfirmed: '国家/地区未能核验', qualified_quota_exceeded: '超过合格客户配额', email_domain_mismatch: '邮箱域名与官网不同', company_identity_unconfirmed: '官网未确认公司名' }[reason] || reason
 }
 
 function reviewFlagLabel(flag) {
@@ -894,9 +784,9 @@ function evidenceCheckStatus(value) {
   return { supported: '已找到', not_found: '未找到', not_configured: '未设置', not_checked: '未检查', conflicting: '信息不一致' }[value] || value
 }
 
-function DiscoveryFunnel({ summary, visibleCount }) {
-  const count = Number.isFinite(visibleCount) ? visibleCount : (summary?.qualified_count || 0)
-  return <div className="discovery-funnel simple-funnel"><div><strong>当前条件下</strong><span>可发送客户</span></div><div className="qualified-result-count"><b>{count}</b><span>家</span></div><p className="funnel-note">这些客户已找到官网公开邮箱，可以直接进入人工发送。其他搜索条件的客户仍保存在本机数据库。</p></div>
+function DiscoveryFunnel({ summary }) {
+  const count = summary.qualified_count || 0
+  return <div className="discovery-funnel simple-funnel"><div><strong>本次搜索结果</strong><span>可发送客户</span></div><div className="qualified-result-count"><b>{count}</b><span>家</span></div><p className="funnel-note">这些客户已找到可用邮箱，可以直接进入人工发送。</p></div>
 }
 
 function Metric({ icon, label, value, note }) { return <div className="metric"><span className={`metric-icon ${icon}`}><Icon name={icon === 'researching' ? 'users' : icon} size={20}/></span><div><span>{label}</span><strong>{value}<Icon name="arrow" size={16}/></strong><small>{note}</small></div></div> }
@@ -919,7 +809,7 @@ function ResearchPanel({ lead, loading, onStart, onReview }) {
   const [sourceUrl, setSourceUrl] = useState(lead.website || '')
   const [maxAttempts, setMaxAttempts] = useState('2')
   const [requestKey, setRequestKey] = useState('')
-  const reviewer = '本地用户'
+  const [reviewer, setReviewer] = useState('')
   const run = lead.researchRun
   const running = run?.status === 'running'
   return <div className="review-controls research-panel"><CustomFieldResults research={lead.research} onReview={(key, value) => onReview(key, value, reviewer)}/><div className="section-title"><h3>资料核验</h3><span>{run?.status === 'running' ? '正在核验' : run?.status === 'failed' ? '核验失败' : lead.research ? '已完成核验' : '资料待整理'}</span></div><p className="research-intro">系统会根据官网公开页面补充公司主体、联系方式、产品和采购信息，并保留来源。</p><label>字段复核人<input value={reviewer} onChange={(event) => setReviewer(event.target.value)} placeholder="填写姓名" /></label><label>来源网址<input value={sourceUrl} onChange={(event) => setSourceUrl(event.target.value)} /></label><button className="primary-button full" disabled={loading || running || !sourceUrl.trim()} onClick={() => onStart(sourceUrl.trim(), Number(maxAttempts), requestKey.trim())}>{loading ? '提交中…' : running ? '正在核验…' : run?.status === 'failed' ? '重新核验客户资料' : '开始核验客户资料'} <Icon name="arrow" size={16}/></button>{run?.error && <p className="generator-hint">核验未完成：请检查官网是否可以访问。</p>}{['succeeded', 'review_required'].includes(run?.status) && <p className="research-success">客户资料已更新，请查看上方核验结果。</p>}<details className="maintenance-inline research-maintenance"><summary>维护：高级核验设置</summary><div className="research-fields"><label>最大尝试次数<select value={maxAttempts} onChange={(event) => setMaxAttempts(event.target.value)}><option value="1">1 次</option><option value="2">2 次</option><option value="3">3 次</option></select></label><label>请求标识（维护用）<input value={requestKey} onChange={(event) => setRequestKey(event.target.value)} placeholder="留空即可" /></label></div></details></div>
@@ -984,73 +874,16 @@ function SenderProfileEditor({ taskConfig, onSave }) {
   return <div className="review-controls sender-editor"><div className="section-title"><h3>发件人资料</h3><span>用于下一版草稿</span></div><label>公司名称<input value={companyName} onChange={(event) => setCompanyName(event.target.value)} placeholder="例如：ABC Trading Co., Ltd." /></label><label>联系人姓名<input value={contactName} onChange={(event) => setContactName(event.target.value)} placeholder="例如：Li Ming" /></label><label>职位<input value={position} onChange={(event) => setPosition(event.target.value)} placeholder="例如：Sales Manager" /></label><button className="outline-button full" onClick={() => onSave({ company_name: companyName, contact_name: contactName, position })}>保存发件人资料</button></div>
 }
 
-function SenderProfilePage({ taskConfig, onSave }) {
-  return <div className="settings-page"><div className="page-heading"><div><h1>发件人资料</h1><p>统一用于自动生成邮件，保存后新邮件会自动使用。</p></div><span className="database-local-badge">本机保存</span></div><div className="settings-content"><SenderProfileEditor taskConfig={taskConfig} onSave={onSave}/><div className="settings-tip"><strong>使用说明</strong><p>只需要填写一次。系统会把公司名称、联系人姓名和职位带入后续邮件，不需要逐封重复填写。</p></div></div></div>
-}
-
-function SetupWizard({ onSave, onLater }) {
-  const [apiKey, setApiKey] = useState('')
-  const [email, setEmail] = useState('')
-  const [password, setPassword] = useState('')
-  const [braveSearchApiKey, setBraveSearchApiKey] = useState('')
-  const [enableSending, setEnableSending] = useState(true)
-  return <div className="modal-backdrop"><form className="task-modal setup-wizard" onSubmit={(event) => { event.preventDefault(); onSave({ deepseek_api_key: apiKey, ali_email: email, ali_password: password, brave_search_api_key: braveSearchApiKey, enable_sending: enableSending }) }}>
-    <span className="modal-icon"><Icon name="settings"/></span><h2>首次使用设置</h2><p>只填写下面三项，其他连接参数由系统自动配置。</p>
-    <label>DeepSeek API Key<input type="password" value={apiKey} onChange={(event) => setApiKey(event.target.value)} placeholder="粘贴你的 API Key" autoComplete="off" required/></label>
-    <label>阿里云邮箱<input type="email" value={email} onChange={(event) => setEmail(event.target.value)} placeholder="例如：sales@your-company.com" required/></label>
-    <label>阿里云邮箱密码<input type="password" value={password} onChange={(event) => setPassword(event.target.value)} placeholder="邮箱登录密码或专用密码" autoComplete="new-password" required/></label>
-    <label>Brave Search API Key（可选）<input type="password" value={braveSearchApiKey} onChange={(event) => setBraveSearchApiKey(event.target.value)} placeholder="用于稳定搜索官网客户" autoComplete="off"/></label>
-    <label className="setup-checkbox"><input type="checkbox" checked={enableSending} onChange={(event) => setEnableSending(event.target.checked)}/>允许系统发送已审核的邮件</label>
-    <div className="setup-actions"><button type="button" className="outline-button" onClick={onLater}>稍后设置</button><button type="submit" className="primary-button">保存并继续 <Icon name="arrow" size={16}/></button></div>
-  </form></div>
-}
-
-function SettingsPanel({ status, mailboxStatus, onSave }) {
-  const [editing, setEditing] = useState(false)
-  const badge = (ready, enabled = ready) => enabled ? ['已就绪', 'ready'] : ['未配置', 'pending']
-  const [deepseekLabel, deepseekTone] = badge(status?.deepseek_configured)
-  const [imapLabel, imapTone] = badge(status?.ali_imap_configured || mailboxStatus?.configured)
-  const [smtpLabel, smtpTone] = badge(status?.ali_smtp_enabled, status?.ali_smtp_enabled)
-  const [searchLabel, searchTone] = badge(status?.brave_search_configured)
-  return <><div className="settings-page"><div className="page-heading"><div><h1>设置</h1><p>管理 AI、搜索和邮箱连接状态。账号、密码和 API Key 不会显示在页面中。</p></div><button className="primary-button" onClick={() => setEditing(true)}>修改连接设置</button></div><div className="settings-grid"><section className="settings-card panel"><div className="section-title"><h2>DeepSeek</h2><span className={`settings-status ${deepseekTone}`}><i/>{deepseekLabel}</span></div><p>用于整理客户资料、核验公开信息和自动生成邮件。</p><div className="settings-row"><span>API Key</span><strong>已隐藏</strong></div></section><section className="settings-card panel"><div className="section-title"><h2>稳定搜索</h2><span className={`settings-status ${searchTone}`}><i/>{searchLabel}</span></div><p>用于稳定发现目标国家的官网客户；未配置时自动使用免费搜索源。</p><div className="settings-row"><span>Brave Search API</span><strong>已隐藏</strong></div></section><section className="settings-card panel"><div className="section-title"><h2>阿里邮箱</h2><span className={`settings-status ${imapTone}`}><i/>{imapLabel}</span></div><p>用于读取收件箱和发送已审核邮件。</p><div className="settings-row"><span>邮箱连接</span><strong>{imapLabel}</strong></div><div className="settings-row"><span>发送功能</span><strong className={`settings-value ${smtpTone}`}>{smtpLabel === '已就绪' ? '已开启' : '未开启'}</strong></div></section></div><div className="settings-guide panel"><strong>修改连接设置</strong><p>DeepSeek、邮箱和稳定搜索均可在这里配置；搜索 API 为可选项。</p><button className="outline-button" onClick={() => setEditing(true)}>打开设置向导</button></div></div>{editing && <SetupWizard onSave={onSave} onLater={() => setEditing(false)}/>}</>
-}
-
 function DraftGenerator({ lead, taskConfig, loading, onGenerate }) {
   const [product, setProduct] = useState(taskConfig?.criteria?.product || '')
   const [template, setTemplate] = useState('Introduce {product} to {company} based on their published product range.')
-  const [autoStarted, setAutoStarted] = useState(false)
-  useEffect(() => {
-    const profile = taskConfig?.sender_profile || {}
-    const ready = Boolean(lead.isRemote && lead.research && lead.email?.includes('@') && !lead.draft && product.trim() && profile.company_name?.trim() && profile.contact_name?.trim() && profile.position?.trim())
-    if (ready && !autoStarted && !loading) {
-      setAutoStarted(true)
-      onGenerate(template, product.trim())
-    }
-  }, [lead.isRemote, lead.domain, lead.research, lead.email, lead.draft, product, template, taskConfig?.sender_profile, autoStarted, loading, onGenerate])
   if (!lead.isRemote) return null
   const hasRecipient = Boolean(lead.email?.includes('@'))
   const researchState = researchDraftState(lead)
-  if (!lead.draft) return <div className="review-controls draft-generator"><div className="section-title"><h3>邮件生成</h3><span>{autoStarted ? '正在自动生成' : '等待条件满足'}</span></div><p className="generator-hint">填写并保存统一发件人资料后，系统会根据客户资料自动生成邮件并进入审核。</p>{!hasRecipient && <p className="generator-hint">当前客户没有公开邮箱，暂不生成邮件。</p>}{!lead.research && <p className="generator-hint">客户资料整理完成后自动生成。</p>}</div>
-  if (lead.draft) return <div className="review-controls draft-generator"><div className="section-title"><h3>邮件生成</h3><span>已自动生成</span></div><p className="generator-hint">邮件已根据客户资料和统一发件人资料生成，请在上方查看中文预览后进行审核。</p></div>
   return <div className="review-controls draft-generator"><div className="section-title"><h3>{lead.draft ? '重新生成邮件' : '生成邮件'}</h3><span>{lead.draft ? '会创建新版本，不覆盖当前草稿' : '使用已整理的客户资料与发件人资料'}</span></div><label>产品或服务<input value={product} onChange={(event) => setProduct(event.target.value)} placeholder="填写本次推广产品" /></label><label>写作方向<textarea value={template} onChange={(event) => setTemplate(event.target.value)} rows="2" /></label><button className="primary-button full" disabled={loading || !product.trim() || !lead.research || !hasRecipient} onClick={() => onGenerate(template, product)}>{loading ? '生成中…' : lead.draft ? '生成新版本草稿' : '生成邮件草稿'} <Icon name="arrow" size={16}/></button>{!hasRecipient ? <p className="generator-hint">当前没有公开邮箱，补充收件人后才能生成。</p> : !lead.research && <p className="generator-hint">{researchState.message}</p>}</div>
 }
 
-function BatchMailPanel({ drafts, index, onIndexChange, selectedIds, onToggle, onReview, translations, translationLoading, onTranslate, onPreview, onConfirm, loading, preview }) {
-  const current = drafts.length ? drafts[Math.min(index, drafts.length - 1)] : null
-  const [showChinese, setShowChinese] = useState(false)
-  useEffect(() => { if (current) setShowChinese(false) }, [current?.id])
-  if (!current) return null
-  const translated = translations?.[current.id]
-  const displayedSubject = showChinese && translated ? translated.subject : current.subject
-  const displayedBody = showChinese && translated ? translated.body : current.body
-  const approved = drafts.filter((draft) => draft.status === 'approved')
-  const selectedApproved = drafts.filter((draft) => selectedIds.includes(draft.id) && draft.status === 'approved')
-  const previewChinese = () => { setShowChinese(true); onTranslate(current.id) }
-  return <section className="batch-mail-panel panel"><div className="panel-heading"><div><h2>批量审核邮件 <span>{drafts.length} 封</span></h2><p>手动查看下一封，审核通过后选择要发送的邮件</p></div><span className="database-readonly">已批准 {approved.length} 封</span></div><div className="batch-mail-toolbar"><span>已选择 {selectedIds.length} 封 · 可发送 {selectedApproved.length} 封</span><button type="button" className="send-button" disabled={loading || !selectedApproved.length} onClick={onPreview}>批量发送已选邮件</button></div><div className="batch-mail-carousel"><button type="button" className="carousel-arrow" disabled={index <= 0} onClick={() => onIndexChange(index - 1)} aria-label="上一封">‹</button><article className="batch-mail-card"><div className="batch-mail-card-top"><span>第 {index + 1} / {drafts.length} 封</span><span className={`batch-draft-status ${current.status}`}>{current.status === 'approved' ? '已批准' : current.status === 'rejected' ? '已拒绝' : current.status === 'revision_required' ? '需修改' : '待审核'}</span></div><div className="batch-mail-recipient"><strong>{current.recipient_email}</strong><button type="button" className="text-button" disabled={translationLoading} onClick={() => translated ? setShowChinese((value) => !value) : previewChinese()}>{translationLoading ? '翻译中…' : showChinese ? '返回英文' : '中文预览'}</button></div><b>{displayedSubject}</b><p>{displayedBody}</p>{showChinese && translated && <small className="translation-note">中文仅供审核阅读，实际发送仍使用英文邮件。</small>}<label className="batch-select"><input type="checkbox" checked={selectedIds.includes(current.id)} disabled={current.status !== 'approved'} onChange={() => onToggle(current.id)} />加入批量发送</label><div className="batch-card-actions"><button type="button" className="outline-button" disabled={loading || current.status === 'approved' || current.status === 'rejected'} onClick={() => onReview(current.id, 'approve')}>审核通过</button><button type="button" className="outline-button" disabled={loading || current.status === 'approved' || current.status === 'rejected'} onClick={() => onReview(current.id, 'request-revision')}>退回修改</button></div></article><button type="button" className="carousel-arrow" disabled={index >= drafts.length - 1} onClick={() => onIndexChange(index + 1)} aria-label="下一封">›</button></div>{preview && <div className="batch-send-confirm"><strong>确认发送已选的 {preview.count} 封邮件？</strong><p>系统会逐封检查并记录发送结果，未批准的邮件不会发送。</p><button type="button" className="outline-button" onClick={() => onConfirm()}>确认发送</button></div>}</section>
-}
-
 function ReviewControls({ lead, sendingEnabled, onReview, onSafetyCheck, safetyLoading, safetyResult, onSend, sendLoading, loading }) {
-  return null
   const [reviewer, setReviewer] = useState('')
   const [note, setNote] = useState('')
   const [confirmingSend, setConfirmingSend] = useState(false)
@@ -1061,9 +894,7 @@ function ReviewControls({ lead, sendingEnabled, onReview, onSafetyCheck, safetyL
 }
 
 function DatabasePanel({ overview, loading, exportLoading, onExport, onSelect, searchCountries }) {
-  // Lead with actionable, already-qualified records. The full archive remains
-  // available through the explicit “全部客户” maintenance view.
-  const [view, setView] = useState('sendable')
+  const [view, setView] = useState('all')
   const stats = overview?.stats || {}
   const items = overview?.items || []
   const targetCountries = splitSearchValues(searchCountries)
@@ -1072,10 +903,15 @@ function DatabasePanel({ overview, loading, exportLoading, onExport, onSelect, s
   const customerItems = items.filter((item) => {
     const name = String(item.lead?.company_name || '').trim().toLowerCase()
     const domain = String(item.lead?.domain || '').trim().toLowerCase()
+    const identity = item.lead?.identity_consistency?.status
     const evidence = item.lead?.evidence_level
-    // 数据库展示已采集的候选，不要求它们已经合格；合格与否由客户池
-    // 单独判断。这里只排除明显的搜索噪声和没有网站身份的空记录。
-    return name && domain && evidence !== 'search_only' && !databaseNoise.some((marker) => name.includes(marker))
+    const sources = item.lead?.source_summary || {}
+    const sourceText = (item.lead?.sources || []).map((source) => String(source?.[1] || '')).join(' ').toLowerCase()
+    const hasWebsiteEvidence = Number(sources.website_count || 0) > 0 && Number(sources.same_domain_count || 0) > 0
+    const identityBacked = identity === 'strong' || identity === 'partial'
+    const businessInIdentity = businessMarkers.some((marker) => `${name} ${domain}`.includes(marker))
+    const businessInEvidence = businessMarkers.filter((marker) => sourceText.includes(marker)).length >= 2
+    return name && hasWebsiteEvidence && identityBacked && evidence !== 'search_only' && (businessInIdentity || businessInEvidence) && !databaseNoise.some((marker) => name.includes(marker)) && !(domain && name === domain && !item.lead?.emails?.length && !item.lead?.country)
   })
   const displayItems = view === 'sendable' ? customerItems.filter((item) => item.sendable) : view === 'pending' ? customerItems.filter((item) => item.pending_contact) : view === 'contacted' ? customerItems.filter((item) => item.contacted) : view === 'follow_up' ? customerItems.filter((item) => item.follow_up_ready) : view === 'qualified' ? customerItems.filter((item) => item.qualified && !item.contacted) : customerItems
   const viewDescription = view === 'sendable' ? '今天优先联系这些客户，按每日发送安排' : view === 'pending' ? '这些客户符合条件，今天不发送，保留到后续联系' : view === 'contacted' ? '查看已经发送过邮件的客户' : view === 'follow_up' ? '查看收到回复、可以继续跟进的客户' : view === 'qualified' ? '展示所有符合当前条件的客户，不受每日发送数量影响' : '查看本机保存的客户资料；明显的文章、工具和目录结果已隐藏'
@@ -1085,7 +921,7 @@ function DatabasePanel({ overview, loading, exportLoading, onExport, onSelect, s
     {!loading && !overview && <div className="empty-results">暂时无法读取本地数据库，请稍后重试。</div>}
     {overview && <>
       <div className="database-stats"><Metric icon="mail" label="今日发送范围" value={stats.sendable_count || 0} note="按每日发送安排"/><Metric icon="check" label="合格客户" value={stats.qualified_count || 0} note="符合当前搜索条件"/><Metric icon="users" label="待联系" value={stats.pending_contact_count || 0} note="合格但安排到后续"/><Metric icon="clipboard" label="已联系" value={stats.contacted_count || 0} note="已有发送记录"/></div>
-      <section className="database-table panel"><div className="panel-heading"><div><h2>客户资料 <span>{displayItems.length} 条</span></h2><p>{viewDescription}</p></div><span className="database-readonly">本机资料</span></div><div className="database-view-tabs"><button className={view === 'sendable' ? 'active' : ''} onClick={() => setView('sendable')}>今日发送 {stats.sendable_count || 0}</button><button className={view === 'pending' ? 'active' : ''} onClick={() => setView('pending')}>待联系 {stats.pending_contact_count || 0}</button><button className={view === 'contacted' ? 'active' : ''} onClick={() => setView('contacted')}>已联系 {stats.contacted_count || 0}</button><button className={view === 'follow_up' ? 'active' : ''} onClick={() => setView('follow_up')}>可继续跟进 {stats.follow_up_count || 0}</button><button className={view === 'qualified' ? 'active' : ''} onClick={() => setView('qualified')}>合格客户 {stats.qualified_count || 0}</button><button className={view === 'all' ? 'active' : ''} onClick={() => setView('all')}>全部客户 {customerItems.length}</button></div><div className="database-table-head"><span>公司</span><span>国家 / 地区</span><span>公开邮箱</span><span>来源</span><span>状态</span></div><div className="database-list">{displayItems.length ? displayItems.map((item) => <button type="button" className="database-row" key={`${item.task_id}-${item.lead.domain}`} onClick={() => onSelect(item)} aria-label={`打开客户资料：${item.lead.company_name || item.lead.domain}`}><strong>{item.lead.company_name || item.lead.domain}</strong><span>{item.lead.country && item.lead.country !== 'unknown' ? item.lead.country : ''}</span><span>{item.lead.emails?.length ? item.lead.emails.join(', ') : ''}</span><span>{item.lead.source_summary?.website_count || 0} 个来源</span><span className={item.follow_up_ready ? 'database-qualified' : item.contacted ? 'database-sendable' : item.pending_contact ? 'database-pending' : item.qualified ? 'database-qualified' : 'database-pending'}>{item.follow_up_ready ? '可继续跟进' : item.contacted ? '已联系' : item.pending_contact ? '待联系' : item.qualified ? '合格客户' : item.sendable ? '今日发送' : '待完善'}</span></button>) : <div className="empty-results">当前分类还没有符合条件的客户。</div>}</div></section>
+      <section className="database-table panel"><div className="panel-heading"><div><h2>客户资料 <span>{displayItems.length} 条</span></h2><p>{viewDescription}</p></div><span className="database-readonly">本机资料</span></div><div className="database-view-tabs"><button className={view === 'sendable' ? 'active' : ''} onClick={() => setView('sendable')}>今日发送 {stats.sendable_count || 0}</button><button className={view === 'pending' ? 'active' : ''} onClick={() => setView('pending')}>待联系 {stats.pending_contact_count || 0}</button><button className={view === 'contacted' ? 'active' : ''} onClick={() => setView('contacted')}>已联系 {stats.contacted_count || 0}</button><button className={view === 'follow_up' ? 'active' : ''} onClick={() => setView('follow_up')}>可继续跟进 {stats.follow_up_count || 0}</button><button className={view === 'qualified' ? 'active' : ''} onClick={() => setView('qualified')}>合格客户 {stats.qualified_count || 0}</button><button className={view === 'all' ? 'active' : ''} onClick={() => setView('all')}>全部客户 {customerItems.length}</button></div><div className="database-table-head"><span>公司</span><span>国家 / 地区</span><span>公开邮箱</span><span>来源</span><span>状态</span></div><div className="database-list">{displayItems.length ? displayItems.map((item) => <button type="button" className="database-row" key={`${item.task_id}-${item.lead.domain}`} onClick={() => onSelect(item)} aria-label={`打开客户资料：${item.lead.company_name || item.lead.domain}`}><strong>{item.lead.company_name || item.lead.domain}</strong><span>{item.lead.country && item.lead.country !== 'unknown' ? item.lead.country : '国家待核验'}</span><span>{item.lead.emails?.length ? item.lead.emails.join(', ') : '未发现公开邮箱'}</span><span>{item.lead.source_summary?.website_count || 0} 个来源</span><span className={item.follow_up_ready ? 'database-qualified' : item.contacted ? 'database-sendable' : item.pending_contact ? 'database-pending' : item.qualified ? 'database-qualified' : 'database-pending'}>{item.follow_up_ready ? '可继续跟进' : item.contacted ? '已联系' : item.pending_contact ? '待联系' : item.qualified ? '合格客户' : item.sendable ? '今日发送' : '待完善'}</span></button>) : <div className="empty-results">当前分类还没有符合条件的客户。</div>}</div></section>
     </>}
   </>
 }

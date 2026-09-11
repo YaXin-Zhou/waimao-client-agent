@@ -3,7 +3,7 @@
 from __future__ import annotations
 
 import re
-from concurrent.futures import ThreadPoolExecutor, TimeoutError as FuturesTimeoutError, as_completed
+from concurrent.futures import ThreadPoolExecutor
 from dataclasses import dataclass, replace
 from urllib.parse import urlparse
 
@@ -24,7 +24,6 @@ from src.domain.lead import (
     clean_leads,
     identity_consistency,
     is_credible_source_excerpt,
-    is_plausible_email,
     is_search_source,
     score_lead,
 )
@@ -94,7 +93,6 @@ class AcquisitionService:
         website_workers: int = 8,
         website_page_limit: int = 3,
         external_source_limit: int = 1,
-        website_enrichment_timeout_seconds: int = 45,
     ):
         self._tasks = task_repository
         self._leads = lead_repository
@@ -107,10 +105,7 @@ class AcquisitionService:
         self._external_source_limit = external_source_limit
         if website_workers <= 0:
             raise ValueError("website_workers must be positive")
-        if website_enrichment_timeout_seconds <= 0:
-            raise ValueError("website_enrichment_timeout_seconds must be positive")
         self._website_workers = website_workers
-        self._website_enrichment_timeout_seconds = website_enrichment_timeout_seconds
         # Search rounds often return the same domains. Cache only successful
         # public-page extraction so changing criteria reuses evidence without
         # hiding a transient fetch failure.
@@ -136,23 +131,6 @@ class AcquisitionService:
         if self._tasks.get(task_id) is None:
             raise KeyError(f"Task not found: {task_id}")
         cleaned = clean_leads(records)
-        # A later search round may only contain a bare search-result URL while
-        # an earlier round already collected an email, country, and website
-        # evidence for the same company. Merge before re-qualifying so a weak
-        # repeat result cannot erase useful public evidence from the local
-        # customer database.
-        existing_items = getattr(self._leads, "list_assessments", lambda _task_id: [])(
-            task_id
-        )
-        existing_by_domain = {
-            item.lead.domain: item.lead
-            for item in existing_items
-            if item.lead.domain
-        }
-        cleaned = [
-            self._merge_existing_lead(lead, existing_by_domain.get(lead.domain))
-            for lead in cleaned
-        ]
         results = [
             AssessedLead(
                 lead=lead,
@@ -170,51 +148,6 @@ class AcquisitionService:
         qualified = self._qualify(results, task.criteria)
         self._leads.save_assessments(task_id, qualified)
         return qualified
-
-    @staticmethod
-    def _merge_existing_lead(lead: CleanLead, previous: CleanLead | None) -> CleanLead:
-        if previous is None:
-            return lead
-
-        def unique(values: tuple[str, ...] | list[str]) -> tuple[str, ...]:
-            output: list[str] = []
-            seen: set[str] = set()
-            for value in values:
-                item = str(value).strip()
-                key = item.casefold()
-                if item and key not in seen:
-                    seen.add(key)
-                    output.append(item)
-            return tuple(output)
-
-        sources = tuple(
-            dict.fromkeys(
-                (*previous.sources, *lead.sources)
-            )
-        )
-        company_name = lead.company_name
-        if (
-            not company_name
-            or clean_company_name(company_name, lead.domain).casefold()
-            == lead.domain.casefold()
-            or (
-                previous.company_name
-                and lead.sources
-                and all(is_search_source(source[0]) for source in lead.sources)
-            )
-        ):
-            company_name = previous.company_name or company_name
-        quality = "complete" if "complete" in {lead.quality, previous.quality} else lead.quality
-        return replace(
-            lead,
-            company_name=company_name,
-            emails=unique((*previous.emails, *lead.emails)),
-            country=lead.country or previous.country,
-            quality=quality,
-            flags=unique((*previous.flags, *lead.flags)),
-            sources=sources,
-            status=previous.status if lead.status == LeadStatus.NEW else lead.status,
-        )
 
     def _derive_signals(
         self, lead: CleanLead, task_id: str, weights: dict[str, int]
@@ -266,7 +199,7 @@ class AcquisitionService:
 
     @classmethod
     def has_product_evidence(cls, lead: CleanLead, criteria: AcquisitionCriteria) -> bool:
-        """Check exact or closely related business evidence on the website."""
+        """Check configured product terms against non-search-page source text."""
         terms = tuple(
             term.strip().lower()
             for term in configured_product_evidence_terms(criteria)
@@ -275,52 +208,9 @@ class AcquisitionService:
         searchable = " ".join(
             source[1] for source in cls._same_domain_sources(lead)
         ).lower()
-        if not searchable:
-            return False
-        if terms and any(cls._term_in_evidence(term, searchable) for term in terms):
-            return True
-        # A website may describe the same business with a nearby English
-        # expression after the user enters Chinese or a short product label.
-        # Keep this deliberately narrow: generic words such as supplier or
-        # manufacturer alone are not enough.
-        related_business_terms = (
-            "product", "products", "plastic", "injection", "molding", "moulding",
-            "mold", "mould", "cnc", "machining", "tooling", "components",
-            "parts", "manufacturing", "engineering",
+        return bool(terms) and any(
+            cls._term_in_evidence(term, searchable) for term in terms
         )
-        return sum(cls._term_in_evidence(term, searchable) for term in related_business_terms) >= 2
-
-    @classmethod
-    def has_industry_evidence(cls, lead: CleanLead, criteria: AcquisitionCriteria) -> bool:
-        """Check the target industry using exact terms or common synonyms."""
-        industry_terms = tuple(
-            term.strip().lower() for term in criteria.industries if term.strip()
-        )
-        if not industry_terms:
-            return True
-        searchable = " ".join(
-            source[1] for source in cls._same_domain_sources(lead)
-        ).lower()
-        if not searchable:
-            return False
-        synonyms = {
-            "汽车": ("automotive", "automobile", "vehicle", "auto parts", "mobility"),
-            "电子": ("electronics", "electronic", "semiconductor", "electrical"),
-            "医疗": ("medical", "healthcare", "medtech", "pharmaceutical"),
-            "工业": ("industrial", "machinery", "engineering"),
-            "新能源": ("renewable energy", "solar", "battery", "energy storage"),
-        }
-        evidence_terms: list[str] = []
-        for term in industry_terms:
-            evidence_terms.append(term)
-            # Users naturally enter specific labels such as “汽车零部件” or
-            # “新能源汽车”.  Match those labels to their broader industry
-            # family, then still require a matching term on the official-site
-            # evidence rather than accepting the label by itself.
-            for family, family_terms in synonyms.items():
-                if family in term or term in family:
-                    evidence_terms.extend(family_terms)
-        return any(cls._term_in_evidence(term, searchable) for term in evidence_terms)
 
     @staticmethod
     def _term_in_evidence(term: str, text: str) -> bool:
@@ -354,8 +244,17 @@ class AcquisitionService:
                 reasons.append("missing_website")
             if criteria.require_public_email and not item.lead.emails:
                 reasons.append("missing_public_email")
-            # 邮箱只要是公开、格式有效的地址即可进入候选；它是否与
-            # 官网同域只作为风险信息，不再因为外部企业邮箱直接淘汰。
+            if (
+                criteria.require_public_email
+                and item.lead.emails
+                and not AcquisitionService._same_domain_sources(item.lead)
+            ):
+                reasons.append("missing_website_evidence")
+            # 有邮箱不等于符合业务需求；至少要在官网同域来源中找到用户配置的产品/业务证据。
+            if configured_research_terms(criteria) and not AcquisitionService.has_product_evidence(
+                item.lead, criteria
+            ):
+                reasons.append("missing_product_evidence")
             target_countries = {
                 _country_key(country)
                 for country in criteria.countries
@@ -372,21 +271,27 @@ class AcquisitionService:
                 and detected_country not in target_countries
             ):
                 reasons.append("country_not_target")
-            # 行业证据或产品/制造业务证据满足其一即可，不要求官网写出
-            # 完整、精确的行业标签。这样能保留确实从事相关制造业务、但
-            # 没有公开写明下游行业的客户，同时过滤没有任何业务证据的记录。
-            has_industry = AcquisitionService.has_industry_evidence(item.lead, criteria)
-            has_product = (
-                AcquisitionService.has_product_evidence(item.lead, criteria)
-                if configured_product_evidence_terms(criteria)
-                else False
+            # 公司主体必须能被官网同域内容支持。搜索标题、目录页或仅有
+            # 一个孤立域名的记录不能进入可发送列表。
+            identity_status = identity_consistency(item.lead).get("status")
+            raw_name = " ".join(str(item.lead.company_name or "").split()).strip()
+            cleaned_name = clean_company_name(raw_name, item.lead.domain)
+            title_only = bool(
+                raw_name
+                and item.lead.domain
+                and cleaned_name.casefold() == item.lead.domain.casefold()
+                and raw_name.casefold() != item.lead.domain.casefold()
             )
-            if criteria.industries and not (has_industry or has_product):
-                reasons.append("missing_industry_evidence")
-            # 公司名称、邮箱域名和主体一致性只保留为风险标记，避免把
-            # 品牌名、集团邮箱或搜索标题差异误判为不可联系客户。
+            if identity_status in {"unknown", "weak"} or title_only:
+                reasons.append("company_identity_unconfirmed")
+            # 产品证据、目标国家和邮箱归属都是交付前硬条件；评分只用于
+            # 排序，不会把缺少关键证据的记录“抬”进可发送列表。
             if "conflicting_country" in item.lead.flags:
                 reasons.append("conflicting_country")
+            if "email_domain_mismatch" in item.lead.flags:
+                reasons.append("email_domain_mismatch")
+            if "company_identity_unconfirmed" in item.lead.flags:
+                reasons.append("company_identity_unconfirmed")
             evaluated.append(
                 replace(
                     item,
@@ -410,9 +315,6 @@ class AcquisitionService:
                 item,
                 lead=replace(
                     item.lead,
-                    emails=tuple(
-                        email for email in item.lead.emails if is_plausible_email(email)
-                    ),
                     company_name=clean_company_name(
                         item.lead.company_name, item.lead.domain
                     ),
@@ -654,15 +556,6 @@ class AcquisitionService:
             raise KeyError(f"Task not found: {task_id}")
         if self._search is None:
             raise RuntimeError("Search provider is not configured")
-        remember_domains = getattr(self._search, "remember_domains", None)
-        if callable(remember_domains):
-            remember_domains(
-                {
-                    item.lead.domain
-                    for item in self.list_leads(task_id)
-                    if item.lead.domain
-                }
-            )
         if progress:
             progress("searching")
         search_pass = getattr(self._search, "search_round", None)
@@ -720,33 +613,15 @@ class AcquisitionService:
         task = self._tasks.get(task_id)
         if task is None:
             raise KeyError(f"Task not found: {task_id}")
-        executor = ThreadPoolExecutor(max_workers=self._website_workers)
-        futures = {
-            executor.submit(self._enrich_one_search_record, record, task.criteria): record
-            for record in unique_records
-        }
-        try:
-            completed = as_completed(
-                futures,
-                timeout=self._website_enrichment_timeout_seconds,
-            )
-            for future in completed:
-                record = futures[future]
-                try:
-                    additions = future.result()
-                except Exception:
-                    additions = []
+        with ThreadPoolExecutor(max_workers=self._website_workers) as executor:
+            for record, additions in zip(unique_records, executor.map(
+                lambda record: self._enrich_one_search_record(record, task.criteria),
+                unique_records,
+            )):
                 enriched.extend(additions)
                 domain = (urlparse(record.website.strip()).hostname or "").lower().removeprefix("www.")
                 if domain and additions:
                     self._website_enrichment_cache[domain] = tuple(additions)
-        except FuturesTimeoutError:
-            # A slow or unresponsive site must not hold up the entire search round.
-            pass
-        finally:
-            for future in futures:
-                future.cancel()
-            executor.shutdown(wait=False, cancel_futures=True)
         return enriched
 
     def _enrich_one_search_record(

@@ -537,19 +537,7 @@ class SQLiteResearchRepository:
             ).fetchone()
         if row is None:
             return None
-        return self._from_data(json.loads(row["report_json"]))
-
-    def list_for_task(self, task_id: str) -> dict[str, ResearchResult]:
-        """Load all research reports for a task with one database connection."""
-        with _connect(self._database) as connection:
-            rows = connection.execute(
-                "SELECT domain, report_json FROM research_reports WHERE task_id = ?",
-                (task_id,),
-            ).fetchall()
-        return {row["domain"]: self._from_data(json.loads(row["report_json"])) for row in rows}
-
-    @staticmethod
-    def _from_data(data: dict) -> ResearchResult:
+        data = json.loads(row["report_json"])
         return ResearchResult(
             company_name=data["company_name"],
             business_summary=data["business_summary"],
@@ -850,14 +838,6 @@ class SQLiteEmailDraftRepository:
             rows = connection.execute(
                 "SELECT id FROM email_drafts WHERE task_id = ? AND lead_domain = ? ORDER BY rowid",
                 (task_id, lead_domain),
-            ).fetchall()
-        return [self.get(row["id"]) for row in rows]
-
-    def list_for_task(self, task_id: str) -> list[EmailDraft]:
-        with _connect(self._database) as connection:
-            rows = connection.execute(
-                "SELECT id FROM email_drafts WHERE task_id = ? AND kind = ? ORDER BY rowid",
-                (task_id, EmailDraftKind.OUTREACH.value),
             ).fetchall()
         return [self.get(row["id"]) for row in rows]
 
