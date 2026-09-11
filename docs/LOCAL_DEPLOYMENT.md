@@ -55,9 +55,9 @@ Invoke-RestMethod http://127.0.0.1:8002/api/ready
 
 官网核验默认使用 4 个受控并发 worker；可在 `config/.env` 设置 `WEBSITE_FETCH_WORKERS` 调整。每个站点仍受单站超时和页面数量上限约束，失败站点不会补造资料。
 
-如果配置了 `TAVILY_API_KEY`，默认先使用 Tavily 基础搜索；失败后按顺序尝试 Bing、
-DuckDuckGo、Yahoo、Google 静态请求，全部失败后自动启动
-本机 Chrome/Edge 浏览器读取公开结果。Brave 默认关闭。客户日常只需点击一次“搜索可发送客户”，
+默认先使用原有的 Yahoo、Bing、Google 静态请求和本机浏览器搜索链路；如果这些来源失败，
+且配置了 `TAVILY_API_KEY`，再使用 Tavily 基础搜索作为后备。设置
+`SEARCH_TAVILY_PRIMARY=true` 才会将 Tavily 提升为第一来源。Brave 默认关闭。客户日常只需点击一次“搜索可发送客户”，
 不需要选择搜索源；所有来源都必须经过国家、官网和公开邮箱核验，异常或无关结果不会进入
 可发送客户。
 
