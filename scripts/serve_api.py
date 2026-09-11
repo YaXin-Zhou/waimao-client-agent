@@ -10,7 +10,8 @@ import time
 from http.server import BaseHTTPRequestHandler, ThreadingHTTPServer
 from pathlib import Path
 
-ROOT = Path(__file__).resolve().parents[1]
+ROOT = Path(sys.executable).resolve().parent if getattr(sys, "frozen", False) else Path(__file__).resolve().parents[1]
+RESOURCE_ROOT = Path(getattr(sys, "_MEIPASS", ROOT))
 sys.path.insert(0, str(ROOT))
 
 from src.application.acquisition_service import AcquisitionService  # noqa: E402
@@ -73,6 +74,8 @@ def _config_values(path: Path) -> dict[str, str]:
 
 config_values = _config_values(ROOT / "config" / ".env")
 language_policy_path = ROOT / "config" / "language_policy.json"
+if not language_policy_path.exists():
+    language_policy_path = RESOURCE_ROOT / "config" / "language_policy.json"
 language_policy = (
     json.loads(language_policy_path.read_text(encoding="utf-8"))
     if language_policy_path.exists()
