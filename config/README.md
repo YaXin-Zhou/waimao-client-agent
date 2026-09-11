@@ -5,3 +5,7 @@
 真实邮箱密码、模型密钥和生产地址只通过本机或部署环境注入，不提交到仓库。
 
 配置步骤请看：[AI API 配置说明](../docs/runbooks/AI_API_CONFIG.md)。
+
+搜索备用源：在本机 `config/.env` 中填写 `TAVILY_API_KEY` 即可启用 Tavily。
+系统仍优先使用原有爬虫，原有搜索源失败或结果不足时才自动切换到 Tavily。
+密钥只保存在本机，不要提交 Git。

@@ -32,6 +32,7 @@ from src.infrastructure.bing_search_provider import BingSearchProvider  # noqa: 
 from src.infrastructure.deepseek_provider import DeepSeekConfig, DeepSeekProvider  # noqa: E402
 from src.infrastructure.fallback_search_provider import FallbackSearchProvider  # noqa: E402
 from src.infrastructure.google_search_provider import GoogleSearchProvider  # noqa: E402
+from src.infrastructure.tavily_search_provider import TavilySearchProvider  # noqa: E402
 from src.infrastructure.machine_translation_provider import (  # noqa: E402
     GoogleMachineTranslationProvider,
 )
@@ -123,11 +124,31 @@ yahoo_search_provider = (
     if config_values.get("SEARCH_YAHOO_ENABLED", "true").lower() == "true"
     else None
 )
+tavily_search_provider = None
+tavily_api_key = config_values.get("TAVILY_API_KEY", "").strip()
+if tavily_api_key and config_values.get("SEARCH_TAVILY_ENABLED", "true").lower() == "true":
+    tavily_search_provider = TavilySearchProvider(
+        api_key=tavily_api_key,
+        timeout=float(config_values.get("SEARCH_TAVILY_TIMEOUT_SECONDS", "20")),
+        max_results_per_query=min(
+            20, int(config_values.get("SEARCH_TAVILY_RESULTS_PER_QUERY", "20"))
+        ),
+        max_queries_per_round=min(
+            24, int(config_values.get("SEARCH_TAVILY_QUERIES_PER_ROUND", "8"))
+        ),
+        endpoint=config_values.get(
+            "SEARCH_TAVILY_ENDPOINT", "https://api.tavily.com/search"
+        ),
+    )
 # Bing is the first live source because it provides a bounded HTML result page
 # in the current local network; Google remains available as a fallback when it
 # is reachable, without making a blocked Google session delay every search.
 search_provider = FallbackSearchProvider(
-    yahoo_search_provider, bing_search_provider, static_search_provider, browser_search_provider
+    yahoo_search_provider,
+    bing_search_provider,
+    static_search_provider,
+    browser_search_provider,
+    tavily_search_provider,
 )
 try:
     deepseek_provider = DeepSeekProvider(DeepSeekConfig.from_env_file(ROOT / "config" / ".env"))

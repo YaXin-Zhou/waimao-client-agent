@@ -80,3 +80,25 @@ def build_search_queries(criteria: AcquisitionCriteria) -> tuple[str, ...]:
     # result pages.  Small explicit test/task configurations remain unchanged.
     max_queries = 24
     return tuple(queries[:max_queries])
+
+
+def build_search_queries_for_round(
+    criteria: AcquisitionCriteria,
+    round_index: int = 0,
+    max_queries: int = 4,
+) -> tuple[str, ...]:
+    """Return a rotating bounded slice for the optional API fallback."""
+    if max_queries <= 0:
+        raise ValueError("max_queries must be positive")
+    queries = build_search_queries(criteria)
+    country_terms = _translated(criteria.countries)
+    if country_terms:
+        queries = tuple(
+            query
+            for query in queries
+            if any(country.casefold() in query.casefold() for country in country_terms)
+        )
+    if len(queries) <= max_queries:
+        return queries
+    start = (max(0, round_index) * max_queries) % len(queries)
+    return tuple(queries[(start + offset) % len(queries)] for offset in range(max_queries))
