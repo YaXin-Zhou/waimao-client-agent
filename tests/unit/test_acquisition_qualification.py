@@ -129,7 +129,7 @@ def test_qualification_accepts_specific_chinese_industry_label_with_official_syn
     assert result.qualified is True
 
 
-def test_qualification_rejects_candidate_without_target_industry_evidence():
+def test_qualification_rejects_candidate_without_industry_or_product_evidence():
     criteria = AcquisitionCriteria(
         product="CNC machining",
         countries=("德国",),

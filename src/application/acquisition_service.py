@@ -372,11 +372,16 @@ class AcquisitionService:
                 and detected_country not in target_countries
             ):
                 reasons.append("country_not_target")
-            # 行业必须有一个官网上的大致证据，但不要求完整产品词或
-            # 精确行业标签；产品匹配继续作为排序和展示信号。
-            if criteria.industries and not AcquisitionService.has_industry_evidence(
-                item.lead, criteria
-            ):
+            # 行业证据或产品/制造业务证据满足其一即可，不要求官网写出
+            # 完整、精确的行业标签。这样能保留确实从事相关制造业务、但
+            # 没有公开写明下游行业的客户，同时过滤没有任何业务证据的记录。
+            has_industry = AcquisitionService.has_industry_evidence(item.lead, criteria)
+            has_product = (
+                AcquisitionService.has_product_evidence(item.lead, criteria)
+                if configured_product_evidence_terms(criteria)
+                else False
+            )
+            if criteria.industries and not (has_industry or has_product):
                 reasons.append("missing_industry_evidence")
             # 公司名称、邮箱域名和主体一致性只保留为风险标记，避免把
             # 品牌名、集团邮箱或搜索标题差异误判为不可联系客户。
