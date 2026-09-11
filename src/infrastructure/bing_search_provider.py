@@ -119,9 +119,6 @@ class BingSearchProvider:
                     domain = canonical_website_domain(resolved)
                     if (
                         not GoogleSearchProvider._is_candidate(resolved, title)
-                        or not GoogleSearchProvider._has_country_signal(
-                            criteria, f"{title} {resolved}"
-                        )
                         or GoogleSearchProvider._has_obvious_country_mismatch(
                             criteria, resolved
                         )

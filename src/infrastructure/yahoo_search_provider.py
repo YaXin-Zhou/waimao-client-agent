@@ -97,9 +97,6 @@ class YahooSearchProvider:
                 domain = canonical_website_domain(resolved)
                 if (
                     not GoogleSearchProvider._is_candidate(resolved, title)
-                    or not GoogleSearchProvider._has_country_signal(
-                        criteria, f"{title} {resolved}"
-                    )
                     or not self._is_query_relevant(title, resolved)
                     or not domain
                     or domain in seen_domains
