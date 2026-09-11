@@ -343,7 +343,12 @@ discovery_queue = DiscoveryJobQueue(
     max_workers=int(config_values.get("DISCOVERY_QUEUE_WORKERS", "1")),
     max_pending=int(config_values.get("DISCOVERY_QUEUE_MAX_PENDING", "2")),
     # One click is one bounded pass; repeat later to accumulate leads safely.
-    max_search_rounds=int(config_values.get("DISCOVERY_MAX_SEARCH_ROUNDS", "1")),
+    # One click can accumulate for an eight-hour work window. The queue stops
+    # as soon as the daily qualified target is reached.
+    max_search_rounds=int(config_values.get("DISCOVERY_MAX_SEARCH_ROUNDS", "24")),
+    round_interval_seconds=float(
+        config_values.get("DISCOVERY_ROUND_INTERVAL_SECONDS", "1200")
+    ),
     research_queue=research_queue,
 )
 application = ApiApplication(

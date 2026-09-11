@@ -3,6 +3,7 @@
 from __future__ import annotations
 
 from concurrent.futures import ThreadPoolExecutor
+import time
 from threading import Lock
 
 from src.domain.discovery_run import DiscoveryRun, DiscoveryRunStep
@@ -20,17 +21,21 @@ class DiscoveryJobQueue:
         # One click is one bounded discovery pass. Later clicks rotate the
         # intent and accumulate leads without burst traffic.
         max_search_rounds: int = 1,
+        round_interval_seconds: float = 0.0,
         research_queue=None,
     ):
         if max_workers <= 0 or max_pending <= 0:
             raise ValueError("discovery queue limits must be positive")
         if max_search_rounds <= 0:
             raise ValueError("max_search_rounds must be positive")
+        if round_interval_seconds < 0:
+            raise ValueError("round_interval_seconds must not be negative")
         self._acquisition = acquisition
         self._runs = runs
         self._executor = ThreadPoolExecutor(max_workers=max_workers)
         self._max_pending = max_pending
         self._max_search_rounds = max_search_rounds
+        self._round_interval_seconds = round_interval_seconds
         self._research_queue = research_queue
         self._jobs = {}
         self._lock = Lock()
@@ -68,6 +73,8 @@ class DiscoveryJobQueue:
                     )
                 if multi_round and self._qualified_count(task_id) >= daily_target:
                     break
+                if round_index and self._round_interval_seconds:
+                    time.sleep(self._round_interval_seconds)
                 discovery_kwargs = {
                     "progress": lambda step, **counts: self._save_progress(
                         run, step, **counts
