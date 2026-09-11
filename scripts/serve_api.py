@@ -241,17 +241,36 @@ duckduckgo_search_provider = (
     if config_values.get("SEARCH_DDG_ENABLED", "true").lower() == "true"
     else None
 )
-# Bing is the first live source because it provides a bounded HTML result page
-# in the current local network. Yahoo and Google remain fallbacks, while the
-# browser adapter is used only after the bounded HTTP sources are exhausted.
+# Keep the original crawler chain as the default. Tavily is useful as a
+# supported API fallback, but making it primary changes result ranking and can
+# make an existing local database appear empty because its domains are new to
+# the API result set. Set SEARCH_TAVILY_PRIMARY=true only when that behavior is
+# explicitly wanted.
+tavily_primary = (
+    tavily_search_provider is not None
+    and config_values.get("SEARCH_TAVILY_PRIMARY", "false").lower() == "true"
+)
+crawler_providers = (
+    # Preserve the original crawler order before the optional API providers.
+    yahoo_search_provider,
+    bing_search_provider,
+    static_search_provider,
+    browser_search_provider,
+    duckduckgo_search_provider,
+    brave_search_provider,
+    brave_api_search_provider,
+)
+search_providers = (
+    (tavily_search_provider, *crawler_providers)
+    if tavily_primary
+    else (*crawler_providers, tavily_search_provider)
+)
 search_provider = FallbackSearchProvider(
-    tavily_search_provider, brave_api_search_provider, bing_search_provider, brave_search_provider, duckduckgo_search_provider,
-    yahoo_search_provider, static_search_provider, browser_search_provider,
+    *search_providers,
     failure_cooldown_seconds=float(config_values.get("SEARCH_FAILURE_COOLDOWN_SECONDS", "300")),
-    # A successful Tavily pass is already a bounded, supported search result.
-    # Keep later sources for Tavily outages only, avoiding unnecessary Google
-    # and browser requests that increase rate-limit risk.
-    stop_after_first_success=tavily_search_provider is not None,
+    # The original crawler accumulated unique results across sources. Keep that
+    # behavior unless Tavily is explicitly promoted to the primary source.
+    stop_after_first_success=tavily_primary,
 )
 try:
     deepseek_provider = DeepSeekProvider(DeepSeekConfig.from_env_file(ROOT / "config" / ".env"))

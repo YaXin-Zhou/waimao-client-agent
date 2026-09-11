@@ -68,6 +68,9 @@ def test_tavily_provider_rejects_market_reports_and_manufacturer_lists():
     assert not TavilySearchProvider._is_company_result(
         "Wholesale Car Part Mold Manufacturers, Suppliers", ""
     )
+    assert not TavilySearchProvider._is_company_result(
+        "Injection Molding Companies in Germany", "Complete sourcing guide"
+    )
     assert TavilySearchProvider._is_company_result(
         "AKF plastics", "Injection moulding for automotive parts"
     )
