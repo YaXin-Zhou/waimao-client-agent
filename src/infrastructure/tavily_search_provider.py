@@ -3,6 +3,7 @@
 from __future__ import annotations
 
 import json
+import time
 from typing import Callable
 from urllib.error import HTTPError, URLError
 from urllib.request import Request, urlopen
@@ -115,11 +116,24 @@ class TavilySearchProvider:
             },
             method="POST",
         )
-        try:
-            response = self._opener(request, timeout=self._timeout)
-            payload = json.loads(response.read().decode("utf-8", errors="replace"))
-        except (HTTPError, URLError, TimeoutError, OSError, ValueError, json.JSONDecodeError) as error:
-            raise SearchProviderError(f"Tavily search failed for query: {query}") from error
+        for attempt in range(3):
+            try:
+                response = self._opener(request, timeout=self._timeout)
+                payload = json.loads(response.read().decode("utf-8", errors="replace"))
+                break
+            except HTTPError as error:
+                if error.code not in {429, 500, 502, 503, 504} or attempt == 2:
+                    raise SearchProviderError(f"Tavily search failed for query: {query}") from error
+                retry_after = error.headers.get("Retry-After", "5")
+                try:
+                    delay = min(max(float(retry_after), 1.0), 600.0)
+                except (TypeError, ValueError):
+                    delay = 5.0
+                time.sleep(delay)
+            except (URLError, TimeoutError, OSError, ValueError, json.JSONDecodeError) as error:
+                if attempt == 2:
+                    raise SearchProviderError(f"Tavily search failed for query: {query}") from error
+                time.sleep(2.0 * (attempt + 1))
         if not isinstance(payload, dict):
             raise SearchProviderError("Tavily returned an invalid response")
         return payload
