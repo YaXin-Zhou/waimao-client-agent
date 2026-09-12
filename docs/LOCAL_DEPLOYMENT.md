@@ -44,9 +44,10 @@ Invoke-RestMethod http://127.0.0.1:8001/api/ready
 
 官网核验默认使用 4 个受控并发 worker；可在 `config/.env` 设置 `WEBSITE_FETCH_WORKERS` 调整。每个站点仍受单站超时和页面数量上限约束，失败站点不会补造资料。
 
-默认搜索源为 Google 静态请求和无界面 Chrome fallback。Bing 适配器目前属于实验性可选来源，
-默认关闭；只有经过一轮真实相关性抽检后，才建议在 `config/.env` 中设置
-`SEARCH_BING_ENABLED=true`。
+默认搜索链为 Bing、Google、Yahoo、DuckDuckGo、Brave、Mojeek 六个来源，按顺序自动尝试；
+某个来源被限流、返回验证页或没有合格官网结果时，会跳过并进入下一个来源。六个来源都失败后，
+才使用本机 Chrome/Edge 浏览器兜底。客户不需要选择搜索源；可通过 `SEARCH_*_ENABLED` 在维护配置中
+关闭某个来源。
 
 ## Google Consent 页面处理
 

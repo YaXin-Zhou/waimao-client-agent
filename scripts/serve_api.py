@@ -30,7 +30,9 @@ from src.application.translation_service import TranslationService  # noqa: E402
 from src.infrastructure.ali_imap import AliImapConfig, AliImapMailbox  # noqa: E402
 from src.infrastructure.ali_smtp import AliSmtpConfig, AliSmtpMailer  # noqa: E402
 from src.infrastructure.bing_search_provider import BingSearchProvider  # noqa: E402
+from src.infrastructure.brave_search_provider import BraveSearchProvider  # noqa: E402
 from src.infrastructure.deepseek_provider import DeepSeekConfig, DeepSeekProvider  # noqa: E402
+from src.infrastructure.duckduckgo_search_provider import DuckDuckGoSearchProvider  # noqa: E402
 from src.infrastructure.fallback_search_provider import FallbackSearchProvider  # noqa: E402
 from src.infrastructure.google_search_provider import GoogleSearchProvider  # noqa: E402
 from src.infrastructure.tavily_search_provider import TavilySearchProvider  # noqa: E402
@@ -53,6 +55,7 @@ from src.infrastructure.sqlite_repositories import (  # noqa: E402
 )
 from src.infrastructure.website_fetcher import WebsiteFetcher  # noqa: E402
 from src.infrastructure.yahoo_search_provider import YahooSearchProvider  # noqa: E402
+from src.infrastructure.mojeek_search_provider import MojeekSearchProvider  # noqa: E402
 from src.interfaces.http_api import ApiApplication  # noqa: E402
 
 DATABASE = ROOT / "data" / "runtime" / "acquisition.db"
@@ -127,6 +130,33 @@ yahoo_search_provider = (
     if config_values.get("SEARCH_YAHOO_ENABLED", "true").lower() == "true"
     else None
 )
+duckduckgo_search_provider = (
+    DuckDuckGoSearchProvider(
+        timeout=float(config_values.get("SEARCH_TIMEOUT_SECONDS", "15")),
+        max_results_per_query=int(config_values.get("SEARCH_RESULTS_PER_QUERY", "10")),
+        host=config_values.get("SEARCH_DDG_HOST", "html.duckduckgo.com"),
+    )
+    if config_values.get("SEARCH_DDG_ENABLED", "true").lower() == "true"
+    else None
+)
+brave_search_provider = (
+    BraveSearchProvider(
+        timeout=float(config_values.get("SEARCH_TIMEOUT_SECONDS", "15")),
+        max_results_per_query=int(config_values.get("SEARCH_RESULTS_PER_QUERY", "10")),
+        host=config_values.get("SEARCH_BRAVE_HOST", "search.brave.com"),
+    )
+    if config_values.get("SEARCH_BRAVE_ENABLED", "true").lower() == "true"
+    else None
+)
+mojeek_search_provider = (
+    MojeekSearchProvider(
+        timeout=float(config_values.get("SEARCH_TIMEOUT_SECONDS", "15")),
+        max_results_per_query=int(config_values.get("SEARCH_RESULTS_PER_QUERY", "10")),
+        host=config_values.get("SEARCH_MOJEEK_HOST", "www.mojeek.com"),
+    )
+    if config_values.get("SEARCH_MOJEEK_ENABLED", "true").lower() == "true"
+    else None
+)
 tavily_search_provider = None
 tavily_api_key = config_values.get("TAVILY_API_KEY", "").strip()
 if tavily_api_key and config_values.get("SEARCH_TAVILY_ENABLED", "true").lower() == "true":
@@ -148,10 +178,13 @@ if tavily_api_key and config_values.get("SEARCH_TAVILY_ENABLED", "true").lower()
 # avoids turning a blocked Yahoo/Google page into a long, empty search round.
 search_provider = FallbackSearchProvider(
     bing_search_provider,
-    tavily_search_provider,
-    yahoo_search_provider,
     static_search_provider,
+    yahoo_search_provider,
+    duckduckgo_search_provider,
+    brave_search_provider,
+    mojeek_search_provider,
     browser_search_provider,
+    tavily_search_provider,
 )
 try:
     deepseek_provider = DeepSeekProvider(DeepSeekConfig.from_env_file(ROOT / "config" / ".env"))

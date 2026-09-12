@@ -14,9 +14,10 @@
 `src/infrastructure/browser_search_provider.py` 接收浏览器读取的可见结果，适用于
 Google 返回 JavaScript 页面时的真实搜索流程。两者都保存查询来源，不从域名推测邮箱。
 
-本地 API 默认还配置 `FallbackSearchProvider`：静态 Google 请求明确失败后，自动调用
-`PlaywrightSearchProvider` 的无界面 Chrome；它通过导航和 DOM/重定向读取结果，不执行人工
-点击。Consent、验证码和异常流量页面会停止流程并返回错误，人工导入仅作为显式兜底。
+本地 API 默认还配置 `FallbackSearchProvider`，按顺序尝试 Bing、Google、Yahoo、
+DuckDuckGo、Brave 和 Mojeek 六个公开搜索源；单个来源明确失败、为空或被验证页拦截时，
+自动尝试下一个来源。六个来源全部失败后，才调用 `PlaywrightSearchProvider` 作为浏览器兜底。
+浏览器适配器通过导航和 DOM/重定向读取可见结果，不绕过 Consent、验证码或异常流量页面。
 
 本机真实验证表明，Google 无浏览器会话的静态请求可能返回仅含 `enablejs` 的页面，
 此时 `GoogleSearchProvider` 必须明确失败，不能返回空客户池或虚构结果。使用浏览器
@@ -52,7 +53,7 @@ Google 返回 JavaScript 页面时的真实搜索流程。两者都保存查询�
 1. 搜索结果和来源证据模型已定义；
 2. JavaScript/同意页、网络失败、超时和空结果均有明确失败边界；
 3. 任务每日数量来自 `daily_limit`，静态搜索每次查询数量由 `SEARCH_RESULTS_PER_QUERY` 配置；
-4. Google 静态和浏览器结果均有契约测试；
+4. 六个搜索源均有独立适配器，新增的 DuckDuckGo、Brave、Mojeek 有契约测试；
 5. 已完成一次有限真实浏览器搜索，并将 ELMAG 结果写入本地 smoke 任务；正式客户验收仍按范围暂不执行。
 
 ## 获客任务执行契约

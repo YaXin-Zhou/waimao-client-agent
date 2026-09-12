@@ -6,6 +6,6 @@
 
 配置步骤请看：[AI API 配置说明](../docs/runbooks/AI_API_CONFIG.md)。
 
-搜索备用源：在本机 `config/.env` 中填写 `TAVILY_API_KEY` 即可启用 Tavily。
-系统仍优先使用原有爬虫，原有搜索源失败或结果不足时才自动切换到 Tavily。
+搜索源按顺序自动尝试 Bing、Google、Yahoo、DuckDuckGo、Brave、Mojeek，全部失败后再使用浏览器兜底。
+Tavily 仍保留为可选 API，但当前本机配置可以通过 `SEARCH_TAVILY_ENABLED=false` 禁用，不影响六个浏览器源。
 密钥只保存在本机，不要提交 Git。
