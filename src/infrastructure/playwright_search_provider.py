@@ -174,7 +174,6 @@ class PlaywrightSearchProvider:
         except Exception as error:
             raise SearchProviderError("Unable to launch the configured browser") from error
 
-    @staticmethod
     def _activate_challenge_window(self, page) -> None:
         try:
             page.bring_to_front()
