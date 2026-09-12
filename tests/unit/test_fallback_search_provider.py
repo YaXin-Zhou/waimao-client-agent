@@ -87,3 +87,17 @@ def test_fallback_deduplicates_same_domain_across_sources():
     ).search(criteria)
 
     assert len(result) == 1
+
+
+def test_fallback_waits_between_search_sources_when_low_frequency_is_enabled():
+    waits = []
+    result = FallbackSearchProvider(
+        Primary(SearchProviderError("blocked")),
+        Fallback(SearchProviderError("blocked")),
+        Fallback(["third"]),
+        provider_interval_seconds=15,
+        sleep=waits.append,
+    ).search(object())
+
+    assert result == ["third"]
+    assert waits == [15, 15]

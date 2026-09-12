@@ -4,6 +4,7 @@ from __future__ import annotations
 
 from concurrent.futures import ThreadPoolExecutor
 from threading import Lock
+import time
 
 from src.domain.discovery_run import DiscoveryRun, DiscoveryRunStep
 from src.domain.lead import is_search_source
@@ -19,17 +20,23 @@ class DiscoveryJobQueue:
         max_pending: int = 4,
         max_search_rounds: int = 6,
         research_queue=None,
+        round_interval_seconds: float = 0.0,
+        sleep=time.sleep,
     ):
         if max_workers <= 0 or max_pending <= 0:
             raise ValueError("discovery queue limits must be positive")
         if max_search_rounds <= 0:
             raise ValueError("max_search_rounds must be positive")
+        if round_interval_seconds < 0:
+            raise ValueError("round_interval_seconds must not be negative")
         self._acquisition = acquisition
         self._runs = runs
         self._executor = ThreadPoolExecutor(max_workers=max_workers)
         self._max_pending = max_pending
         self._max_search_rounds = max_search_rounds
         self._research_queue = research_queue
+        self._round_interval_seconds = round_interval_seconds
+        self._sleep = sleep
         self._jobs = {}
         self._lock = Lock()
         recover = getattr(self._runs, "fail_running", None)
@@ -78,6 +85,8 @@ class DiscoveryJobQueue:
                 if multi_round:
                     counts = self._cumulative_counts(task_id)
                     self._save_progress(run, "completed", **counts)
+                    if round_index + 1 < rounds and self._qualified_count(task_id) < daily_target:
+                        self._sleep(self._round_interval_seconds)
             counts = self._cumulative_counts(task_id) if multi_round else {}
             latest = self._runs.get(run.id) or run
             self._enqueue_research(task_id, run.id, weights)

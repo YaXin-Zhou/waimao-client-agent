@@ -2,6 +2,7 @@
 
 from __future__ import annotations
 
+import time
 from urllib.parse import urlsplit
 
 from src.domain.task import effective_candidate_limit
@@ -9,10 +10,15 @@ from src.infrastructure.google_search_provider import SearchProviderError
 
 
 class FallbackSearchProvider:
-    def __init__(self, primary, fallback=None, *additional):
+    def __init__(self, primary, fallback=None, *additional,
+                 provider_interval_seconds: float = 0.0, sleep=time.sleep):
+        if provider_interval_seconds < 0:
+            raise ValueError("provider_interval_seconds must not be negative")
         self._providers = tuple(
             provider for provider in (primary, fallback, *additional) if provider is not None
         )
+        self._provider_interval_seconds = provider_interval_seconds
+        self._sleep = sleep
 
     def search(self, criteria):
         return self._search(criteria, 0)
@@ -29,7 +35,9 @@ class FallbackSearchProvider:
         errors = []
         collected = []
         seen = set()
-        for provider in self._providers:
+        for provider_index, provider in enumerate(self._providers):
+            if provider_index and self._provider_interval_seconds:
+                self._sleep(self._provider_interval_seconds)
             try:
                 search_round = getattr(provider, "search_round", None)
                 records = (

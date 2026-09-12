@@ -185,6 +185,9 @@ search_provider = FallbackSearchProvider(
     mojeek_search_provider,
     browser_search_provider,
     tavily_search_provider,
+    provider_interval_seconds=float(
+        config_values.get("SEARCH_PROVIDER_INTERVAL_SECONDS", "15")
+    ),
 )
 try:
     deepseek_provider = DeepSeekProvider(DeepSeekConfig.from_env_file(ROOT / "config" / ".env"))
@@ -273,6 +276,9 @@ discovery_queue = DiscoveryJobQueue(
     max_workers=int(config_values.get("DISCOVERY_QUEUE_WORKERS", "1")),
     max_pending=int(config_values.get("DISCOVERY_QUEUE_MAX_PENDING", "2")),
     max_search_rounds=int(config_values.get("DISCOVERY_MAX_SEARCH_ROUNDS", "6")),
+    round_interval_seconds=float(
+        config_values.get("DISCOVERY_ROUND_INTERVAL_SECONDS", "1200")
+    ),
     research_queue=research_queue,
 )
 application = ApiApplication(
