@@ -147,8 +147,8 @@ if tavily_api_key and config_values.get("SEARCH_TAVILY_ENABLED", "true").lower()
 # in the current local network; Google remains available as a fallback when it
 # is reachable, without making a blocked Google session delay every search.
 search_provider = FallbackSearchProvider(
-    yahoo_search_provider,
     bing_search_provider,
+    yahoo_search_provider,
     static_search_provider,
     browser_search_provider,
     tavily_search_provider,
