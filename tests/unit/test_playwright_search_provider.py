@@ -24,6 +24,9 @@ def test_browser_provider_stops_on_consent_and_traffic_pages():
     assert not PlaywrightSearchProvider._is_blocked(
         "https://www.google.com/search", "Search results"
     )
+    assert not PlaywrightSearchProvider._is_blocked(
+        "https://www.google.com/search", "Search results. Please enable JavaScript."
+    )
 
 
 def test_browser_provider_resolves_google_hk_redirect_without_clicking():

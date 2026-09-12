@@ -149,7 +149,6 @@ class PlaywrightSearchProvider:
             "before you continue",
             "unusual traffic",
             "detected unusual traffic",
-            "enable javascript",
         )
         return any(marker in lowered for marker in markers)
 
