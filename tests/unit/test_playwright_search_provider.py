@@ -65,3 +65,25 @@ def test_browser_provider_continues_after_visible_verification_clears():
 
     provider = PlaywrightSearchProvider(challenge_timeout=1)
     provider._wait_for_user_verification(Page())
+
+
+def test_browser_provider_opens_challenge_in_a_visible_front_window():
+    class Chromium:
+        def __init__(self):
+            self.options = None
+
+        def launch(self, **options):
+            self.options = options
+            return object()
+
+    class Playwright:
+        def __init__(self):
+            self.chromium = Chromium()
+
+    playwright = Playwright()
+    provider = PlaywrightSearchProvider()
+    provider._launch_browser(playwright, headless=False)
+
+    assert playwright.chromium.options["headless"] is False
+    assert "--new-window" in playwright.chromium.options["args"]
+    assert "--start-maximized" in playwright.chromium.options["args"]

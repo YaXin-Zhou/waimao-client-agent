@@ -6,6 +6,8 @@
 
 from __future__ import annotations
 
+import ctypes
+import os
 from pathlib import Path
 import time
 from typing import Any
@@ -67,6 +69,7 @@ class PlaywrightSearchProvider:
                 raise SearchProviderError("Unable to launch the configured browser") from error
             try:
                 page = browser.new_page()
+                self._activate_challenge_window(page)
                 queries = build_search_queries(criteria)
                 intent_suffixes = ("", "contact", "supplier", "manufacturer", "factory", "distributor", "purchasing", "procurement")
                 suffix = intent_suffixes[round_index % len(intent_suffixes)]
@@ -90,7 +93,9 @@ class PlaywrightSearchProvider:
                                 browser.close()
                                 browser = self._launch_browser(playwright, headless=False)
                                 page = browser.new_page()
+                                self._activate_challenge_window(page)
                                 page.goto(url, wait_until="domcontentloaded", timeout=self._timeout_ms)
+                                self._activate_challenge_window(page)
                                 self._wait_for_user_verification(page)
                             rows = page.locator("a").evaluate_all(
                                 """els => els.map(a => ({
@@ -150,6 +155,16 @@ class PlaywrightSearchProvider:
 
     def _launch_browser(self, playwright, headless: bool):
         launch_options: dict[str, Any] = {"headless": headless}
+        if not headless:
+            # Force a separate, visible window so the user can complete a
+            # provider challenge instead of it opening behind an existing
+            # browser session.
+            launch_options["args"] = [
+                "--new-window",
+                "--start-maximized",
+                "--disable-backgrounding-occluded-windows",
+                "--disable-features=CalculateNativeWinOcclusion",
+            ]
         if self._executable_path:
             launch_options["executable_path"] = self._executable_path
         if self._proxy:
@@ -158,6 +173,41 @@ class PlaywrightSearchProvider:
             return playwright.chromium.launch(**launch_options)
         except Exception as error:
             raise SearchProviderError("Unable to launch the configured browser") from error
+
+    @staticmethod
+    def _activate_challenge_window(self, page) -> None:
+        try:
+            page.bring_to_front()
+        except Exception:
+            # Some lightweight test doubles and browser implementations do
+            # not expose tab activation; visibility still comes from the
+            # headful launch options.
+            pass
+        if os.name != "nt":
+            return
+        try:
+            user32 = ctypes.windll.user32
+            target = self._host.lower()
+            enum_windows = user32.EnumWindows
+            enum_windows_proc = ctypes.WINFUNCTYPE(ctypes.c_bool, ctypes.c_void_p, ctypes.c_void_p)
+
+            def visit(hwnd, _lparam):
+                if not user32.IsWindowVisible(hwnd):
+                    return True
+                buffer = ctypes.create_unicode_buffer(512)
+                user32.GetWindowTextW(hwnd, buffer, len(buffer))
+                title = buffer.value.lower()
+                if target in title or "google" in title:
+                    user32.ShowWindow(hwnd, 9)  # SW_RESTORE
+                    user32.SetForegroundWindow(hwnd)
+                    return False
+                return True
+
+            enum_windows(enum_windows_proc(visit), 0)
+        except Exception:
+            # Window activation is a best-effort Windows UX enhancement; the
+            # visible Playwright launch remains the functional fallback.
+            pass
 
     def _wait_for_user_verification(self, page) -> None:
         """Wait for the user to finish a visible verification page.
