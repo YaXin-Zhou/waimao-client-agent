@@ -7,6 +7,7 @@
 from __future__ import annotations
 
 from pathlib import Path
+import time
 from typing import Any
 from urllib.parse import quote_plus, urlsplit
 
@@ -27,17 +28,23 @@ class PlaywrightSearchProvider:
         executable_path: str = "",
         headless: bool = True,
         proxy: str = "",
+        headful_on_challenge: bool = True,
+        challenge_timeout: float = 180.0,
     ) -> None:
         if not host.strip() or "/" in host:
             raise ValueError("Google search host must be a hostname")
         if timeout <= 0 or max_results_per_query <= 0:
             raise ValueError("browser search timeout and page size must be positive")
+        if challenge_timeout <= 0:
+            raise ValueError("challenge timeout must be positive")
         self._host = host.strip()
         self._timeout_ms = int(timeout * 1000)
         self._max_results = max_results_per_query
         self._executable_path = executable_path.strip() or self._find_chrome()
         self._headless = headless
         self._proxy = proxy.strip()
+        self._headful_on_challenge = headful_on_challenge
+        self._challenge_timeout_ms = int(challenge_timeout * 1000)
 
     def search(self, criteria: AcquisitionCriteria) -> list[LeadRecord]:
         return self.search_round(criteria, 0)
@@ -54,13 +61,8 @@ class PlaywrightSearchProvider:
         records: list[LeadRecord] = []
         seen_domains: set[str] = set()
         with sync_playwright() as playwright:
-            launch_options: dict[str, Any] = {"headless": self._headless}
-            if self._executable_path:
-                launch_options["executable_path"] = self._executable_path
-            if self._proxy:
-                launch_options["proxy"] = {"server": self._proxy}
             try:
-                browser = playwright.chromium.launch(**launch_options)
+                browser = self._launch_browser(playwright, self._headless)
             except Exception as error:
                 raise SearchProviderError("Unable to launch the configured browser") from error
             try:
@@ -80,10 +82,16 @@ class PlaywrightSearchProvider:
                             page.goto(url, wait_until="domcontentloaded", timeout=self._timeout_ms)
                             page.wait_for_timeout(350)
                             if self._is_blocked(page.url, page.locator("body").inner_text()):
-                                raise SearchProviderError(
-                                    "Google browser search stopped at Consent/captcha/"
-                                    "unusual-traffic page"
-                                )
+                                if not self._headful_on_challenge:
+                                    raise SearchProviderError(
+                                        "Google browser search stopped at Consent/captcha/"
+                                        "unusual-traffic page"
+                                    )
+                                browser.close()
+                                browser = self._launch_browser(playwright, headless=False)
+                                page = browser.new_page()
+                                page.goto(url, wait_until="domcontentloaded", timeout=self._timeout_ms)
+                                self._wait_for_user_verification(page)
                             rows = page.locator("a").evaluate_all(
                                 """els => els.map(a => ({
                                     href: a.href || '',
@@ -139,6 +147,36 @@ class PlaywrightSearchProvider:
             "enable javascript",
         )
         return any(marker in lowered for marker in markers)
+
+    def _launch_browser(self, playwright, headless: bool):
+        launch_options: dict[str, Any] = {"headless": headless}
+        if self._executable_path:
+            launch_options["executable_path"] = self._executable_path
+        if self._proxy:
+            launch_options["proxy"] = {"server": self._proxy}
+        try:
+            return playwright.chromium.launch(**launch_options)
+        except Exception as error:
+            raise SearchProviderError("Unable to launch the configured browser") from error
+
+    def _wait_for_user_verification(self, page) -> None:
+        """Wait for the user to finish a visible verification page.
+
+        The page remains visible only for this bounded handoff. No CAPTCHA is
+        solved by the application and the search continues only after the
+        challenge markers disappear.
+        """
+        deadline = time.monotonic() + self._challenge_timeout_ms / 1000
+        while time.monotonic() < deadline:
+            try:
+                if not self._is_blocked(page.url, page.locator("body").inner_text()):
+                    return
+            except Exception:
+                pass
+            page.wait_for_timeout(1000)
+        raise SearchProviderError(
+            "Google browser search verification was not completed in time"
+        )
 
     @staticmethod
     def _find_chrome() -> str:

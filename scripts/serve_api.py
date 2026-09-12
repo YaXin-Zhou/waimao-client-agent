@@ -111,6 +111,12 @@ if config_values.get("SEARCH_BROWSER_ENABLED", "true").lower() == "true":
         proxy=config_values.get(
             "SEARCH_BROWSER_PROXY", config_values.get("HTTPS_PROXY", "")
         ),
+        headful_on_challenge=config_values.get(
+            "SEARCH_BROWSER_HEADFUL_ON_CHALLENGE", "true"
+        ).lower() == "true",
+        challenge_timeout=float(
+            config_values.get("SEARCH_BROWSER_CHALLENGE_TIMEOUT_SECONDS", "180")
+        ),
     )
 bing_search_provider = (
     BingSearchProvider(
