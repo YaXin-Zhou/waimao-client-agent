@@ -71,6 +71,13 @@ def test_tavily_provider_rejects_market_reports_and_manufacturer_lists():
     assert not TavilySearchProvider._is_company_result(
         "Injection Molding Companies in Germany", "Complete sourcing guide"
     )
+    assert not TavilySearchProvider._is_company_result(
+        "Automotive Interior Plastics Injection Molded Plastic Parts",
+        "Made-in-China.com product listing",
+    )
+    assert not TavilySearchProvider._is_company_result(
+        "Injection Molded Automotive Parts Market Sizing", "Market overview"
+    )
     assert TavilySearchProvider._is_company_result(
         "AKF plastics", "Injection moulding for automotive parts"
     )

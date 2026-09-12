@@ -144,14 +144,14 @@ if tavily_api_key and config_values.get("SEARCH_TAVILY_ENABLED", "true").lower()
         ),
     )
 # Bing is the first live source because it provides a bounded HTML result page
-# in the current local network; Google remains available as a fallback when it
-# is reachable, without making a blocked Google session delay every search.
+# in the current local network. Tavily is the next source when configured: it
+# avoids turning a blocked Yahoo/Google page into a long, empty search round.
 search_provider = FallbackSearchProvider(
     bing_search_provider,
+    tavily_search_provider,
     yahoo_search_provider,
     static_search_provider,
     browser_search_provider,
-    tavily_search_provider,
 )
 try:
     deepseek_provider = DeepSeekProvider(DeepSeekConfig.from_env_file(ROOT / "config" / ".env"))

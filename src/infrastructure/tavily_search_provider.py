@@ -74,7 +74,7 @@ class TavilySearchProvider:
                 if (
                     not domain
                     or not GoogleSearchProvider._is_candidate(url, title)
-                    or not self._is_company_result(title, content)
+                    or not self._is_company_result(title, f"{content} {url}")
                     or domain.casefold() in self._excluded_domains
                     or domain in seen
                 ):
@@ -160,6 +160,7 @@ class TavilySearchProvider:
             "made in the usa",
             "etsy",
             "market size",
+            "market sizing",
             "market report",
             "market analysis",
             "market share",
@@ -170,5 +171,15 @@ class TavilySearchProvider:
             "directory listing",
             "company directory",
             "buyers list",
+            "made-in-china",
+            "towardsautomotive",
+            "/market",
+            "market-",
+            "-market",
+            "/report",
+            "-report",
+            "/research",
+            "-research",
+            "/insights/",
         )
         return not any(phrase in text for phrase in blocked_phrases)
