@@ -18,6 +18,13 @@ from src.infrastructure.google_search_provider import GoogleSearchProvider, Sear
 class TavilySearchProvider:
     """Use Tavily's supported JSON API instead of scraping search HTML."""
 
+    # Tavily is an API-backed source. Once it returns public-web candidates,
+    # do not continue into HTML/browser fallbacks for the same round; doing so
+    # can trigger search-engine challenges even though the configured source
+    # already succeeded. Fallbacks remain available when Tavily errors or
+    # returns no usable candidates.
+    return_immediately_after_results = True
+
     def __init__(
         self,
         api_key: str,
