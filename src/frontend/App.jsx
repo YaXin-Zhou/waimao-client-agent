@@ -5,6 +5,8 @@ import BrowserImportModal from './components/BrowserImportModal'
 const navItems = [
   ['users', '客户池'],
   ['database', '本地数据库'],
+  ['user', '发件人资料'],
+  ['settings', '设置'],
 ]
 
 const SEARCH_UI_TIMEOUT_SECONDS = 210
@@ -23,6 +25,7 @@ function Icon({ name, size = 18 }) {
     external: <><path d="M14 3h7v7M10 14 21 3"/><path d="M18 13v6a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2V8a2 2 0 0 1 2-2h6"/></>,
     filter: <path d="M4 6h16M7 12h10m-7 6h4"/>,
     database: <><ellipse cx="12" cy="5" rx="8" ry="3"/><path d="M4 5v7c0 1.7 3.6 3 8 3s8-1.3 8-3V5M4 12v7c0 1.7 3.6 3 8 3s8-1.3 8-3v-7"/></>,
+    user: <><circle cx="12" cy="8" r="3.5"/><path d="M5 21a7 7 0 0 1 14 0"/></>,
   }
   return <svg aria-hidden="true" width={size} height={size} viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.8" strokeLinecap="round" strokeLinejoin="round">{paths[name]}</svg>
 }
@@ -784,7 +787,7 @@ function App() {
     <main className="main-shell">
       <header className="topbar"><div className="top-actions"><button className="icon-button" onClick={() => notify('暂无新的系统通知')} aria-label="通知"><Icon name="bell" size={20}/><i className="notification-dot"/></button></div></header>
       <div className="content">
-      {activeNav === '本地数据库' ? <DatabasePanel overview={databaseOverview} loading={databaseLoading} exportLoading={databaseExportLoading} onExport={exportDatabase} onSelect={selectDatabaseLead} searchCountries={searchCountries}/> : <>
+      {activeNav === '本地数据库' ? <DatabasePanel overview={databaseOverview} loading={databaseLoading} exportLoading={databaseExportLoading} onExport={exportDatabase} onSelect={selectDatabaseLead} searchCountries={searchCountries}/> : activeNav === '发件人资料' ? <SenderProfilePage taskConfig={remoteTaskConfig} onSave={saveSenderProfile}/> : activeNav === '设置' ? <SettingsPage apiState={apiState} mailboxStatus={mailboxStatus} taskConfig={remoteTaskConfig}/> : <>
         <div className="page-heading"><div><h1>找客户</h1><p>输入目标条件，优先展示官网有公开邮箱的客户</p></div>{!remoteTaskId && <button className="primary-button" onClick={() => setShowTask(true)}><Icon name="plus" size={19}/>开始使用</button>}</div>
         <div className={`data-notice ${apiState}`}><span />{apiState === 'loading' ? '正在准备客户资料…' : apiState === 'connected' ? '客户资料已准备就绪' : apiState === 'empty' ? '当前还没有客户资料' : '客户资料暂时无法读取'}</div>
         <section className="search-panel panel"><div className="search-panel-heading"><div><h2>搜索条件</h2><p>常用条件放在这里，中文也可以直接输入</p></div><button type="button" className="primary-button" disabled={isSearching} onClick={discoverLeads}><Icon name="search" size={16}/>{isSearching ? '正在搜索…' : remoteTaskId ? '搜索可发送客户' : '开始搜索'}</button></div><div className="search-fields"><label>产品或业务<input value={searchProduct} onChange={(event) => setSearchProduct(event.target.value)} placeholder="例如：注塑件、精密零件" /></label><label>关键词<input value={searchKeywords} onChange={(event) => setSearchKeywords(event.target.value)} placeholder="例如：精密零件、注塑件" /></label><label>目标国家 / 地区<input value={searchCountries} onChange={(event) => setSearchCountries(event.target.value)} placeholder="例如：德国、墨西哥" /></label><label>行业<input value={searchIndustries} onChange={(event) => setSearchIndustries(event.target.value)} placeholder="例如：汽车、电子" /></label>{searchWarnings.length > 0 && <div className="criteria-hint">{searchWarnings.map((warning) => <span key={warning}>{warning}</span>)}</div>}{discoveryError && <div className="discovery-friendly-error">{discoveryError}</div>}</div>{isSearching && <SearchProgress elapsedSeconds={searchElapsedSeconds} step={discoveryRun?.step} />}<div className="search-panel-foot"><details className="maintenance-inline"><summary>维护工具（不常用）</summary><div className="maintenance-inline-body"><button type="button" className="outline-button" onClick={() => setShowRuleEditor(true)}>研究规则</button><button type="button" className="outline-button" onClick={() => setShowBrowserImport(true)}>备用导入</button></div></details></div></section>
@@ -1003,6 +1006,26 @@ function DatabasePanel({ overview, loading, exportLoading, onExport, onSelect, s
       <div className="database-stats"><Metric icon="mail" label="今日发送范围" value={stats.sendable_count || 0} note="按每日发送安排"/><Metric icon="check" label="合格客户" value={stats.qualified_count || 0} note="符合当前搜索条件"/><Metric icon="users" label="待联系" value={stats.pending_contact_count || 0} note="合格但安排到后续"/><Metric icon="clipboard" label="已联系" value={stats.contacted_count || 0} note="已有发送记录"/></div>
       <section className="database-table panel"><div className="panel-heading"><div><h2>客户资料 <span>{displayItems.length} 条</span></h2><p>{viewDescription}</p></div><span className="database-readonly">本机资料</span></div><div className="database-view-tabs"><button className={view === 'sendable' ? 'active' : ''} onClick={() => setView('sendable')}>今日发送 {stats.sendable_count || 0}</button><button className={view === 'pending' ? 'active' : ''} onClick={() => setView('pending')}>待联系 {stats.pending_contact_count || 0}</button><button className={view === 'contacted' ? 'active' : ''} onClick={() => setView('contacted')}>已联系 {stats.contacted_count || 0}</button><button className={view === 'follow_up' ? 'active' : ''} onClick={() => setView('follow_up')}>可继续跟进 {stats.follow_up_count || 0}</button><button className={view === 'qualified' ? 'active' : ''} onClick={() => setView('qualified')}>合格客户 {stats.qualified_count || 0}</button><button className={view === 'all' ? 'active' : ''} onClick={() => setView('all')}>全部客户 {customerItems.length}</button></div><div className="database-table-head"><span>公司</span><span>国家 / 地区</span><span>公开邮箱</span><span>来源</span><span>状态</span></div><div className="database-list">{displayItems.length ? displayItems.map((item) => <button type="button" className="database-row" key={`${item.task_id}-${item.lead.domain}`} onClick={() => onSelect(item)} aria-label={`打开客户资料：${item.lead.company_name || item.lead.domain}`}><strong>{item.lead.company_name || item.lead.domain}</strong><span>{item.lead.country && item.lead.country !== 'unknown' ? item.lead.country : '国家待核验'}</span><span>{item.lead.emails?.length ? item.lead.emails.join(', ') : '未发现公开邮箱'}</span><span>{item.lead.source_summary?.website_count || 0} 个来源</span><span className={item.follow_up_ready ? 'database-qualified' : item.contacted ? 'database-sendable' : item.pending_contact ? 'database-pending' : item.qualified ? 'database-qualified' : 'database-pending'}>{item.follow_up_ready ? '可继续跟进' : item.contacted ? '已联系' : item.pending_contact ? '待联系' : item.qualified ? '合格客户' : item.sendable ? '今日发送' : '待完善'}</span></button>) : <div className="empty-results">当前分类还没有符合条件的客户。</div>}</div></section>
     </>}
+  </>
+}
+
+function SenderProfilePage({ taskConfig, onSave }) {
+  return <>
+    <div className="page-heading"><div><h1>发件人资料</h1><p>统一设置邮件中使用的公司和联系人信息，保存后自动用于后续邮件。</p></div></div>
+    <section className="settings-grid"><SenderProfileEditor taskConfig={taskConfig} onSave={onSave}/><div className="settings-help panel"><h2>使用说明</h2><p>这里的信息会用于邮件称呼、公司介绍和签名。收件人的邮箱由客户资料库自动整理。</p><p>修改后保存即可生效，不需要逐个客户重复填写。</p></div></section>
+  </>
+}
+
+function SettingsPage({ apiState, mailboxStatus, taskConfig }) {
+  const mailboxLabel = mailboxStatus?.configured ? '已连接' : '未配置'
+  const searchLabel = apiState === 'error' ? '暂时不可用' : '本机服务正常'
+  const taskLabel = taskConfig ? '已准备' : '等待初始化'
+  return <>
+    <div className="page-heading"><div><h1>设置</h1><p>查看本机服务状态和当前搜索工作区。</p></div></div>
+    <section className="settings-grid">
+      <div className="settings-card panel"><div className="section-title"><h2>服务状态</h2><span>只显示状态，不展示密钥</span></div><div className="settings-status-row"><span>搜索服务</span><strong>{searchLabel}</strong></div><div className="settings-status-row"><span>客户资料</span><strong>{taskLabel}</strong></div><div className="settings-status-row"><span>阿里邮箱</span><strong>{mailboxLabel}</strong></div></div>
+      <div className="settings-card panel"><div className="section-title"><h2>配置说明</h2><span>本机使用</span></div><p>DeepSeek、Tavily 和阿里邮箱的连接信息保存在项目的 <code>config/.env</code> 文件中。</p><p>需要调整连接信息时修改配置后重启程序，页面会自动读取新的状态。</p></div>
+    </section>
   </>
 }
 
