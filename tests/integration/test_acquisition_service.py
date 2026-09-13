@@ -577,7 +577,7 @@ def test_service_keeps_country_and_email_match_when_product_evidence_is_implicit
     assert "missing_product_evidence" not in result.rejection_reasons
 
 
-def test_service_keeps_conflicting_identity_records_out_of_qualified_results():
+def test_service_keeps_public_email_when_identity_conflicts():
     service = AcquisitionService(InMemoryTaskRepository(), InMemoryLeadRepository())
     task = service.create_task(
         "Identity gate",
@@ -604,11 +604,11 @@ def test_service_keeps_conflicting_identity_records_out_of_qualified_results():
         signals_by_domain={},
     )[0]
 
-    assert not result.qualified
-    assert "email_domain_mismatch" in result.rejection_reasons
+    assert result.qualified
+    assert "email_domain_mismatch" not in result.rejection_reasons
 
 
-def test_external_page_cannot_be_the_only_product_evidence():
+def test_service_accepts_email_without_same_domain_product_evidence():
     service = AcquisitionService(InMemoryTaskRepository(), InMemoryLeadRepository())
     task = service.create_task(
         "External evidence boundary",
@@ -635,7 +635,7 @@ def test_external_page_cannot_be_the_only_product_evidence():
     )[0]
 
     assert result.score.breakdown["product_match"] == 0
-    assert result.qualified is False
+    assert result.qualified is True
 
 
 def test_service_requalifies_legacy_assessments_when_reading_task_leads():

@@ -264,56 +264,10 @@ class AcquisitionService:
         evaluated: list[AssessedLead] = []
         for item in results:
             reasons: list[str] = []
-            if not item.lead.domain:
-                reasons.append("missing_website")
+            # 当前客户只关心可联系邮箱。官网、国家、产品/行业和公司主体
+            # 仍然作为资料展示与排序信息保留，但不再阻断进入可发送列表。
             if criteria.require_public_email and not item.lead.emails:
                 reasons.append("missing_public_email")
-            if (
-                criteria.require_public_email
-                and item.lead.emails
-                and not AcquisitionService._same_domain_sources(item.lead)
-            ):
-                reasons.append("missing_website_evidence")
-            # 产品/行业相关性用于搜索排序和资料展示，不作为硬淘汰条件。
-            # 公开官网常常只描述应用场景或能力，不会直接写出采购方的
-            # 关键词；只要国家、邮箱和公司主体可信，就保留给人工判断。
-            target_countries = {
-                _country_key(country)
-                for country in criteria.countries
-                if str(country).strip()
-            }
-            detected_country = _country_key(item.lead.country)
-            if (
-                target_countries
-                and not detected_country
-            ):
-                reasons.append("country_unconfirmed")
-            elif (
-                target_countries
-                and detected_country not in target_countries
-            ):
-                reasons.append("country_not_target")
-            # 公司主体必须能被官网同域内容支持。搜索标题、目录页或仅有
-            # 一个孤立域名的记录不能进入可发送列表。
-            identity_status = identity_consistency(item.lead).get("status")
-            raw_name = " ".join(str(item.lead.company_name or "").split()).strip()
-            cleaned_name = clean_company_name(raw_name, item.lead.domain)
-            title_only = bool(
-                raw_name
-                and item.lead.domain
-                and cleaned_name.casefold() == item.lead.domain.casefold()
-                and raw_name.casefold() != item.lead.domain.casefold()
-            )
-            if identity_status in {"unknown", "weak"} or title_only:
-                reasons.append("company_identity_unconfirmed")
-            # 国家、邮箱归属和公司主体是交付前硬条件；产品/行业匹配和
-            # 评分只用于排序与提示，不会因缺少明确关键词而静默丢弃客户。
-            if "conflicting_country" in item.lead.flags:
-                reasons.append("conflicting_country")
-            if "email_domain_mismatch" in item.lead.flags:
-                reasons.append("email_domain_mismatch")
-            if "company_identity_unconfirmed" in item.lead.flags:
-                reasons.append("company_identity_unconfirmed")
             evaluated.append(
                 replace(
                     item,
