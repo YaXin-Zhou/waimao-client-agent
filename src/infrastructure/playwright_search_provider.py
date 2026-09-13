@@ -11,7 +11,7 @@ import os
 from pathlib import Path
 import time
 from typing import Any
-from urllib.parse import quote_plus, urlsplit
+from urllib.parse import parse_qs, quote_plus, urlsplit
 
 from src.application.search_queries import build_search_queries
 from src.domain.lead import LeadRecord, canonical_website_domain
@@ -299,6 +299,15 @@ class PlaywrightSearchProvider:
             parsed.hostname.endswith("google.com")
             or parsed.hostname.endswith("google.com.hk")
         ):
+            # Google commonly puts the destination directly in q/url/u. Avoid
+            # a network round trip for every result anchor; a page can contain
+            # dozens of such links and the old fallback made one search appear
+            # stuck after verification.
+            params = parse_qs(parsed.query)
+            for key in ("q", "url", "u"):
+                target = params.get(key, [""])[0].strip()
+                if urlsplit(target).scheme in {"http", "https"}:
+                    return target
             try:
                 response = page.request.get(href, timeout=10_000, max_redirects=5)
                 return response.url
