@@ -355,9 +355,9 @@ function App() {
       .catch(() => {})
     return () => { cancelled = true }
   }, [researchRuns, remoteTaskId, selected?.domain])
-  // 候选池仍完整保留在本地数据库；工作台只展示达到交付门槛的客户。
-  const targetCountries = splitSearchValues(searchCountries)
-  const targetLeads = remoteLeads.filter((lead) => countryMatchesTarget(lead.country, targetCountries))
+  // 国家是搜索时的目标条件，但不能在结果页再次用“未知/翻译差异”把
+  // 已经由后端判定合格的邮箱客户隐藏掉。后端返回的 qualified 是唯一展示门槛。
+  const targetLeads = remoteLeads
   const qualifiedLeads = targetLeads.filter((lead) => lead.qualified && !lead.contacted)
   const displayLeads = leadView === 'qualified' ? qualifiedLeads : targetLeads
   const filteredLeads = useMemo(() => displayLeads.filter((lead) => `${lead.name} ${lead.country} ${lead.type}`.toLowerCase().includes(query.toLowerCase())), [displayLeads, query])
@@ -814,7 +814,9 @@ function mapRemoteLead(item) {
     flag: '·',
     type: customerTypeLabel(lead.customer_type),
     score: item.score?.total > 0 ? item.score.total : null,
-    status: item.qualified ? (lead.quality === 'complete' ? 'evidence' : 'review') : 'review',
+    // 当前合格门槛是“存在可用公开邮箱”；资料完整度不再把合格客户
+    // 误标为待审核，详细资料仍可在客户详情中继续查看。
+    status: item.qualified ? 'evidence' : 'review',
     workflowStatus: lead.status || 'new',
     detail: '已找到官网公开邮箱，可开始核验客户资料。',
     email: lead.emails?.[0] || '未发现公开邮箱',
@@ -981,21 +983,15 @@ function DatabasePanel({ overview, loading, exportLoading, onExport, onSelect, s
   const [view, setView] = useState('all')
   const stats = overview?.stats || {}
   const items = overview?.items || []
-  const targetCountries = splitSearchValues(searchCountries)
   const databaseNoise = ['weather', 'calculator', 'university', 'tripadvisor', 'hotels.com', '百度知道', '知乎', '站酷', 'google trends', 'google traductor', 'wikipedia', 'worldometer', 'population', 'quiz', 'whois', 'search -', 'search brand', 'search wiki', 'sign in', 'log on', 'login', 'google images', 'google scholar', 'yahoo mail', 'yahoo新闻', 'facebook share', 'steam workshop', 'tiktok', 'recipe', 'chicken noodle', 'gas station', 'gas prices', 'hotel ', 'hotels:', 'trivago', 'world time', 'time now', 'time converter', 'current time', 'aest time', 'm22759', 'honor magic', 'microsoft ', 'bing ', 'top cnc', 'top machining', 'medical suppliers', 'medical device distributors', 'importer & exporter search', 'global trade database', 'buy seafood', 'seafood market', 'cricket world cup', 'reading nook', 'convert cm', 'centimeters to feet', 'analysis of ', 'about montreal', 'on this day', 'today in history', 'markets today', 'marketwatch', 'markets insider', 'compare cheap flights', 'cheap hotel', 'billa plus', 'duolingo', 'world health organization', 'who)', 'target :', 'wish |', 'wish for', 'merchant support', 'merchant materials', 'door dash', 'doordash', 'little caesars', 'restaurant', 'restaurante', 'secretaría', 'universidad', 'definition', 'definición', 'empathique', 'humanidades', 'russland', 'russia map', 'map of russia', 'malouines', 'falklands', 'iron lung', 'ford ', 'lg ', 'coretec', 'avif', 'magic6', 'julián quiñones', 'soup recipe', 'power fx', 'github -', 'générez des styles', 'synchronize account', 'bank of america']
-  const businessMarkers = ['cnc', 'machin', 'mold', 'mould', 'plastic', 'precision', 'injection', 'manufactur', 'tooling', 'medical', 'industrial', 'components', 'parts']
   const customerItems = items.filter((item) => {
     const name = String(item.lead?.company_name || '').trim().toLowerCase()
     const domain = String(item.lead?.domain || '').trim().toLowerCase()
-    const identity = item.lead?.identity_consistency?.status
-    const evidence = item.lead?.evidence_level
     const sources = item.lead?.source_summary || {}
-    const sourceText = (item.lead?.sources || []).map((source) => String(source?.[1] || '')).join(' ').toLowerCase()
     const hasWebsiteEvidence = Number(sources.website_count || 0) > 0 && Number(sources.same_domain_count || 0) > 0
-    const identityBacked = identity === 'strong' || identity === 'partial'
-    const businessInIdentity = businessMarkers.some((marker) => `${name} ${domain}`.includes(marker))
-    const businessInEvidence = businessMarkers.filter((marker) => sourceText.includes(marker)).length >= 2
-    return name && hasWebsiteEvidence && identityBacked && evidence !== 'search_only' && (businessInIdentity || businessInEvidence) && !databaseNoise.some((marker) => name.includes(marker)) && !(domain && name === domain && !item.lead?.emails?.length && !item.lead?.country)
+    // 资料库按“可用客户资料”展示：有官网、有公开邮箱即可；行业/国家
+    // 作为详情字段呈现，不再用脆弱的关键词二次过滤造成大量漏数。
+    return name && item.lead?.emails?.length && hasWebsiteEvidence && !databaseNoise.some((marker) => name.includes(marker))
   })
   const displayItems = view === 'sendable' ? customerItems.filter((item) => item.sendable) : view === 'pending' ? customerItems.filter((item) => item.pending_contact) : view === 'contacted' ? customerItems.filter((item) => item.contacted) : view === 'follow_up' ? customerItems.filter((item) => item.follow_up_ready) : view === 'qualified' ? customerItems.filter((item) => item.qualified && !item.contacted) : customerItems
   const viewDescription = view === 'sendable' ? '今天优先联系这些客户，按每日发送安排' : view === 'pending' ? '这些客户符合条件，今天不发送，保留到后续联系' : view === 'contacted' ? '查看已经发送过邮件的客户' : view === 'follow_up' ? '查看收到回复、可以继续跟进的客户' : view === 'qualified' ? '展示所有符合当前条件的客户，不受每日发送数量影响' : '查看本机保存的客户资料；明显的文章、工具和目录结果已隐藏'

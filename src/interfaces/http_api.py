@@ -425,6 +425,18 @@ class ApiApplication:
             "weather", "calculator", "university", "tripadvisor", "hotels.com",
             "百度知道", "知乎", "站酷", "google trends", "google traductor",
             "wikipedia", "worldometer", "population", "quiz", "whois",
+            # 搜索结果标题不是公司主体；这些词组在历史宽搜数据中明确
+            # 表示文章、教程、新闻或服务页面，不能因为页面里出现邮箱
+            # 就进入客户池。
+            "cabin air quality", "car mold removal", "i accidentally turned",
+            "could mold in your car", "professional mould removal",
+            "mold making -", "automotive thermoplastic composites",
+            "moulded plastic parts production", "plastic parts in the automotive",
+            "plastic components", "cnc machining germany |",
+            "construction of injection moulding", "german automotive plastics supplier",
+            "cnc training in", "standardization of plastic",
+            "polypropylene (pp) plastic injection", "injection molding on automotive",
+            "development of plastic injection", "plastic parts for the mobility",
         )
         return not any(marker in raw_name.casefold() for marker in noise_markers)
 
@@ -707,29 +719,13 @@ class ApiApplication:
                 item for item in assessments if self._is_displayable_lead(item.lead)
             ]
             assessments = self._apply_research_country(task.id, task, assessments)
-            target_countries = {
-                _country_key(country)
-                for country in task.criteria.countries
-                if str(country).strip()
-            }
-            # 客户可见数据库不展示无法确认国家或不属于本次目标市场的记录。
-            # 记录仍保存在本地候选库，后续重新核验后可再次进入展示范围。
-            assessments = [
-                item
-                for item in assessments
-                if item.lead.country.strip()
-                and item.lead.country.casefold() != "unknown"
-                and (
-                    not target_countries
-                    or _country_key(item.lead.country) in target_countries
-                )
-            ]
+            # 国家和业务信息只用于资料展示；当前可发送客户只以公开邮箱
+            # 为准，因此不能在汇总层再次按国家或核验状态过滤掉邮箱记录。
             eligible = [
                 item for item in assessments
                 if item.qualified
                 and item.lead.emails
                 and not (set(email.lower() for email in item.lead.emails) & contacted_emails)
-                and "email_domain_mismatch" not in item.lead.flags
                 and bool(item.lead.domain)
             ]
             today_domains = {
