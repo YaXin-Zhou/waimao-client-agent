@@ -155,7 +155,6 @@ class TavilySearchProvider:
             "for cars",
             "car mold cleaning",
             "mold cleaning for",
-            "wholesale",
             "manufacturers, suppliers",
             "made in the usa",
             "etsy",
@@ -173,13 +172,7 @@ class TavilySearchProvider:
             "buyers list",
             "made-in-china",
             "towardsautomotive",
-            "/market",
-            "market-",
-            "-market",
             "/report",
             "-report",
-            "/research",
-            "-research",
-            "/insights/",
         )
         return not any(phrase in text for phrase in blocked_phrases)

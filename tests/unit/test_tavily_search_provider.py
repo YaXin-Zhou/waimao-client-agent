@@ -83,6 +83,15 @@ def test_tavily_provider_rejects_market_reports_and_manufacturer_lists():
     )
 
 
+def test_tavily_provider_keeps_company_pages_with_broad_business_terms():
+    assert TavilySearchProvider._is_company_result(
+        "Wholesale Plastics Ltd", "Injection molding services for automotive parts"
+    )
+    assert TavilySearchProvider._is_company_result(
+        "Rosti Group", "Plastic injection molding and CNC machining services"
+    )
+
+
 def test_tavily_provider_accepts_configured_query_budget():
     provider = TavilySearchProvider(
         "secret", max_results_per_query=20, max_queries_per_round=8
