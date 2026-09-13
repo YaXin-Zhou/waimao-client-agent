@@ -13,20 +13,10 @@ def test_build_search_queries_uses_user_configured_business_conditions():
 
     queries = build_search_queries(criteria)
 
-    assert queries == (
-        "portable solar generator outdoor equipment distributor Germany",
-        "portable solar generator outdoor equipment wholesaler Germany",
-        "portable solar generator outdoor equipment distributor France",
-        "portable solar generator outdoor equipment wholesaler France",
-        "portable power station outdoor equipment distributor Germany",
-        "portable power station outdoor equipment wholesaler Germany",
-        "portable power station outdoor equipment distributor France",
-        "portable power station outdoor equipment wholesaler France",
-        "solar generator supplier outdoor equipment distributor Germany",
-        "solar generator supplier outdoor equipment wholesaler Germany",
-        "solar generator supplier outdoor equipment distributor France",
-        "solar generator supplier outdoor equipment wholesaler France",
-    )
+    assert "portable solar generator outdoor equipment distributor Germany" in queries
+    assert "portable solar generator outdoor equipment distributor Germany supplier" in queries
+    assert "portable power station outdoor equipment wholesaler France" in queries
+    assert any(query.endswith(" contact") for query in queries)
 
 
 def test_build_search_queries_can_use_business_offering_terms_without_fixed_product():
@@ -45,12 +35,14 @@ def test_build_search_queries_can_use_business_offering_terms_without_fixed_prod
 
     queries = build_search_queries(criteria)
     assert "CNC machining Mexico" in queries
+    assert "CNC machining Mexico supplier" in queries
     assert "precision machining Mexico" in queries
     assert "machined components Mexico" in queries
 
 
 def test_build_search_queries_has_a_product_only_fallback():
-    assert build_search_queries(AcquisitionCriteria(product="solar lamp")) == ("solar lamp",)
+    queries = build_search_queries(AcquisitionCriteria(product="solar lamp"))
+    assert queries[:2] == ("solar lamp", "solar lamp supplier")
 
 
 def test_build_search_queries_translates_chinese_input_without_changing_the_criteria(monkeypatch):
@@ -68,6 +60,7 @@ def test_build_search_queries_translates_chinese_input_without_changing_the_crit
         'plastic injection moulding automotive Germany',
         'plastic components automotive Germany',
     )
+    assert 'injection molded parts automotive Germany supplier' in queries
 
 
 def test_build_search_queries_keeps_manufacturing_terms_searchable(monkeypatch):

@@ -42,6 +42,8 @@ _TERM_ALIASES = {
     "cnc machining": ("precision machining", "machined components"),
 }
 
+_BUYER_INTENTS = ("", "supplier", "manufacturer", "procurement", "contact")
+
 
 def _search_term(value: str) -> str:
     """将中文输入转换为英文搜索词，转换只发生在后端查询构建阶段。"""
@@ -92,15 +94,21 @@ def build_search_queries(criteria: AcquisitionCriteria) -> tuple[str, ...]:
     customer_types = _translated(criteria.customer_types) or ("",)
     countries = _translated(criteria.countries) or ("",)
 
-    queries: list[str] = []
+    base_queries: list[str] = []
     for term, industry, country, customer_type in product(
         terms, industries, countries, customer_types
     ):
         query = " ".join(
             part.strip() for part in (term, industry, customer_type, country) if part.strip()
         )
-        if query and query not in queries:
-            queries.append(query)
+        if query and query not in base_queries:
+            base_queries.append(query)
+    queries: list[str] = list(base_queries)
+    for base_query in base_queries:
+        for intent in _BUYER_INTENTS[1:]:
+            query = " ".join(part for part in (base_query, intent) if part)
+            if query not in queries:
+                queries.append(query)
     # Keep flexible user criteria, but bound the cartesian product so a browser
     # provider cannot spend minutes serially opening dozens of near-duplicate
     # result pages.  Small explicit test/task configurations remain unchanged.
