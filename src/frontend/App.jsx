@@ -198,8 +198,8 @@ function App() {
   useEffect(() => {
     const criteria = remoteTaskConfig?.criteria
     if (!criteria) return
-    setSearchProduct(criteria.product || '')
-    setSearchKeywords((criteria.keywords || []).join(', '))
+    setSearchProduct([criteria.product, ...(criteria.keywords || [])].filter(Boolean).join(', '))
+    setSearchKeywords('')
     setSearchCountries((criteria.countries || []).join(', '))
     setSearchIndustries((criteria.industries || []).join(', '))
   }, [remoteTaskConfig?.id])
@@ -569,8 +569,7 @@ function App() {
   const discoverLeads = async () => {
     if (discoverLoading) return
     if (!remoteTaskId) {
-      setShowTask(true)
-      notify('请先填写搜索条件，系统会自动建立本机工作区')
+      notify('客户工作区正在准备，请稍后再试')
       return
     }
     setDiscoverLoading(true)
@@ -579,8 +578,8 @@ function App() {
     try {
       const criteria = {
         ...(remoteTaskConfig?.criteria || {}),
-        product: searchProduct.trim(),
-        keywords: splitSearchValues(searchKeywords),
+        product: splitSearchValues(searchProduct)[0] || '',
+        keywords: splitSearchValues(searchProduct).slice(1),
         countries: splitSearchValues(searchCountries),
         industries: splitSearchValues(searchIndustries),
         daily_limit: 30,
@@ -788,9 +787,9 @@ function App() {
       <header className="topbar"><div className="top-actions"><button className="icon-button" onClick={() => notify('暂无新的系统通知')} aria-label="通知"><Icon name="bell" size={20}/><i className="notification-dot"/></button></div></header>
       <div className="content">
       {activeNav === '本地数据库' ? <DatabasePanel overview={databaseOverview} loading={databaseLoading} exportLoading={databaseExportLoading} onExport={exportDatabase} onSelect={selectDatabaseLead} searchCountries={searchCountries}/> : activeNav === '发件人资料' ? <SenderProfilePage taskConfig={remoteTaskConfig} onSave={saveSenderProfile}/> : activeNav === '设置' ? <SettingsPage apiState={apiState} mailboxStatus={mailboxStatus} taskConfig={remoteTaskConfig}/> : <>
-        <div className="page-heading"><div><h1>找客户</h1><p>输入目标条件，优先展示官网有公开邮箱的客户</p></div>{!remoteTaskId && <button className="primary-button" onClick={() => setShowTask(true)}><Icon name="plus" size={19}/>开始使用</button>}</div>
+        <div className="page-heading"><div><h1>找客户</h1><p>输入目标条件，优先展示官网有公开邮箱的客户</p></div></div>
         <div className={`data-notice ${apiState}`}><span />{apiState === 'loading' ? '正在准备客户资料…' : apiState === 'connected' ? '客户资料已准备就绪' : apiState === 'empty' ? '当前还没有客户资料' : '客户资料暂时无法读取'}</div>
-        <section className="search-panel panel"><div className="search-panel-heading"><div><h2>搜索条件</h2><p>常用条件放在这里，中文也可以直接输入</p></div><button type="button" className="primary-button" disabled={isSearching} onClick={discoverLeads}><Icon name="search" size={16}/>{isSearching ? '正在搜索…' : remoteTaskId ? '搜索可发送客户' : '开始搜索'}</button></div><div className="search-fields"><label>产品或业务<input value={searchProduct} onChange={(event) => setSearchProduct(event.target.value)} placeholder="例如：注塑件、精密零件" /></label><label>关键词<input value={searchKeywords} onChange={(event) => setSearchKeywords(event.target.value)} placeholder="例如：精密零件、注塑件" /></label><label>目标国家 / 地区<input value={searchCountries} onChange={(event) => setSearchCountries(event.target.value)} placeholder="例如：德国、墨西哥" /></label><label>行业<input value={searchIndustries} onChange={(event) => setSearchIndustries(event.target.value)} placeholder="例如：汽车、电子" /></label>{searchWarnings.length > 0 && <div className="criteria-hint">{searchWarnings.map((warning) => <span key={warning}>{warning}</span>)}</div>}{discoveryError && <div className="discovery-friendly-error">{discoveryError}</div>}</div>{isSearching && <SearchProgress elapsedSeconds={searchElapsedSeconds} step={discoveryRun?.step} />}<div className="search-panel-foot"><details className="maintenance-inline"><summary>维护工具（不常用）</summary><div className="maintenance-inline-body"><button type="button" className="outline-button" onClick={() => setShowRuleEditor(true)}>研究规则</button><button type="button" className="outline-button" onClick={() => setShowBrowserImport(true)}>备用导入</button></div></details></div></section>
+        <section className="search-panel panel"><div className="search-panel-heading"><div><h2>搜索条件</h2><p>常用条件放在这里，中文也可以直接输入</p></div><button type="button" className="primary-button" disabled={isSearching} onClick={discoverLeads}><Icon name="search" size={16}/>{isSearching ? '正在搜索…' : '搜索可发送客户'}</button></div><div className="search-fields"><label>产品或业务关键词<input value={searchProduct} onChange={(event) => setSearchProduct(event.target.value)} placeholder="例如：注塑件、塑料零件、精密加工" /></label><label>目标国家 / 地区<input value={searchCountries} onChange={(event) => setSearchCountries(event.target.value)} placeholder="例如：德国、墨西哥" /></label><label>行业<input value={searchIndustries} onChange={(event) => setSearchIndustries(event.target.value)} placeholder="例如：汽车、电子" /></label>{searchWarnings.length > 0 && <div className="criteria-hint">{searchWarnings.map((warning) => <span key={warning}>{warning}</span>)}</div>}{discoveryError && <div className="discovery-friendly-error">{discoveryError}</div>}</div>{isSearching && <SearchProgress elapsedSeconds={searchElapsedSeconds} step={discoveryRun?.step} />}<div className="search-panel-foot"><details className="maintenance-inline"><summary>维护工具（不常用）</summary><div className="maintenance-inline-body"><button type="button" className="outline-button" onClick={() => setShowRuleEditor(true)}>研究规则</button><button type="button" className="outline-button" onClick={() => setShowBrowserImport(true)}>备用导入</button></div></details></div></section>
         {discoverySummary ? <DiscoveryFunnel summary={discoverySummary}/> : null}
         <ReplyCenter mailboxStatus={mailboxStatus} threads={mailThreads} analyses={replyAnalyses} followUpTasks={followUpTasks} loading={replyLoading} onTest={testMailbox} onSync={syncMailbox} onAnalyze={analyzeReplies} onGenerateDraft={generateReplyDraft} onFollowUpStatus={updateFollowUpStatus}/>
         <section className="workspace-grid">
@@ -801,7 +800,6 @@ function App() {
       </div>
     </main>
     {toast && <div className="toast"><span>✓</span>{toast}</div>}
-    {showTask && <div className="modal-backdrop" onClick={() => setShowTask(false)}><form className="task-modal" onSubmit={createTask} onClick={(event) => event.stopPropagation()}><button type="button" className="modal-close" onClick={() => setShowTask(false)}>×</button><span className="modal-icon"><Icon name="search"/></span><h2>开始找客户</h2><p>只填写这次搜索需要的条件，系统会自动保存设置。</p><input type="hidden" name="name" value="默认获客工作区" readOnly/><label>产品或业务<input name="product" placeholder="例如：注塑件、精密零件" /></label><label>关键词（逗号分隔）<input name="keywords" placeholder="例如：塑料件、产品制造商、采购" /></label><div className="modal-grid"><label>目标国家 / 地区<input name="countries" placeholder="例如：德国、墨西哥" /></label><label>行业<input name="industries" placeholder="例如：汽车、电子" /></label></div><button type="submit" className="primary-button full">进入搜索 <Icon name="arrow" size={16}/></button></form></div>}
     {showRuleEditor && remoteTaskConfig && <RuleEditorModal task={remoteTaskConfig} onClose={() => setShowRuleEditor(false)} onSave={saveCriteria}/>}
     {showBrowserImport && (
       <BrowserImportModal onClose={() => setShowBrowserImport(false)} onImport={importBrowserResults} loading={browserImportLoading}/>
