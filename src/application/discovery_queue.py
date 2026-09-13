@@ -18,7 +18,7 @@ class DiscoveryJobQueue:
         runs,
         max_workers: int = 1,
         max_pending: int = 4,
-        max_search_rounds: int = 6,
+        max_search_rounds: int = 1,
         research_queue=None,
         round_interval_seconds: float = 0.0,
         sleep=time.sleep,

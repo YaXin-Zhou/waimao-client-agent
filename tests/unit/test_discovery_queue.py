@@ -101,6 +101,26 @@ def test_discovery_queue_persists_progress_and_completion():
     queue.close()
 
 
+def test_discovery_queue_runs_one_search_round_by_default():
+    runs = Runs()
+    acquisition = MultiRoundAcquisition()
+    acquisition._tasks = SimpleNamespace(
+        get=lambda task_id: SimpleNamespace(
+            criteria=SimpleNamespace(qualified_lead_limit=10)
+        )
+        if task_id == "task"
+        else None
+    )
+    queue = DiscoveryJobQueue(acquisition, runs, max_workers=1, max_pending=1)
+
+    queued = queue.submit("task", {}, {})
+    finished = wait_for_terminal(runs, queued.id)
+
+    assert finished.step is DiscoveryRunStep.COMPLETED
+    assert acquisition.rounds == [0]
+    queue.close()
+
+
 def test_discovery_queue_rejects_unknown_task():
     queue = DiscoveryJobQueue(Acquisition(), Runs(), max_workers=1, max_pending=1)
 
@@ -112,7 +132,9 @@ def test_discovery_queue_rejects_unknown_task():
 def test_discovery_queue_accumulates_rounds_until_qualified_target():
     runs = Runs()
     acquisition = MultiRoundAcquisition()
-    queue = DiscoveryJobQueue(acquisition, runs, max_workers=1, max_pending=1)
+    queue = DiscoveryJobQueue(
+        acquisition, runs, max_workers=1, max_pending=1, max_search_rounds=2
+    )
 
     queued = queue.submit("task", {}, {})
     finished = wait_for_terminal(runs, queued.id)
@@ -129,7 +151,12 @@ def test_discovery_queue_starts_background_research_for_qualified_leads():
     acquisition = MultiRoundAcquisition()
     research = ResearchQueue()
     queue = DiscoveryJobQueue(
-        acquisition, runs, max_workers=1, max_pending=1, research_queue=research
+        acquisition,
+        runs,
+        max_workers=1,
+        max_pending=1,
+        max_search_rounds=2,
+        research_queue=research,
     )
 
     queued = queue.submit("task", {}, {})

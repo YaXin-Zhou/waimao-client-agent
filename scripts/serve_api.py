@@ -180,16 +180,17 @@ if tavily_api_key and config_values.get("SEARCH_TAVILY_ENABLED", "true").lower()
         ),
     )
 # Bing is the first live source because it provides a bounded HTML result page
-# in the current local network. Tavily is the next source when configured: it
-# avoids turning a blocked Yahoo/Google page into a long, empty search round.
+# in the current local network. The browser Google handoff follows the static
+# Google adapter immediately, so a consent/captcha page becomes visible early
+# instead of being hidden behind every other source.
 search_provider = FallbackSearchProvider(
     bing_search_provider,
     static_search_provider,
+    browser_search_provider,
     yahoo_search_provider,
     duckduckgo_search_provider,
     brave_search_provider,
     mojeek_search_provider,
-    browser_search_provider,
     tavily_search_provider,
     provider_interval_seconds=float(
         config_values.get("SEARCH_PROVIDER_INTERVAL_SECONDS", "15")
@@ -281,7 +282,10 @@ discovery_queue = DiscoveryJobQueue(
     discovery_run_repository,
     max_workers=int(config_values.get("DISCOVERY_QUEUE_WORKERS", "1")),
     max_pending=int(config_values.get("DISCOVERY_QUEUE_MAX_PENDING", "2")),
-    max_search_rounds=int(config_values.get("DISCOVERY_MAX_SEARCH_ROUNDS", "6")),
+    # One click performs one bounded search pass. Users can search again later
+    # to accumulate more candidates without leaving one request running for
+    # several rounds.
+    max_search_rounds=int(config_values.get("DISCOVERY_MAX_SEARCH_ROUNDS", "1")),
     round_interval_seconds=float(
         config_values.get("DISCOVERY_ROUND_INTERVAL_SECONDS", "1200")
     ),
