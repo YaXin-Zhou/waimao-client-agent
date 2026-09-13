@@ -35,6 +35,31 @@ function splitSearchValues(value) {
   return [...new Set(String(value || '').replace(/[，、；;|]/g, ',').split(',').map((item) => item.trim()).filter(Boolean))]
 }
 
+function formatSearchElapsed(seconds) {
+  if (seconds < 60) return `${seconds}秒`
+  return `${Math.floor(seconds / 60)}分${String(seconds % 60).padStart(2, '0')}秒`
+}
+
+function SearchProgress({ elapsedSeconds, step }) {
+  const steps = [
+    ['searching', '搜索公开信息'],
+    ['organizing', '整理公司资料'],
+    ['checking', '检查公开邮箱'],
+    ['filtering', '筛选符合条件的客户'],
+  ]
+  const activeIndex = Math.max(0, steps.findIndex(([key]) => key === step))
+  return <div className="search-progress" role="status" aria-live="polite">
+    <div className="search-progress-heading">
+      <span className="search-progress-indicator" aria-hidden="true" />
+      <div><strong>正在搜索客户</strong><p>{elapsedSeconds > 0 ? `已进行 ${formatSearchElapsed(elapsedSeconds)}` : '正在建立搜索连接，请稍候'}</p></div>
+    </div>
+    <div className="search-progress-steps" aria-label="搜索进度">
+      {steps.map(([key, label], index) => <span key={key} className={index <= activeIndex ? 'is-active' : ''}><i>{index < activeIndex ? '✓' : index + 1}</i>{label}</span>)}
+    </div>
+    <p className="search-progress-note">系统正在整理公开信息，完成后会自动更新结果，请不要重复点击搜索。</p>
+  </div>
+}
+
 function countryMatchesTarget(country, targets) {
   const value = String(country || '').trim().toLowerCase()
   if (!targets.length) return true
@@ -99,6 +124,8 @@ function App() {
   const [showMaintenanceTools, setShowMaintenanceTools] = useState(false)
   const [browserImportLoading, setBrowserImportLoading] = useState(false)
   const [discoveryRun, setDiscoveryRun] = useState(null)
+  const [searchStartedAt, setSearchStartedAt] = useState(null)
+  const [searchElapsedSeconds, setSearchElapsedSeconds] = useState(0)
   const [toast, setToast] = useState('')
   const [searchProduct, setSearchProduct] = useState('')
   const [searchKeywords, setSearchKeywords] = useState('')
@@ -108,6 +135,18 @@ function App() {
   const [databaseLoading, setDatabaseLoading] = useState(false)
   const [databaseExportLoading, setDatabaseExportLoading] = useState(false)
   const searchWarnings = searchCriteriaWarnings({ product: searchProduct, keywords: searchKeywords, countries: searchCountries, industries: searchIndustries })
+  const isSearching = discoverLoading || discoveryRun?.status === 'running'
+
+  useEffect(() => {
+    if (!isSearching || !searchStartedAt) {
+      if (!isSearching) setSearchElapsedSeconds(0)
+      return undefined
+    }
+    const updateElapsed = () => setSearchElapsedSeconds(Math.max(0, Math.floor((Date.now() - searchStartedAt) / 1000)))
+    updateElapsed()
+    const timer = window.setInterval(updateElapsed, 1000)
+    return () => window.clearInterval(timer)
+  }, [isSearching, searchStartedAt])
   useEffect(() => {
     let cancelled = false
     const load = async () => {
@@ -498,6 +537,7 @@ function App() {
       return
     }
     setDiscoverLoading(true)
+    setSearchStartedAt(Date.now())
     setDiscoveryError(null)
     try {
       const criteria = {
@@ -535,9 +575,11 @@ function App() {
       const summary = payload.summary
       setDiscoverySummary(summary)
       setDiscoveryRun(null)
+      setSearchStartedAt(null)
       const funnel = summary?.funnel || {}
       notify(`搜索完成：找到 ${summary?.qualified_count || 0} 家可发送客户`)
     } catch (error) {
+      setSearchStartedAt(null)
       setDiscoveryError({ code: error.code || 'discovery_failed', message: error.message, retryable: error.retryable !== false })
       notify(error.code === 'search_provider_unavailable' ? '这次没有找到新的合格客户，已有客户仍可继续使用' : error.message || '这次没有找到新的合格客户')
     } finally { setDiscoverLoading(false) }
@@ -708,7 +750,7 @@ function App() {
       {activeNav === '本地数据库' ? <DatabasePanel overview={databaseOverview} loading={databaseLoading} exportLoading={databaseExportLoading} onExport={exportDatabase} onSelect={selectDatabaseLead} searchCountries={searchCountries}/> : <>
         <div className="page-heading"><div><h1>找客户</h1><p>输入目标条件，优先展示官网有公开邮箱的客户</p></div>{!remoteTaskId && <button className="primary-button" onClick={() => setShowTask(true)}><Icon name="plus" size={19}/>开始使用</button>}</div>
         <div className={`data-notice ${apiState}`}><span />{apiState === 'loading' ? '正在准备客户资料…' : apiState === 'connected' ? '客户资料已准备就绪' : apiState === 'empty' ? '当前还没有客户资料' : '客户资料暂时无法读取'}</div>
-        <section className="search-panel panel"><div className="search-panel-heading"><div><h2>搜索条件</h2><p>常用条件放在这里，中文也可以直接输入</p></div><button type="button" className="primary-button" disabled={discoverLoading || discoveryRun?.status === 'running'} onClick={discoverLeads}><Icon name="search" size={16}/>{discoverLoading || discoveryRun?.status === 'running' ? '正在搜索…' : remoteTaskId ? '搜索可发送客户' : '开始搜索'}</button></div><div className="search-fields"><label>产品或业务<input value={searchProduct} onChange={(event) => setSearchProduct(event.target.value)} placeholder="例如：注塑件、精密零件" /></label><label>关键词<input value={searchKeywords} onChange={(event) => setSearchKeywords(event.target.value)} placeholder="例如：精密零件、注塑件" /></label><label>目标国家 / 地区<input value={searchCountries} onChange={(event) => setSearchCountries(event.target.value)} placeholder="例如：德国、墨西哥" /></label><label>行业<input value={searchIndustries} onChange={(event) => setSearchIndustries(event.target.value)} placeholder="例如：汽车、电子" /></label>{searchWarnings.length > 0 && <div className="criteria-hint">{searchWarnings.map((warning) => <span key={warning}>{warning}</span>)}</div>}{discoveryError && <div className="discovery-friendly-error">{discoveryError}</div>}</div><div className="search-panel-foot"><details className="maintenance-inline"><summary>维护工具（不常用）</summary><div className="maintenance-inline-body"><button type="button" className="outline-button" onClick={() => setShowRuleEditor(true)}>研究规则</button><button type="button" className="outline-button" onClick={() => setShowBrowserImport(true)}>备用导入</button></div></details></div></section>
+        <section className="search-panel panel"><div className="search-panel-heading"><div><h2>搜索条件</h2><p>常用条件放在这里，中文也可以直接输入</p></div><button type="button" className="primary-button" disabled={isSearching} onClick={discoverLeads}><Icon name="search" size={16}/>{isSearching ? '正在搜索…' : remoteTaskId ? '搜索可发送客户' : '开始搜索'}</button></div><div className="search-fields"><label>产品或业务<input value={searchProduct} onChange={(event) => setSearchProduct(event.target.value)} placeholder="例如：注塑件、精密零件" /></label><label>关键词<input value={searchKeywords} onChange={(event) => setSearchKeywords(event.target.value)} placeholder="例如：精密零件、注塑件" /></label><label>目标国家 / 地区<input value={searchCountries} onChange={(event) => setSearchCountries(event.target.value)} placeholder="例如：德国、墨西哥" /></label><label>行业<input value={searchIndustries} onChange={(event) => setSearchIndustries(event.target.value)} placeholder="例如：汽车、电子" /></label>{searchWarnings.length > 0 && <div className="criteria-hint">{searchWarnings.map((warning) => <span key={warning}>{warning}</span>)}</div>}{discoveryError && <div className="discovery-friendly-error">{discoveryError}</div>}</div>{isSearching && <SearchProgress elapsedSeconds={searchElapsedSeconds} step={discoveryRun?.step} />}<div className="search-panel-foot"><details className="maintenance-inline"><summary>维护工具（不常用）</summary><div className="maintenance-inline-body"><button type="button" className="outline-button" onClick={() => setShowRuleEditor(true)}>研究规则</button><button type="button" className="outline-button" onClick={() => setShowBrowserImport(true)}>备用导入</button></div></details></div></section>
         {discoverySummary ? <DiscoveryFunnel summary={discoverySummary}/> : null}
         <ReplyCenter mailboxStatus={mailboxStatus} threads={mailThreads} analyses={replyAnalyses} followUpTasks={followUpTasks} loading={replyLoading} onTest={testMailbox} onSync={syncMailbox} onAnalyze={analyzeReplies} onGenerateDraft={generateReplyDraft} onFollowUpStatus={updateFollowUpStatus}/>
         <section className="workspace-grid">

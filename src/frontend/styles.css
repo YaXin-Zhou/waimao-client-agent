@@ -333,5 +333,18 @@ h1 { color: #132238; font-size: 29px; font-weight: 700; letter-spacing: -.8px; }
 @media (max-width: 600px) { .search-panel-heading { align-items: flex-start; flex-direction: column; }.search-panel-heading .primary-button { width: 100%; justify-content: center; }.search-fields { grid-template-columns: 1fr; }.search-panel-foot { align-items: flex-start; flex-direction: column; }.database-stats { grid-template-columns: 1fr 1fr; }.database-local-badge { margin-top: 12px; } }
 .criteria-hint { display: flex; flex-wrap: wrap; gap: 6px; margin-top: 10px; color: #8b6a27; font-size: 11px; line-height: 1.45; }.criteria-hint span { padding: 6px 9px; border: 1px solid #f0dfb5; border-radius: 6px; background: #fffaf0; }
 .discovery-friendly-error { margin-top: 10px; padding: 8px 10px; border: 1px solid #f0dfb5; border-radius: 6px; color: #8b6a27; background: #fffaf0; font-size: 11px; }
+.search-progress { margin-top: 14px; padding: 14px 16px; border: 1px solid #d7e9f7; border-radius: 8px; background: linear-gradient(135deg, #f8fcff, #f3f9fd); }
+.search-progress-heading { display: flex; align-items: center; gap: 10px; color: #20364d; }
+.search-progress-heading strong { font-size: 13px; font-weight: 700; }
+.search-progress-heading p { margin-top: 3px; color: #7d91a5; font-size: 11px; }
+.search-progress-indicator { width: 9px; height: 9px; flex: 0 0 auto; border-radius: 50%; background: #1687df; box-shadow: 0 0 0 5px rgba(22, 135, 223, .11); animation: search-progress-pulse 1.5s ease-in-out infinite; }
+.search-progress-steps { display: grid; grid-template-columns: repeat(4, 1fr); gap: 8px; margin-top: 13px; }
+.search-progress-steps span { display: flex; align-items: center; gap: 5px; color: #a2afbc; font-size: 10px; white-space: nowrap; }
+.search-progress-steps i { display: inline-grid; width: 17px; height: 17px; place-items: center; border: 1px solid #d8e2eb; border-radius: 50%; color: #9aa8b5; background: #fff; font-size: 9px; font-style: normal; }
+.search-progress-steps span.is-active { color: #39749f; }
+.search-progress-steps span.is-active i { border-color: #79bcea; color: #1687df; background: #edf7ff; }
+.search-progress-note { margin-top: 11px; color: #8294a5; font-size: 10px; }
+@keyframes search-progress-pulse { 0%, 100% { opacity: .55; transform: scale(.9); } 50% { opacity: 1; transform: scale(1.08); } }
+@media (max-width: 600px) { .search-progress-steps { grid-template-columns: 1fr 1fr; row-gap: 9px; }.search-progress-steps span { white-space: normal; } }
 .detail-body dl dt:has(+ dd:empty), .detail-body dl dt:has(+ dd:empty) + dd { display: none; }
 .detail-body dl dt:nth-of-type(4), .detail-body dl dt:nth-of-type(4) + dd { display: none; }
