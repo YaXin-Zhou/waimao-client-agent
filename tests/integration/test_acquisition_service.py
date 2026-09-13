@@ -545,14 +545,15 @@ def test_service_keeps_only_qualified_leads_marked_and_records_rejection_reasons
     assert "qualified_quota_exceeded" not in low_score.rejection_reasons
 
 
-def test_service_explains_missing_product_evidence_separately():
+def test_service_keeps_country_and_email_match_when_product_evidence_is_implicit():
     service = AcquisitionService(InMemoryTaskRepository(), InMemoryLeadRepository())
     task = service.create_task(
         "Product evidence reason",
         AcquisitionCriteria(
             product="portable power station",
+            countries=("德国",),
             minimum_qualification_score=0,
-            require_public_email=False,
+            require_public_email=True,
             candidate_limit=1,
             qualified_lead_limit=1,
         ),
@@ -560,13 +561,20 @@ def test_service_explains_missing_product_evidence_separately():
 
     result = service.assess_leads(
         task.id,
-        [LeadRecord("Unrelated", "https://unrelated.example")],
+        [LeadRecord(
+            "Unrelated Manufacturing",
+            "https://unrelated.example",
+            "info@unrelated.example",
+            country="DE",
+            source_url="https://unrelated.example/company",
+            source_excerpt="Unrelated Manufacturing GmbH develops industrial equipment.",
+        )],
         {"product_match": 30},
         {},
     )[0]
 
-    assert result.qualified is False
-    assert "missing_product_evidence" in result.rejection_reasons
+    assert result.qualified is True
+    assert "missing_product_evidence" not in result.rejection_reasons
 
 
 def test_service_keeps_conflicting_identity_records_out_of_qualified_results():
@@ -607,17 +615,18 @@ def test_external_page_cannot_be_the_only_product_evidence():
         AcquisitionCriteria(
             product="portable power station",
             minimum_qualification_score=0,
-            require_public_email=False,
+            require_public_email=True,
         ),
     )
 
     result = service.assess_leads(
         task.id,
         [
-            LeadRecord(
-                "Alpine",
-                "https://alpine.example",
-                source_url="https://group.example/products",
+                LeadRecord(
+                    "Alpine",
+                    "https://alpine.example",
+                    "info@alpine.example",
+                    source_url="https://group.example/products",
                 source_excerpt="Alpine group portable power station products",
             )
         ],

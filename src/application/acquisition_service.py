@@ -274,11 +274,9 @@ class AcquisitionService:
                 and not AcquisitionService._same_domain_sources(item.lead)
             ):
                 reasons.append("missing_website_evidence")
-            # 有邮箱不等于符合业务需求；至少要在官网同域来源中找到用户配置的产品/业务证据。
-            if configured_research_terms(criteria) and not AcquisitionService.has_product_evidence(
-                item.lead, criteria
-            ):
-                reasons.append("missing_product_evidence")
+            # 产品/行业相关性用于搜索排序和资料展示，不作为硬淘汰条件。
+            # 公开官网常常只描述应用场景或能力，不会直接写出采购方的
+            # 关键词；只要国家、邮箱和公司主体可信，就保留给人工判断。
             target_countries = {
                 _country_key(country)
                 for country in criteria.countries
@@ -308,8 +306,8 @@ class AcquisitionService:
             )
             if identity_status in {"unknown", "weak"} or title_only:
                 reasons.append("company_identity_unconfirmed")
-            # 产品证据、目标国家和邮箱归属都是交付前硬条件；评分只用于
-            # 排序，不会把缺少关键证据的记录“抬”进可发送列表。
+            # 国家、邮箱归属和公司主体是交付前硬条件；产品/行业匹配和
+            # 评分只用于排序与提示，不会因缺少明确关键词而静默丢弃客户。
             if "conflicting_country" in item.lead.flags:
                 reasons.append("conflicting_country")
             if "email_domain_mismatch" in item.lead.flags:
