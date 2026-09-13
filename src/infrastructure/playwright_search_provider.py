@@ -26,6 +26,11 @@ from src.infrastructure.google_search_provider import (
 class PlaywrightSearchProvider:
     """通过本机 Chrome 的无界面页面读取 Google 可见结果。"""
 
+    # A visible browser pass is intentionally a user-assisted, low-frequency
+    # unit. Do not make the fallback chain immediately open more providers
+    # after it has collected results from this session.
+    return_immediately_after_results = True
+
     def __init__(
         self,
         host: str = "www.google.com.hk",

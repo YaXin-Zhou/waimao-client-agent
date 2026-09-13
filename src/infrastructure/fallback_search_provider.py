@@ -86,6 +86,8 @@ class FallbackSearchProvider:
                 collected.append(record)
                 if len(collected) >= target:
                     return collected[:target]
+            if getattr(provider, "return_immediately_after_results", False):
+                return collected
         if collected:
             return collected
         if errors:

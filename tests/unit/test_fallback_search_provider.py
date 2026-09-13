@@ -28,6 +28,16 @@ class Fallback:
         return self.result
 
 
+class VisibleBrowser:
+    return_immediately_after_results = True
+
+    def __init__(self, result):
+        self.result = result
+
+    def search(self, criteria):
+        return self.result
+
+
 def test_fallback_is_not_used_when_static_search_succeeds():
     fallback = Fallback(["static"])
 
@@ -100,6 +110,23 @@ def test_fallback_supplements_short_primary_results_until_candidate_limit():
         "third.example",
     ]
     assert fallback.called
+
+
+def test_fallback_returns_visible_browser_results_without_opening_more_sources():
+    next_source = Fallback(["should not run"])
+    result = FallbackSearchProvider(
+        VisibleBrowser([LeadRecord("Visible", "https://visible.example")]),
+        next_source,
+    ).search(
+        AcquisitionCriteria(
+            product="portable power station",
+            candidate_limit=30,
+            qualified_lead_limit=1,
+        )
+    )
+
+    assert [item.website for item in result] == ["https://visible.example"]
+    assert next_source.called is False
 
 
 def test_fallback_deduplicates_same_domain_across_sources():
