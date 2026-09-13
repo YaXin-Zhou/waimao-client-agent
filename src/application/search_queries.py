@@ -30,6 +30,18 @@ _DOMAIN_TRANSLATIONS = {
     "意大利": "Italy",
 }
 
+_TERM_ALIASES = {
+    "注塑件": ("injection molding", "plastic injection moulding", "plastic components"),
+    "injection molded parts": ("injection molding", "plastic injection moulding", "plastic components"),
+    "塑料件": ("injection molded parts", "plastic components", "thermoplastic parts"),
+    "塑料零件": ("injection molded parts", "plastic components", "thermoplastic parts"),
+    "注塑": ("injection molded parts", "plastic injection moulding"),
+    "模具": ("tooling", "injection molds", "mould making"),
+    "模具制造": ("tooling", "injection molds", "mould making"),
+    "cnc机加工": ("CNC machining", "precision machining", "machined components"),
+    "cnc machining": ("precision machining", "machined components"),
+}
+
 
 def _search_term(value: str) -> str:
     """将中文输入转换为英文搜索词，转换只发生在后端查询构建阶段。"""
@@ -60,8 +72,22 @@ def _translated(values: tuple[str, ...]) -> tuple[str, ...]:
     return tuple(dict.fromkeys(_search_term(value) for value in values if value.strip()))
 
 
+def search_term_variants(value: str) -> tuple[str, ...]:
+    """Return a small bounded synonym set for one user-entered term."""
+    original = value.strip()
+    translated = _search_term(original)
+    aliases = _TERM_ALIASES.get(original.casefold(), ())
+    return tuple(dict.fromkeys(item for item in (translated, *aliases) if item.strip()))
+
+
 def build_search_queries(criteria: AcquisitionCriteria) -> tuple[str, ...]:
-    terms = _translated(configured_research_terms(criteria))
+    terms = tuple(
+        dict.fromkeys(
+            variant
+            for term in configured_research_terms(criteria)
+            for variant in search_term_variants(term)
+        )
+    )
     industries = _translated(criteria.industries) or ("",)
     customer_types = _translated(criteria.customer_types) or ("",)
     countries = _translated(criteria.countries) or ("",)

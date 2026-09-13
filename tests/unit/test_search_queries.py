@@ -43,10 +43,10 @@ def test_build_search_queries_can_use_business_offering_terms_without_fixed_prod
         ),
     )
 
-    assert build_search_queries(criteria) == (
-        "CNC machining Mexico",
-        "precision machining Mexico",
-    )
+    queries = build_search_queries(criteria)
+    assert "CNC machining Mexico" in queries
+    assert "precision machining Mexico" in queries
+    assert "machined components Mexico" in queries
 
 
 def test_build_search_queries_has_a_product_only_fallback():
@@ -62,7 +62,12 @@ def test_build_search_queries_translates_chinese_input_without_changing_the_crit
         AcquisitionCriteria(product='注塑件', countries=('德国',), industries=('汽车',))
     )
 
-    assert queries == ('injection molded parts automotive Germany',)
+    assert queries[:4] == (
+        'injection molded parts automotive Germany',
+        'injection molding automotive Germany',
+        'plastic injection moulding automotive Germany',
+        'plastic components automotive Germany',
+    )
 
 
 def test_build_search_queries_keeps_manufacturing_terms_searchable(monkeypatch):
@@ -78,11 +83,11 @@ def test_build_search_queries_keeps_manufacturing_terms_searchable(monkeypatch):
         )
     )
 
-    assert queries == (
-        'injection molded parts automotive parts France',
-        'CNC machining automotive parts France',
-        'molds tooling automotive parts France',
-    )
+    assert 'injection molded parts automotive parts France' in queries
+    assert 'injection molding automotive parts France' in queries
+    assert 'CNC machining automotive parts France' in queries
+    assert 'precision machining automotive parts France' in queries
+    assert 'molds tooling automotive parts France' in queries
 
 
 def test_build_search_queries_bounds_large_condition_combinations():

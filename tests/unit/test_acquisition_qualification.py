@@ -79,6 +79,31 @@ def test_qualification_accepts_email_and_configured_product_evidence_from_same_d
     assert result.qualified is True
 
 
+def test_qualification_accepts_plausible_industry_use_without_exact_product_phrase():
+    criteria = AcquisitionCriteria(
+        product="injection molded parts",
+        countries=("德国",),
+        industries=("汽车",),
+    )
+    result = AcquisitionService._qualify(
+        [
+            assessed(
+                LeadRecord(
+                    "German Automotive Components",
+                    "https://german-components.example",
+                    "sales@german-components.example",
+                    country="Germany",
+                    source_url="https://german-components.example/about",
+                    source_excerpt="Automotive components manufacturer and OEM production partner.",
+                )
+            )
+        ],
+        criteria,
+    )[0]
+
+    assert result.qualified is True
+
+
 def test_qualification_rejects_unknown_country_when_targets_are_configured():
     criteria = AcquisitionCriteria(product="CNC machining", countries=("德国", "美国", "英国"))
     result = AcquisitionService._qualify(

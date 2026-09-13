@@ -13,6 +13,7 @@ from src.application.ports import (
     SearchProvider,
     TaskRepository,
 )
+from src.application.search_queries import search_term_variants
 from src.domain.audit_event import AuditEvent
 from src.domain.lead import (
     CleanLead,
@@ -199,17 +200,40 @@ class AcquisitionService:
 
     @classmethod
     def has_product_evidence(cls, lead: CleanLead, criteria: AcquisitionCriteria) -> bool:
-        """Check configured product terms against non-search-page source text."""
+        """Accept direct product evidence or a credible industry-use signal."""
         terms = tuple(
-            term.strip().lower()
+            variant.strip().lower()
             for term in configured_product_evidence_terms(criteria)
-            if term.strip()
+            for variant in search_term_variants(term)
+            if variant.strip()
         )
         searchable = " ".join(
             source[1] for source in cls._same_domain_sources(lead)
         ).lower()
-        return bool(terms) and any(
+        if not searchable or not terms:
+            return False
+        if any(
             cls._term_in_evidence(term, searchable) for term in terms
+        ):
+            return True
+        # A company can be a plausible buyer even when its site does not name
+        # the exact purchased part. Require both a configured target industry
+        # and a manufacturing/use-context signal before accepting that case.
+        industries = tuple(
+            variant.strip().lower()
+            for industry in criteria.industries
+            for variant in search_term_variants(industry)
+            if variant.strip()
+        )
+        context_terms = (
+            "manufacturer", "manufacturing", "production", "components",
+            "oem", "engineering", "factory", "automotive", "electronics",
+            "medical", "appliance", "industrial",
+        )
+        return bool(industries) and any(
+            cls._term_in_evidence(term, searchable) for term in industries
+        ) and any(
+            cls._term_in_evidence(term, searchable) for term in context_terms
         )
 
     @staticmethod
