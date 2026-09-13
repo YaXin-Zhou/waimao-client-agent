@@ -11,14 +11,20 @@ from src.infrastructure.google_search_provider import SearchChallengeError, Sear
 
 class FallbackSearchProvider:
     def __init__(self, primary, fallback=None, *additional,
-                 provider_interval_seconds: float = 0.0, sleep=time.sleep):
+                 provider_interval_seconds: float = 0.0,
+                 max_duration_seconds: float = 240.0,
+                 sleep=time.sleep, clock=time.monotonic):
         if provider_interval_seconds < 0:
             raise ValueError("provider_interval_seconds must not be negative")
+        if max_duration_seconds <= 0:
+            raise ValueError("max_duration_seconds must be positive")
         self._providers = tuple(
             provider for provider in (primary, fallback, *additional) if provider is not None
         )
         self._provider_interval_seconds = provider_interval_seconds
+        self._max_duration_seconds = max_duration_seconds
         self._sleep = sleep
+        self._clock = clock
 
     def search(self, criteria):
         return self._search(criteria, 0)
@@ -35,9 +41,20 @@ class FallbackSearchProvider:
         errors = []
         collected = []
         seen = set()
+        started_at = self._clock()
         for provider_index, provider in enumerate(self._providers):
+            elapsed = self._clock() - started_at
+            if elapsed >= self._max_duration_seconds:
+                raise SearchProviderError(
+                    "search round exceeded its time limit; try again later"
+                )
             if provider_index and self._provider_interval_seconds:
-                self._sleep(self._provider_interval_seconds)
+                remaining = self._max_duration_seconds - elapsed
+                if remaining <= 0:
+                    raise SearchProviderError(
+                        "search round exceeded its time limit; try again later"
+                    )
+                self._sleep(min(self._provider_interval_seconds, remaining))
             try:
                 search_round = getattr(provider, "search_round", None)
                 records = (

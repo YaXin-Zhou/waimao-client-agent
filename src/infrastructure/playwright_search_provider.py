@@ -168,6 +168,10 @@ class PlaywrightSearchProvider:
                 "--disable-backgrounding-occluded-windows",
                 "--disable-features=CalculateNativeWinOcclusion",
             ]
+            # Playwright adds this default for its managed browser process.
+            # Remove it for the human verification handoff, otherwise the
+            # challenge page can exist without a window the user can see.
+            launch_options["ignore_default_args"] = ["--no-startup-window"]
         if self._executable_path:
             launch_options["executable_path"] = self._executable_path
         if self._proxy:

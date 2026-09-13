@@ -90,3 +90,4 @@ def test_browser_provider_opens_challenge_in_a_visible_front_window():
     assert playwright.chromium.options["headless"] is False
     assert "--new-window" in playwright.chromium.options["args"]
     assert "--start-maximized" in playwright.chromium.options["args"]
+    assert "--no-startup-window" in playwright.chromium.options["ignore_default_args"]

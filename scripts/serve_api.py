@@ -195,6 +195,9 @@ search_provider = FallbackSearchProvider(
     provider_interval_seconds=float(
         config_values.get("SEARCH_PROVIDER_INTERVAL_SECONDS", "15")
     ),
+    max_duration_seconds=float(
+        config_values.get("SEARCH_ROUND_MAX_DURATION_SECONDS", "240")
+    ),
 )
 try:
     deepseek_provider = DeepSeekProvider(DeepSeekConfig.from_env_file(ROOT / "config" / ".env"))

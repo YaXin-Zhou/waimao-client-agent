@@ -59,6 +59,21 @@ def test_fallback_does_not_switch_sources_after_search_challenge():
     assert fallback.called is False
 
 
+def test_fallback_stops_when_search_round_exceeds_time_limit():
+    fallback = Fallback(["should not run"])
+    clock_values = iter((0, 10))
+
+    with pytest.raises(SearchProviderError, match="time limit"):
+        FallbackSearchProvider(
+            Primary(SearchProviderError("temporary provider failure")),
+            fallback,
+            max_duration_seconds=5,
+            clock=lambda: next(clock_values),
+        ).search(object())
+
+    assert fallback.called is False
+
+
 def test_fallback_preserves_a_clear_error_when_both_providers_fail():
     with pytest.raises(SearchProviderError, match="all configured search providers failed"):
         FallbackSearchProvider(
