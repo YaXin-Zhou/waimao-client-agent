@@ -7,6 +7,8 @@ const navItems = [
   ['database', '本地数据库'],
 ]
 
+const SEARCH_UI_TIMEOUT_SECONDS = 210
+
 function Icon({ name, size = 18 }) {
   const paths = {
     users: <><path d="M16 21v-2a4 4 0 0 0-4-4H6a4 4 0 0 0-4 4v2"/><circle cx="9" cy="7" r="4"/><path d="M22 21v-2a4 4 0 0 0-3-3.87M16 3.13a4 4 0 0 1 0 7.75"/></>,
@@ -146,6 +148,16 @@ function App() {
     updateElapsed()
     const timer = window.setInterval(updateElapsed, 1000)
     return () => window.clearInterval(timer)
+  }, [isSearching, searchStartedAt])
+  useEffect(() => {
+    if (!isSearching || !searchStartedAt) return undefined
+    const timer = window.setTimeout(() => {
+      setSearchStartedAt(null)
+      setDiscoverLoading(false)
+      setDiscoveryRun((current) => current ? { ...current, status: 'failed', step: 'failed', error: '搜索等待时间过长，暂未收到结果。请检查搜索窗口或稍后重试。' } : current)
+      setDiscoveryError('搜索等待时间过长，暂未收到结果。请检查搜索窗口或稍后重试。')
+    }, SEARCH_UI_TIMEOUT_SECONDS * 1000)
+    return () => window.clearTimeout(timer)
   }, [isSearching, searchStartedAt])
   useEffect(() => {
     let cancelled = false
