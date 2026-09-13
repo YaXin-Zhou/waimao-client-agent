@@ -76,7 +76,8 @@ class PlaywrightSearchProvider:
             except Exception as error:
                 raise SearchProviderError("Unable to launch the configured browser") from error
             try:
-                page = browser.new_page()
+                context = browser.new_context()
+                page = context.new_page()
                 self._activate_challenge_window(page)
                 queries = build_search_queries(criteria)
                 intent_suffixes = ("", "contact", "supplier", "manufacturer", "factory", "distributor", "purchasing", "procurement")
@@ -98,9 +99,16 @@ class PlaywrightSearchProvider:
                                         "Google browser search stopped at Consent/captcha/"
                                         "unusual-traffic page"
                                     )
+                                # Preserve cookies/local storage when handing the
+                                # challenge from the hidden browser to the visible
+                                # browser.  Recreating a blank browser here makes a
+                                # completed human verification invisible to the
+                                # search session that follows.
+                                storage_state = context.storage_state()
                                 browser.close()
                                 browser = self._launch_browser(playwright, headless=False)
-                                page = browser.new_page()
+                                context = browser.new_context(storage_state=storage_state)
+                                page = context.new_page()
                                 self._activate_challenge_window(page)
                                 page.goto(url, wait_until="domcontentloaded", timeout=self._timeout_ms)
                                 self._activate_challenge_window(page)
