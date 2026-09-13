@@ -189,7 +189,7 @@ if tavily_api_key and config_values.get("SEARCH_TAVILY_ENABLED", "true").lower()
             20, int(config_values.get("SEARCH_TAVILY_RESULTS_PER_QUERY", "20"))
         ),
         max_queries_per_round=min(
-            24, int(config_values.get("SEARCH_TAVILY_QUERIES_PER_ROUND", "8"))
+            24, int(config_values.get("SEARCH_TAVILY_QUERIES_PER_ROUND", "12"))
         ),
         endpoint=config_values.get(
             "SEARCH_TAVILY_ENDPOINT", "https://api.tavily.com/search"

@@ -17,6 +17,9 @@ class Runs:
     def get(self, run_id):
         return self.items.get(run_id)
 
+    def list_for_task(self, task_id):
+        return [item for item in self.items.values() if item.task_id == task_id]
+
 
 class Tasks:
     def get(self, task_id):
@@ -118,6 +121,26 @@ def test_discovery_queue_runs_one_search_round_by_default():
 
     assert finished.step is DiscoveryRunStep.COMPLETED
     assert acquisition.rounds == [0]
+    queue.close()
+
+
+def test_discovery_queue_rotates_query_slice_on_later_clicks():
+    runs = Runs()
+    runs.save(
+        SimpleNamespace(
+            id="previous",
+            task_id="task",
+            status=SimpleNamespace(value="succeeded"),
+        )
+    )
+    acquisition = MultiRoundAcquisition()
+    queue = DiscoveryJobQueue(acquisition, runs, max_workers=1, max_pending=1)
+
+    queued = queue.submit("task", {}, {})
+    finished = wait_for_terminal(runs, queued.id)
+
+    assert finished.step is DiscoveryRunStep.COMPLETED
+    assert acquisition.rounds == [1]
     queue.close()
 
 

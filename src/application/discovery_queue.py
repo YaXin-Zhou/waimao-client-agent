@@ -54,18 +54,20 @@ class DiscoveryJobQueue:
                 raise KeyError(f"Task not found: {task_id}")
             run = DiscoveryRun.start(task_id)
             self._runs.save(run)
+            start_round = self._next_search_round(task_id)
             self._jobs[run.id] = self._executor.submit(
-                self._run, run, task_id, weights, signals
+                self._run, run, task_id, weights, signals, start_round
             )
         return run
 
-    def _run(self, run, task_id, weights, signals):
+    def _run(self, run, task_id, weights, signals, start_round=0):
         try:
             list_leads = getattr(self._acquisition, "list_leads", None)
             task = self._acquisition._tasks.get(task_id)
             multi_round = callable(list_leads) and task is not None
             rounds = self._max_search_rounds if multi_round else 1
-            for round_index in range(rounds):
+            for round_offset in range(rounds):
+                round_index = start_round + round_offset
                 if multi_round:
                     daily_target = getattr(
                         task.criteria, "daily_limit", task.criteria.qualified_lead_limit
@@ -93,6 +95,18 @@ class DiscoveryJobQueue:
             self._runs.save(latest.succeed(**counts))
         except Exception as error:
             self._runs.save((self._runs.get(run.id) or run).fail(str(error)))
+
+    def _next_search_round(self, task_id: str) -> int:
+        """Rotate later clicks through remaining query slices."""
+        list_for_task = getattr(self._runs, "list_for_task", None)
+        if not callable(list_for_task):
+            return 0
+        return sum(
+            1
+            for item in list_for_task(task_id)
+            if getattr(getattr(item, "status", None), "value", getattr(item, "status", ""))
+            == "succeeded"
+        )
 
     def _qualified_count(self, task_id: str) -> int:
         return sum(bool(item.qualified) for item in self._acquisition.list_leads(task_id))
