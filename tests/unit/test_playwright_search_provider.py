@@ -70,6 +70,28 @@ def test_browser_provider_continues_after_visible_verification_clears():
     provider._wait_for_user_verification(Page())
 
 
+def test_browser_provider_continues_when_results_appear_with_stale_challenge_text():
+    class Body:
+        def inner_text(self):
+            return "Search results. Detected unusual traffic"
+
+    class Results:
+        def count(self):
+            return 3
+
+    class Page:
+        url = "https://www.google.com/search"
+
+        def locator(self, selector):
+            return Results() if selector == "#search h3, #rso h3, a h3" else Body()
+
+        def wait_for_timeout(self, _milliseconds):
+            raise AssertionError("verification should finish without waiting")
+
+    provider = PlaywrightSearchProvider(challenge_timeout=1)
+    provider._wait_for_user_verification(Page())
+
+
 def test_browser_provider_opens_challenge_in_a_visible_front_window():
     class Chromium:
         def __init__(self):

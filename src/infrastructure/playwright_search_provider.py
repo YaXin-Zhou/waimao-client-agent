@@ -229,7 +229,11 @@ class PlaywrightSearchProvider:
         deadline = time.monotonic() + self._challenge_timeout_ms / 1000
         while time.monotonic() < deadline:
             try:
-                if not self._is_blocked(page.url, page.locator("body").inner_text()):
+                body_text = page.locator("body").inner_text()
+                if (
+                    not self._is_blocked(page.url, body_text)
+                    or self._has_search_results(page)
+                ):
                     return
             except Exception:
                 pass
@@ -237,6 +241,14 @@ class PlaywrightSearchProvider:
         raise SearchChallengeError(
             "Google browser search verification was not completed in time"
         )
+
+    @staticmethod
+    def _has_search_results(page) -> bool:
+        """Accept a verified page even if a stale challenge phrase remains."""
+        try:
+            return page.locator("#search h3, #rso h3, a h3").count() > 0
+        except Exception:
+            return False
 
     @staticmethod
     def _find_chrome() -> str:
