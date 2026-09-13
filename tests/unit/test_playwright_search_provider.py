@@ -83,7 +83,11 @@ def test_browser_provider_continues_when_results_appear_with_stale_challenge_tex
         url = "https://www.google.com/search"
 
         def locator(self, selector):
-            return Results() if selector == "#search h3, #rso h3, a h3" else Body()
+            expected = (
+                "#search h3, #rso h3, a h3, a[href^='/url?q='], "
+                "a[href^='https://www.google.com/url?q=']"
+            )
+            return Results() if selector == expected else Body()
 
         def wait_for_timeout(self, _milliseconds):
             raise AssertionError("verification should finish without waiting")

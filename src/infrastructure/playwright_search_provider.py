@@ -246,7 +246,10 @@ class PlaywrightSearchProvider:
     def _has_search_results(page) -> bool:
         """Accept a verified page even if a stale challenge phrase remains."""
         try:
-            return page.locator("#search h3, #rso h3, a h3").count() > 0
+            return page.locator(
+                "#search h3, #rso h3, a h3, a[href^='/url?q='], "
+                "a[href^='https://www.google.com/url?q=']"
+            ).count() > 0
         except Exception:
             return False
 
