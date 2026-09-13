@@ -25,7 +25,15 @@ class InMemoryLeadRepository:
         self._items: dict[str, list[AssessedLead]] = {}
 
     def save_assessments(self, task_id: str, results: list[AssessedLead]) -> None:
-        self._items[task_id] = list(results)
+        # Match the SQLite repository's upsert semantics: a later search round
+        # adds or refreshes domains without hiding customers found earlier.
+        current = {item.lead.domain: item for item in self._items.get(task_id, [])}
+        order = [item.lead.domain for item in self._items.get(task_id, [])]
+        for item in results:
+            if item.lead.domain not in current:
+                order.append(item.lead.domain)
+            current[item.lead.domain] = item
+        self._items[task_id] = [current[domain] for domain in order if domain in current]
 
     def list_assessments(self, task_id: str) -> list[AssessedLead]:
         return list(self._items.get(task_id, []))
