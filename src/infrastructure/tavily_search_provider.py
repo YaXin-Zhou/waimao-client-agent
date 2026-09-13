@@ -4,6 +4,7 @@ from __future__ import annotations
 
 import json
 import time
+from dataclasses import replace
 from typing import Callable
 from urllib.error import HTTPError, URLError
 from urllib.request import Request, urlopen
@@ -25,6 +26,7 @@ class TavilySearchProvider:
         max_results_per_query: int = 10,
         max_queries_per_round: int = 8,
         endpoint: str = "https://api.tavily.com/search",
+        keyword_expander=None,
     ) -> None:
         if not api_key.strip():
             raise ValueError("Tavily API key is required")
@@ -40,6 +42,7 @@ class TavilySearchProvider:
         self._max_results = max_results_per_query
         self._max_queries = max_queries_per_round
         self._endpoint = endpoint
+        self._keyword_expander = keyword_expander
         self._excluded_domains: set[str] = set()
 
     def remember_domains(self, domains: set[str] | list[str] | tuple[str, ...]) -> None:
@@ -59,8 +62,16 @@ class TavilySearchProvider:
         target = effective_candidate_limit(criteria)
         records: list[LeadRecord] = []
         seen: set[str] = set()
+        search_criteria = criteria
+        if self._keyword_expander is not None:
+            expanded = self._keyword_expander.expand(criteria)
+            if expanded:
+                search_criteria = replace(
+                    criteria,
+                    keywords=tuple(dict.fromkeys((*criteria.keywords, *expanded))),
+                )
         queries = build_search_queries_for_round(
-            criteria, round_index, max_queries=self._max_queries
+            search_criteria, round_index, max_queries=self._max_queries
         )
         for query in queries:
             payload = self._request(query)

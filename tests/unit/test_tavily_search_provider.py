@@ -104,3 +104,36 @@ def test_tavily_provider_excludes_domains_already_in_local_database():
     provider = TavilySearchProvider("secret")
     provider.remember_domains(["manufacturer.fr"])
     assert "manufacturer.fr" in provider._excluded_domains
+
+
+def test_tavily_provider_uses_optional_model_expansion_without_changing_country():
+    captured = []
+
+    def opener(request, timeout):
+        query = json.loads(request.data.decode())["query"]
+        captured.append(query)
+        if "plastic components" not in query:
+            return type("EmptyResponse", (), {"read": lambda self: b'{"results": []}'})()
+        return Response()
+
+    class Expander:
+        def expand(self, criteria):
+            return ("plastic components",)
+
+    provider = TavilySearchProvider(
+        "secret",
+        opener=opener,
+        max_queries_per_round=24,
+        keyword_expander=Expander(),
+    )
+    provider.search(
+        AcquisitionCriteria(
+            product="injection molding",
+            countries=("France",),
+            candidate_limit=1,
+            qualified_lead_limit=1,
+        )
+    )
+
+    assert any("plastic components" in query for query in captured)
+    assert all("France" in query for query in captured)

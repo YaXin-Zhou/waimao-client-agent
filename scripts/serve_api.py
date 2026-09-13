@@ -19,6 +19,7 @@ from src.application.discovery_queue import DiscoveryJobQueue  # noqa: E402
 from src.application.email_draft_service import EmailDraftService  # noqa: E402
 from src.application.email_send_service import EmailSendService  # noqa: E402
 from src.application.follow_up_task_service import FollowUpTaskService  # noqa: E402
+from src.application.keyword_expansion import DeepSeekKeywordExpander  # noqa: E402
 from src.application.mailbox_sync import MailboxSyncService  # noqa: E402
 from src.application.reply_analysis_service import ReplyAnalysisService  # noqa: E402
 from src.application.reply_draft_service import ReplyDraftService  # noqa: E402
@@ -165,6 +166,19 @@ mojeek_search_provider = (
     if config_values.get("SEARCH_MOJEEK_ENABLED", "true").lower() == "true"
     else None
 )
+try:
+    deepseek_provider = DeepSeekProvider(DeepSeekConfig.from_env_file(ROOT / "config" / ".env"))
+except (FileNotFoundError, ValueError):
+    deepseek_provider = None
+keyword_expander = (
+    DeepSeekKeywordExpander(
+        deepseek_provider,
+        max_terms=min(12, int(config_values.get("DEEPSEEK_SEARCH_EXPANSION_LIMIT", "8"))),
+    )
+    if deepseek_provider is not None
+    and config_values.get("DEEPSEEK_SEARCH_EXPANSION_ENABLED", "true").lower() == "true"
+    else None
+)
 tavily_search_provider = None
 tavily_api_key = config_values.get("TAVILY_API_KEY", "").strip()
 if tavily_api_key and config_values.get("SEARCH_TAVILY_ENABLED", "true").lower() == "true":
@@ -180,6 +194,7 @@ if tavily_api_key and config_values.get("SEARCH_TAVILY_ENABLED", "true").lower()
         endpoint=config_values.get(
             "SEARCH_TAVILY_ENDPOINT", "https://api.tavily.com/search"
         ),
+        keyword_expander=keyword_expander,
     )
 # Bing is the first live source because it provides a bounded HTML result page
 # in the current local network. The browser Google handoff follows the static
@@ -201,10 +216,6 @@ search_provider = FallbackSearchProvider(
         config_values.get("SEARCH_ROUND_MAX_DURATION_SECONDS", "240")
     ),
 )
-try:
-    deepseek_provider = DeepSeekProvider(DeepSeekConfig.from_env_file(ROOT / "config" / ".env"))
-except (FileNotFoundError, ValueError):
-    deepseek_provider = None
 try:
     email_draft_service = (
         EmailDraftService(deepseek_provider, language_policy.get("country_languages", {}))
