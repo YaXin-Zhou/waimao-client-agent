@@ -196,11 +196,11 @@ if tavily_api_key and config_values.get("SEARCH_TAVILY_ENABLED", "true").lower()
         ),
         keyword_expander=keyword_expander,
     )
-# Bing is the first live source because it provides a bounded HTML result page
-# in the current local network. The browser Google handoff follows the static
-# Google adapter immediately, so a consent/captcha page becomes visible early
-# instead of being hidden behind every other source.
+# Tavily is the primary source when configured: it avoids search-engine HTML
+# challenges and returns bounded public-web results. Browser and HTML sources
+# remain fallbacks for installations without a working Tavily connection.
 search_provider = FallbackSearchProvider(
+    tavily_search_provider,
     bing_search_provider,
     static_search_provider,
     browser_search_provider,
@@ -208,7 +208,6 @@ search_provider = FallbackSearchProvider(
     duckduckgo_search_provider,
     brave_search_provider,
     mojeek_search_provider,
-    tavily_search_provider,
     provider_interval_seconds=float(
         config_values.get("SEARCH_PROVIDER_INTERVAL_SECONDS", "15")
     ),
