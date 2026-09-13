@@ -205,7 +205,11 @@ class PlaywrightSearchProvider:
             return
         try:
             user32 = ctypes.windll.user32
-            target = self._host.lower()
+            # Window titles normally contain the provider brand ("Google")
+            # rather than the full host ("google.com"). Match both forms so
+            # the verification window is actually brought to the foreground.
+            host_parts = self._host.lower().split(".")
+            targets = {self._host.lower(), host_parts[0] if host_parts else self._host.lower()}
             enum_windows = user32.EnumWindows
             enum_windows_proc = ctypes.WINFUNCTYPE(ctypes.c_bool, ctypes.c_void_p, ctypes.c_void_p)
 
@@ -215,7 +219,7 @@ class PlaywrightSearchProvider:
                 buffer = ctypes.create_unicode_buffer(512)
                 user32.GetWindowTextW(hwnd, buffer, len(buffer))
                 title = buffer.value.lower()
-                if target in title:
+                if any(target in title for target in targets):
                     user32.ShowWindow(hwnd, 9)  # SW_RESTORE
                     user32.SetForegroundWindow(hwnd)
                     return False
