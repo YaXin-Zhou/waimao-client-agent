@@ -21,7 +21,18 @@ a = Analysis(
     hookspath=[],
     hooksconfig={},
     runtime_hooks=[],
-    excludes=[],
+    # These are unrelated to the desktop agent and can make PyInstaller scan
+    # hundreds of megabytes of globally installed scientific/test packages.
+    excludes=[
+        "torch",
+        "torchvision",
+        "tensorflow",
+        "pandas",
+        "scipy",
+        "sklearn",
+        "pytest",
+        "langsmith",
+    ],
     noarchive=False,
 )
 pyz = PYZ(a.pure)
