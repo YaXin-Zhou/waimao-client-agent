@@ -195,7 +195,7 @@ class PlaywrightSearchProvider:
                 buffer = ctypes.create_unicode_buffer(512)
                 user32.GetWindowTextW(hwnd, buffer, len(buffer))
                 title = buffer.value.lower()
-                if target in title or "google" in title:
+                if target in title:
                     user32.ShowWindow(hwnd, 9)  # SW_RESTORE
                     user32.SetForegroundWindow(hwnd)
                     return False
