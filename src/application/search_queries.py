@@ -32,6 +32,21 @@ _DOMAIN_TRANSLATIONS = {
 
 _TERM_ALIASES = {
     "注塑件": ("injection molding", "plastic injection moulding", "plastic components"),
+    "injection molding": (
+        "injection molded parts",
+        "plastic injection moulding",
+        "plastic components",
+    ),
+    "plastic injection moulding": (
+        "injection molding",
+        "injection molded parts",
+        "plastic components",
+    ),
+    "plastic components": (
+        "injection molding",
+        "plastic injection moulding",
+        "injection molded parts",
+    ),
     "injection molded parts": ("injection molding", "plastic injection moulding", "plastic components"),
     "塑料件": ("injection molded parts", "plastic components", "thermoplastic parts"),
     "塑料零件": ("injection molded parts", "plastic components", "thermoplastic parts"),
@@ -134,5 +149,7 @@ def build_search_queries_for_round(
         )
     if len(queries) <= max_queries:
         return queries
-    start = (max(0, round_index) * max_queries) % len(queries)
-    return tuple(queries[(start + offset) % len(queries)] for offset in range(max_queries))
+    start = max(0, round_index) * max_queries
+    if start >= len(queries):
+        return ()
+    return queries[start : start + max_queries]

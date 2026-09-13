@@ -70,6 +70,22 @@ def test_generic_domain_needs_explicit_location_context_for_country_inference():
     ) == "Italy"
 
 
+def test_generic_website_can_use_one_consistent_country_code_email_suffix():
+    cleaned = clean_leads(
+        [
+            LeadRecord(
+                "Langer Group",
+                "https://langer-group.eu",
+                "info@langer-group.de",
+                source_url="https://langer-group.eu/contact",
+                source_excerpt="Plastic injection molding and automotive production.",
+            )
+        ]
+    )
+
+    assert cleaned[0].country == "Germany"
+
+
 def test_clean_company_name_removes_search_title_prefixes():
     assert clean_company_name(
         "automotiveAutomotive Injection Moulding - Plastic-IT"

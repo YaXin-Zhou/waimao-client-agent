@@ -63,6 +63,20 @@ def test_build_search_queries_translates_chinese_input_without_changing_the_crit
     assert 'injection molded parts automotive Germany supplier' in queries
 
 
+def test_build_search_queries_expands_english_product_aliases_and_rounds_without_overlap():
+    from src.application.search_queries import build_search_queries_for_round
+
+    criteria = AcquisitionCriteria(
+        product="injection molding", countries=("Germany",), industries=("automotive",)
+    )
+    first = build_search_queries_for_round(criteria, 0, max_queries=4)
+    second = build_search_queries_for_round(criteria, 1, max_queries=4)
+
+    assert "injection molded parts automotive Germany" in first + second
+    assert "plastic components automotive Germany" in first + second
+    assert not set(first) & set(second)
+
+
 def test_build_search_queries_keeps_manufacturing_terms_searchable(monkeypatch):
     from src.application import search_queries
 

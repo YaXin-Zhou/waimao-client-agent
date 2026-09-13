@@ -111,7 +111,9 @@ def _normalize_text(value: str) -> str:
 
 
 def infer_country_from_public_evidence(
-    domain: str, sources: tuple[tuple[str, str], ...]
+    domain: str,
+    sources: tuple[tuple[str, str], ...],
+    emails: tuple[str, ...] = (),
 ) -> str:
     """Infer a country only from strong, explainable public signals.
 
@@ -126,6 +128,23 @@ def infer_country_from_public_evidence(
     tld_country = _COUNTRY_TLDS.get(suffix) or _COUNTRY_TLDS.get(labels[-1], "")
     if tld_country:
         return tld_country
+
+    # Some businesses use a generic website domain but publish a mailbox on
+    # their country-code domain (for example, a .de contact address on a .eu
+    # website). Treat one consistent country-code email suffix as a strong
+    # supporting signal, but never infer from a generic .com/.net address.
+    email_countries = []
+    for email in emails:
+        email_domain = email.rsplit("@", 1)[-1].lower() if "@" in email else ""
+        email_labels = email_domain.split(".")
+        email_suffix = ".".join(email_labels[-2:]) if len(email_labels) >= 2 else ""
+        email_country = _COUNTRY_TLDS.get(email_suffix) or _COUNTRY_TLDS.get(
+            email_labels[-1] if email_labels else "", ""
+        )
+        if email_country:
+            email_countries.append(email_country)
+    if email_countries and len(set(email_countries)) == 1:
+        return email_countries[0]
 
     website_text = " ".join(
         excerpt.lower()
@@ -459,7 +478,7 @@ def clean_leads(records: list[LeadRecord]) -> list[CleanLead]:
         ):
             flags.append("company_identity_unconfirmed")
         country = countries[0] if countries else infer_country_from_public_evidence(
-            group_domain, sources
+            group_domain, sources, emails
         )
         quality = (
             "complete"
