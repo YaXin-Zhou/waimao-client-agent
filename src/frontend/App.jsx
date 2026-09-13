@@ -85,6 +85,17 @@ function searchCriteriaWarnings({ product, keywords, countries, industries }) {
   return warnings
 }
 
+function friendlyDiscoveryError(value) {
+  const message = String(value || '')
+  if (message.includes('all configured search providers failed')) {
+    return '搜索服务暂时无法连接，请检查本机网络或代理设置，确认浏览器可以访问外网后再试。'
+  }
+  if (message.includes('verification was not completed in time')) {
+    return '搜索需要完成浏览器验证，请在弹出的验证窗口操作后再试。'
+  }
+  return message || '搜索未完成，请稍后重试。'
+}
+
 function App() {
   const [selected, setSelected] = useState(null)
   const [remoteLeads, setRemoteLeads] = useState([])
@@ -239,7 +250,7 @@ function App() {
         if (latest?.status === 'failed') {
           setSearchStartedAt(null)
           setDiscoverLoading(false)
-          setDiscoveryError(latest.error || '本次搜索未完成，请稍后重试。')
+          setDiscoveryError(friendlyDiscoveryError(latest.error))
         }
         if (latest?.status === 'succeeded') {
           const leadResponse = await fetch(`/api/tasks/${remoteTaskId}/leads`)
@@ -257,7 +268,7 @@ function App() {
         if (!cancelled) {
           setSearchStartedAt(null)
           setDiscoverLoading(false)
-          setDiscoveryError(error.message || '搜索状态读取失败，请稍后重试。')
+          setDiscoveryError(friendlyDiscoveryError(error.message || '搜索状态读取失败，请稍后重试。'))
         }
       }
     }
@@ -603,8 +614,11 @@ function App() {
       notify(`搜索完成：找到 ${summary?.qualified_count || 0} 家可发送客户`)
     } catch (error) {
       setSearchStartedAt(null)
-      setDiscoveryError(error.message || '搜索未完成，请稍后重试。')
-      notify(error.code === 'search_provider_unavailable' ? '这次没有找到新的合格客户，已有客户仍可继续使用' : error.message || '这次没有找到新的合格客户')
+      const message = error.code === 'search_provider_unavailable'
+        ? '搜索服务暂时无法连接，请检查本机网络或代理设置后再试。'
+        : friendlyDiscoveryError(error.message)
+      setDiscoveryError(message)
+      notify(message)
     } finally { setDiscoverLoading(false) }
   }
   const importBrowserResults = async (records) => {
