@@ -225,18 +225,29 @@ function App() {
         setDiscoveryRun(latest)
         if (latest?.status === 'running') timer = window.setTimeout(loadDiscoveryRuns, 1000)
         if (latest?.status === 'failed') {
-          setDiscoveryError('本次暂未找到新的合格客户，可以稍后再试。')
+          setSearchStartedAt(null)
+          setDiscoverLoading(false)
+          setDiscoveryError(latest.error || '本次搜索未完成，请稍后重试。')
         }
         if (latest?.status === 'succeeded') {
-          setDiscoveryError(null)
           const leadResponse = await fetch(`/api/tasks/${remoteTaskId}/leads`)
           if (!leadResponse.ok) return
           const leads = await leadResponse.json()
-          setRemoteLeads((leads.items || []).map(mapRemoteLead))
+          const loadedLeads = (leads.items || []).map(mapRemoteLead)
+          setSearchStartedAt(null)
+          setDiscoverLoading(false)
+          setRemoteLeads(loadedLeads)
           setDiscoverySummary(leads.summary || null)
-          setApiState((leads.items || []).length ? 'connected' : 'empty')
+          setApiState(loadedLeads.length ? 'connected' : 'empty')
+          setDiscoveryError(loadedLeads.length ? null : '本次搜索已完成，暂未找到符合条件的客户。请调整搜索条件后再试。')
         }
-      } catch { if (!cancelled) setDiscoveryRun(null) }
+      } catch (error) {
+        if (!cancelled) {
+          setSearchStartedAt(null)
+          setDiscoverLoading(false)
+          setDiscoveryError(error.message || '搜索状态读取失败，请稍后重试。')
+        }
+      }
     }
     loadDiscoveryRuns()
     return () => { cancelled = true; if (timer) window.clearTimeout(timer) }
@@ -580,7 +591,7 @@ function App() {
       notify(`搜索完成：找到 ${summary?.qualified_count || 0} 家可发送客户`)
     } catch (error) {
       setSearchStartedAt(null)
-      setDiscoveryError({ code: error.code || 'discovery_failed', message: error.message, retryable: error.retryable !== false })
+      setDiscoveryError(error.message || '搜索未完成，请稍后重试。')
       notify(error.code === 'search_provider_unavailable' ? '这次没有找到新的合格客户，已有客户仍可继续使用' : error.message || '这次没有找到新的合格客户')
     } finally { setDiscoverLoading(false) }
   }
@@ -605,7 +616,7 @@ function App() {
       const funnel = summary?.funnel || {}
       notify(`导入完成：找到 ${summary?.qualified_count || 0} 家可发送客户`)
     } catch (error) {
-      setDiscoveryError({ code: 'browser_import_failed', message: error.message, retryable: false })
+      setDiscoveryError(error.message || '浏览器结果导入失败，请稍后重试。')
       notify(error.message || '导入失败，请检查结果格式')
     } finally { setBrowserImportLoading(false) }
   }
