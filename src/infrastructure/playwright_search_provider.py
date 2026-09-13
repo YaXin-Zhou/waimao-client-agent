@@ -64,10 +64,11 @@ class PlaywrightSearchProvider:
             raise SearchProviderError("Playwright is not installed for browser fallback") from error
 
         candidate_limit = effective_candidate_limit(criteria)
-        # Browser handoff is deliberately bounded to two result pages per
-        # query. Users can run another low-frequency pass to accumulate more
-        # leads; one click should not keep a visible browser busy for minutes.
-        browser_candidate_limit = min(candidate_limit, self._max_results * 2)
+        # A browser pass intentionally handles one query and one result page.
+        # The user can run another low-frequency pass to accumulate more leads;
+        # continuing through many query variants after a human verification
+        # would immediately trigger another provider challenge.
+        browser_candidate_limit = min(candidate_limit, self._max_results)
         records: list[LeadRecord] = []
         seen_domains: set[str] = set()
         with sync_playwright() as playwright:
@@ -79,7 +80,7 @@ class PlaywrightSearchProvider:
                 context = browser.new_context()
                 page = context.new_page()
                 self._activate_challenge_window(page)
-                queries = build_search_queries(criteria)
+                queries = build_search_queries(criteria)[:1]
                 intent_suffixes = ("", "contact", "supplier", "manufacturer", "factory", "distributor", "purchasing", "procurement")
                 suffix = intent_suffixes[round_index % len(intent_suffixes)]
                 if suffix:
