@@ -107,7 +107,9 @@ if config_values.get("SEARCH_BROWSER_ENABLED", "true").lower() == "true":
         max_results_per_query=int(config_values.get("SEARCH_RESULTS_PER_QUERY", "10")),
         host=config_values.get("SEARCH_GOOGLE_HOST", "www.google.com.hk"),
         executable_path=config_values.get("SEARCH_BROWSER_EXECUTABLE", ""),
-        headless=config_values.get("SEARCH_BROWSER_HEADLESS", "true").lower() == "true",
+        # Keep the browser visible by default so a Google verification is
+        # completed in the same session that reads the search results.
+        headless=config_values.get("SEARCH_BROWSER_HEADLESS", "false").lower() == "true",
         proxy=config_values.get(
             "SEARCH_BROWSER_PROXY", config_values.get("HTTPS_PROXY", "")
         ),
