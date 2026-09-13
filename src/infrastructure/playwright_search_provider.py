@@ -131,10 +131,12 @@ class PlaywrightSearchProvider:
                                 self._wait_for_user_verification(page)
                             rows = page.locator("a").evaluate_all(
                                 """els => els.map(a => ({
-                                    href: a.href || '',
+                                    href: a.href || a.getAttribute('href') || '',
+                                    dataHref: a.getAttribute('data-href') || '',
+                                    dataUrl: a.getAttribute('data-url') || '',
                                     text: (a.innerText || a.textContent || '').trim(),
                                     excerpt: (a.parentElement?.innerText || '').trim()
-                                })).filter(item => item.href && item.text)"""
+                                })).filter(item => (item.href || item.dataHref || item.dataUrl) && item.text)"""
                             )
                         except SearchProviderError:
                             raise
@@ -142,7 +144,15 @@ class PlaywrightSearchProvider:
                             raise SearchProviderError("Browser Google search failed") from error
                         added_on_page = 0
                         for row in rows:
-                            result_url = self._resolve_result_url(page, row.get("href", ""))
+                            result_url = ""
+                            for link in (
+                                row.get("href", ""),
+                                row.get("dataHref", ""),
+                                row.get("dataUrl", ""),
+                            ):
+                                result_url = self._resolve_result_url(page, link)
+                                if result_url:
+                                    break
                             if not GoogleSearchProvider._is_candidate(
                                 result_url, str(row.get("text", ""))
                             ):
