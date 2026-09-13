@@ -37,6 +37,19 @@ def test_browser_provider_resolves_google_hk_redirect_without_clicking():
     assert resolved == "https://example.com/company"
 
 
+def test_browser_provider_skips_google_navigation_links_without_network_calls():
+    class RequestThatMustNotRun:
+        def get(self, href, **kwargs):
+            raise AssertionError("navigation links must not be requested")
+
+    class Page:
+        request = RequestThatMustNotRun()
+
+    assert PlaywrightSearchProvider._resolve_result_url(
+        Page(), "https://www.google.com.hk/preferences"
+    ) == ""
+
+
 def test_browser_provider_enables_bounded_user_handoff_by_default():
     provider = PlaywrightSearchProvider()
 

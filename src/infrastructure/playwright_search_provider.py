@@ -293,7 +293,7 @@ class PlaywrightSearchProvider:
 
     @staticmethod
     def _resolve_result_url(page, href: str) -> str:
-        """Resolve Google redirect links with a request, never by clicking them."""
+        """Resolve Google result links without clicking or probing navigation links."""
         parsed = urlsplit(href)
         if parsed.hostname and (
             parsed.hostname.endswith("google.com")
@@ -308,9 +308,8 @@ class PlaywrightSearchProvider:
                 target = params.get(key, [""])[0].strip()
                 if urlsplit(target).scheme in {"http", "https"}:
                     return target
-            try:
-                response = page.request.get(href, timeout=10_000, max_redirects=5)
-                return response.url
-            except Exception:
-                return ""
+            # Navigation, account, policy, and JS links do not expose a
+            # destination in their query string. Skip them rather than making
+            # a potentially slow request for every non-result anchor.
+            return ""
         return href
