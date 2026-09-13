@@ -20,6 +20,10 @@ class SearchProviderError(RuntimeError):
     """搜索服务不可用、返回异常页面或无法解析时抛出。"""
 
 
+class SearchChallengeError(SearchProviderError):
+    """搜索服务要求人工完成验证；此类错误不得触发备用搜索源。"""
+
+
 class _GoogleResultParser(HTMLParser):
     def __init__(self) -> None:
         super().__init__()

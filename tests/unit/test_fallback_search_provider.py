@@ -3,7 +3,7 @@ import pytest
 from src.domain.lead import LeadRecord
 from src.domain.task import AcquisitionCriteria
 from src.infrastructure.fallback_search_provider import FallbackSearchProvider
-from src.infrastructure.google_search_provider import SearchProviderError
+from src.infrastructure.google_search_provider import SearchChallengeError, SearchProviderError
 
 
 class Primary:
@@ -46,6 +46,17 @@ def test_fallback_runs_only_after_explicit_static_provider_error():
 
     assert result == ["browser"]
     assert fallback.called is True
+
+
+def test_fallback_does_not_switch_sources_after_search_challenge():
+    fallback = Fallback(["should not run"])
+
+    with pytest.raises(SearchChallengeError, match="captcha"):
+        FallbackSearchProvider(
+            Primary(SearchChallengeError("captcha requires user verification")), fallback
+        ).search(object())
+
+    assert fallback.called is False
 
 
 def test_fallback_preserves_a_clear_error_when_both_providers_fail():

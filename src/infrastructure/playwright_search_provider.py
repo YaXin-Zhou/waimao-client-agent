@@ -16,7 +16,11 @@ from urllib.parse import quote_plus, urlsplit
 from src.application.search_queries import build_search_queries
 from src.domain.lead import LeadRecord, canonical_website_domain
 from src.domain.task import AcquisitionCriteria, effective_candidate_limit
-from src.infrastructure.google_search_provider import GoogleSearchProvider, SearchProviderError
+from src.infrastructure.google_search_provider import (
+    GoogleSearchProvider,
+    SearchChallengeError,
+    SearchProviderError,
+)
 
 
 class PlaywrightSearchProvider:
@@ -86,7 +90,7 @@ class PlaywrightSearchProvider:
                             page.wait_for_timeout(350)
                             if self._is_blocked(page.url, page.locator("body").inner_text()):
                                 if not self._headful_on_challenge:
-                                    raise SearchProviderError(
+                                    raise SearchChallengeError(
                                         "Google browser search stopped at Consent/captcha/"
                                         "unusual-traffic page"
                                     )
@@ -222,7 +226,7 @@ class PlaywrightSearchProvider:
             except Exception:
                 pass
             page.wait_for_timeout(1000)
-        raise SearchProviderError(
+        raise SearchChallengeError(
             "Google browser search verification was not completed in time"
         )
 

@@ -6,7 +6,7 @@ import time
 from urllib.parse import urlsplit
 
 from src.domain.task import effective_candidate_limit
-from src.infrastructure.google_search_provider import SearchProviderError
+from src.infrastructure.google_search_provider import SearchChallengeError, SearchProviderError
 
 
 class FallbackSearchProvider:
@@ -46,6 +46,8 @@ class FallbackSearchProvider:
                     else provider.search(criteria)
                 )
             except SearchProviderError as error:
+                if isinstance(error, SearchChallengeError):
+                    raise
                 errors.append(error)
                 continue
             if not records:
