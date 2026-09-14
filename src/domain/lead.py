@@ -186,6 +186,30 @@ def infer_country_from_public_evidence(
         rf"|\b{address_cue}\b[^.!?]{{0,120}}\b(?:{us_codes})\s+\d{{5}}(?:-\d{{4}})?\b"
         rf"|\b{address_cue}\b[^.!?]{{0,100}}(?:\+1|001)[\s().-]*\d{{3}}[\s().-]*\d{{3}}[\s.-]*\d{{4}}"
     )
+    patterns["United Kingdom"] += (
+        r"|\b(?:address|office|contact|registered|facility)\b[^.!?]{0,100}"
+        r"\b[a-z]{1,2}\d[a-z\d]?\s\d[a-z]{2}\b"
+        r"|\b(?:address|office|contact|registered|facility)\b[^.!?]{0,100}"
+        r"(?:\+44|0044)[\s().-]*\d{3,4}[\s.-]*\d{3,4}[\s.-]*\d{3,4}"
+    )
+    patterns["Germany"] += (
+        r"|\b(?:address|office|contact|registered|facility|sitz)\b[^.!?]{0,100}"
+        r"\b(?:d|de)-?\d{5}\b"
+        r"|\b(?:address|office|contact|registered|facility|sitz)\b[^.!?]{0,100}"
+        r"(?:\+49|0049)[\s().-]*\d{2,5}[\s.-]*\d{3,10}"
+    )
+    patterns["France"] += (
+        r"|\b(?:address|office|contact|registered|facility)\b[^.!?]{0,100}"
+        r"\bfr[- ]?\d{5}\b"
+        r"|\b(?:address|office|contact|registered|facility)\b[^.!?]{0,100}"
+        r"(?:\+33|0033)[\s().-]*\d[\s.-]*\d{2}[\s.-]*\d{2}[\s.-]*\d{2}[\s.-]*\d{2}"
+    )
+    patterns["Italy"] += (
+        r"|\b(?:address|office|contact|registered|facility)\b[^.!?]{0,100}"
+        r"\bit[- ]?\d{5}\b"
+        r"|\b(?:address|office|contact|registered|facility)\b[^.!?]{0,100}"
+        r"(?:\+39|0039)[\s().-]*\d{2,4}[\s.-]*\d{5,8}"
+    )
     matches = [country for country, pattern in patterns.items() if re.search(pattern, website_text)]
     return matches[0] if len(set(matches)) == 1 else ""
 

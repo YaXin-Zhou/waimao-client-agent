@@ -111,6 +111,15 @@ def test_generic_country_evidence_does_not_treat_unqualified_zip_as_us():
     assert infer_country_from_public_evidence("example-molding.com", sources) == ""
 
 
+def test_generic_uk_website_can_use_postcode_address_evidence():
+    sources = ((
+        "https://example-molding.com/contact",
+        "Contact address: 12 Industrial Road, Birmingham B1 1AA.",
+    ),)
+
+    assert infer_country_from_public_evidence("example-molding.com", sources) == "United Kingdom"
+
+
 def test_clean_company_name_removes_search_title_prefixes():
     assert clean_company_name(
         "automotiveAutomotive Injection Moulding - Plastic-IT"
