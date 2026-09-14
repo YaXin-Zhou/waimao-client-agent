@@ -712,13 +712,47 @@ function App() {
     } catch (error) { notify(error.message || '跟进状态更新失败') }
   }
   const saveSenderProfile = async (profile) => {
-    if (!remoteTaskId) return
     try {
-      const response = await fetch(`/api/tasks/${remoteTaskId}/sender-profile`, { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify(profile) })
+      let taskId = remoteTaskId
+      if (!taskId) {
+        const response = await fetch('/api/tasks', {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({
+            name: '默认客户工作区',
+            criteria: {
+              // A new local installation has no search form values yet. The
+              // backend requires at least one search term, so seed the
+              // default customer scenario; the user can change it before
+              // searching.
+              product: searchProduct.trim() || '注塑件',
+              countries: splitSearchValues(searchCountries),
+              industries: splitSearchValues(searchIndustries),
+              customer_types: [],
+              language: 'English',
+              daily_limit: 30,
+              qualified_lead_limit: 30,
+              candidate_limit: 100,
+              require_public_email: true,
+            },
+            sender_profile: profile,
+          }),
+        })
+        const payload = await response.json()
+        if (!response.ok) throw new Error(payload.error || 'workspace creation failed')
+        taskId = payload.id
+        setRemoteTaskId(taskId)
+        setRemoteTaskConfig(payload)
+        setRemoteTasks((tasks) => [payload, ...tasks])
+        setApiState('connected')
+        notify('发件人资料已保存，客户工作区已准备好')
+        return
+      }
+      const response = await fetch(`/api/tasks/${taskId}/sender-profile`, { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify(profile) })
       if (!response.ok) throw new Error('sender profile update failed')
       setRemoteTaskConfig(await response.json())
       notify('发件人资料已保存，重新生成时会创建新草稿版本')
-    } catch { notify('发件人资料保存失败，请稍后重试') }
+    } catch (error) { notify(error.message || '发件人资料保存失败，请稍后重试') }
   }
   const createTask = async (event) => {
     event.preventDefault()
