@@ -1075,7 +1075,7 @@ function BatchMailPanel({ drafts, index, onIndexChange, selectedIds, onToggle, o
   const current = drafts.length ? drafts[Math.min(index, drafts.length - 1)] : null
   const [showChinese, setShowChinese] = useState(false)
   useEffect(() => { if (current) setShowChinese(false) }, [current?.id])
-  if (!current) return null
+  if (!current) return <section className="batch-mail-panel panel"><div className="panel-heading"><div><h2>批量审核邮件</h2><p>邮件生成后会自动出现在这里，逐封审核后再批量发送。</p></div><span className="database-readonly">等待邮件</span></div><div className="batch-mail-empty"><strong>当前没有待审核邮件</strong><span>请先完成发件人资料配置，系统会自动生成邮件。</span></div></section>
   const translated = translations[current.id]
   const approved = drafts.filter((draft) => draft.status === 'approved')
   const selectedApproved = drafts.filter((draft) => selectedIds.includes(draft.id) && draft.status === 'approved')
