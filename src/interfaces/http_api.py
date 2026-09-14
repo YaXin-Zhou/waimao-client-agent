@@ -834,23 +834,55 @@ class ApiApplication:
         sheet = workbook.active
         sheet.title = "客户资料"
         headers = (
-            "公司名称", "官网域名", "国家/地区", "客户类型", "公开邮箱",
-            "发送安排", "业务简介", "产品", "来源数量",
+            "公司全称", "官网", "国家/地区", "行业/业务匹配", "客户类型",
+            "注册地址", "成立时间", "公司类型", "公司主体资料", "主营产品", "业务定位",
+            "公开邮箱", "电话", "LinkedIn", "Facebook", "Instagram",
+            "采购/决策岗位", "决策人邮箱", "决策人 LinkedIn", "过往采购品类", "官网与联系方式",
+            "发送安排", "业务简介", "来源网址", "来源数量",
         )
+
+        def field_value(research: dict, key: str) -> str:
+            field = research.get("custom_fields", {}).get(key, {})
+            return str(field.get("value", "")).strip() if isinstance(field, dict) else ""
+
+        def field_sources(research: dict) -> list[str]:
+            urls = []
+            for field in research.get("custom_fields", {}).values():
+                if isinstance(field, dict):
+                    urls.extend(str(url).strip() for url in field.get("sources", []) if str(url).strip())
+            urls.extend(str(url).strip() for url in research.get("evidence_urls", []) if str(url).strip())
+            return list(dict.fromkeys(urls))
         sheet.append(headers)
         for item in overview["items"]:
             lead = item["lead"]
             report = self._research.get(item["task_id"], lead.get("domain", "")) if lead.get("domain") else None
             research = self._research_result(report) if report else {}
+            source_urls = field_sources(research)
             sheet.append((
-                lead.get("company_name") or lead.get("domain", ""),
+                research.get("company_name") or lead.get("company_name") or lead.get("domain", ""),
                 lead.get("domain", ""),
-                lead.get("country", ""),
+                research.get("country") or lead.get("country", ""),
+                field_value(research, "industry_business_fit"),
                 lead.get("customer_type", ""),
+                field_value(research, "registered_address"),
+                field_value(research, "founded_date"),
+                field_value(research, "company_type"),
+                field_value(research, "company_identity"),
+                "; ".join(research.get("products", [])),
+                field_value(research, "business_positioning"),
                 "; ".join(lead.get("emails", [])),
+                field_value(research, "phone"),
+                field_value(research, "linkedin"),
+                field_value(research, "facebook"),
+                field_value(research, "instagram"),
+                field_value(research, "procurement_decision_makers"),
+                field_value(research, "decision_maker_email"),
+                field_value(research, "decision_maker_linkedin"),
+                field_value(research, "historical_sourcing_categories"),
+                field_value(research, "official_contact_channels"),
                 "已发送" if item.get("contacted") else "未发送",
                 research.get("business_summary", ""),
-                "; ".join(research.get("products", [])),
+                "; ".join(source_urls),
                 lead.get("source_summary", {}).get("website_count", 0),
             ))
         sheet.freeze_panes = "A2"
