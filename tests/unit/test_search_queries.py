@@ -97,6 +97,18 @@ def test_build_search_queries_keeps_manufacturing_terms_searchable(monkeypatch):
     assert 'molds tooling automotive parts France' in queries
 
 
+def test_build_search_queries_uses_builtin_translation_for_common_industry():
+    from src.application import search_queries
+
+    search_queries._TRANSLATION_CACHE.clear()
+    queries = build_search_queries(
+        AcquisitionCriteria(product='塑料件', countries=('法国',), industries=('制造业',))
+    )
+
+    assert queries[0] == 'plastic parts manufacturing France'
+    assert all('制造业' not in query for query in queries)
+
+
 def test_build_search_queries_bounds_large_condition_combinations():
     criteria = AcquisitionCriteria(
         product="plastic parts",
