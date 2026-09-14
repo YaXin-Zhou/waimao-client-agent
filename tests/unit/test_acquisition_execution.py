@@ -10,6 +10,10 @@ from src.infrastructure.memory_repositories import InMemoryLeadRepository, InMem
 class SearchProvider:
     def __init__(self, should_fail=False):
         self.should_fail = should_fail
+        self.remembered = set()
+
+    def remember_domains(self, domains):
+        self.remembered.update(domains)
 
     def search(self, criteria):
         if self.should_fail:
@@ -62,3 +66,19 @@ def test_completed_task_is_not_executed_twice():
 
     with pytest.raises(ValueError, match="cannot be executed again"):
         executor.execute(task.id, {}, {})
+
+
+def test_discovery_syncs_existing_domains_to_deduplicating_provider():
+    tasks = InMemoryTaskRepository()
+    leads = InMemoryLeadRepository()
+    provider = SearchProvider()
+    acquisition = AcquisitionService(tasks, leads, search_provider=provider)
+    task = acquisition.create_task(
+        "dedupe", AcquisitionCriteria(product="portable power station")
+    )
+
+    acquisition.discover_and_assess(task.id, {}, {}, search_round=0)
+
+    assert provider.remembered == set()
+    acquisition.discover_and_assess(task.id, {}, {}, search_round=1)
+    assert provider.remembered == {"alpine.example"}

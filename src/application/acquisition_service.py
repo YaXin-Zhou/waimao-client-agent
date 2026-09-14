@@ -548,6 +548,19 @@ class AcquisitionService:
             raise KeyError(f"Task not found: {task_id}")
         if self._search is None:
             raise RuntimeError("Search provider is not configured")
+        # Keep repeated rounds productive: the search provider exposes bounded
+        # query slices, while the local database owns durable deduplication.
+        # Synchronize known domains before each round so later searches move
+        # past already-seen companies instead of overwriting them again.
+        remember_domains = getattr(self._search, "remember_domains", None)
+        if callable(remember_domains):
+            remember_domains(
+                {
+                    item.lead.domain
+                    for item in self._leads.list_assessments(task_id)
+                    if item.lead.domain
+                }
+            )
         if progress:
             progress("searching")
         search_pass = getattr(self._search, "search_round", None)
