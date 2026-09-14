@@ -63,7 +63,34 @@ _TERM_ALIASES = {
     "cnc machining": ("precision machining", "machined components"),
 }
 
-_BUYER_INTENTS = ("", "supplier", "manufacturer", "procurement", "contact")
+# Keep the user's country and business terms in every query, but provide enough
+# bounded intent variants for repeated low-frequency rounds to discover new
+# domains instead of exhausting the first two rounds.
+_BUYER_INTENTS = (
+    "",
+    "supplier",
+    "manufacturer",
+    "procurement",
+    "contact",
+    "company",
+    "email",
+    "purchasing",
+    "engineering",
+    "components",
+    "factory",
+    "industrial",
+)
+
+_DISCOVERY_QUALIFIERS = (
+    "official website",
+    "contact email",
+    "company profile",
+    "product catalog",
+    "about us",
+    "contact us",
+    "purchasing manager",
+    "engineering manager",
+)
 
 
 def _search_term(value: str) -> str:
@@ -130,10 +157,17 @@ def build_search_queries(criteria: AcquisitionCriteria) -> tuple[str, ...]:
             query = " ".join(part for part in (base_query, intent) if part)
             if query not in queries:
                 queries.append(query)
+        for qualifier in _DISCOVERY_QUALIFIERS:
+            query = " ".join(part for part in (base_query, qualifier) if part)
+            if query not in queries:
+                queries.append(query)
     # Keep flexible user criteria, but bound the cartesian product so a browser
     # provider cannot spend minutes serially opening dozens of near-duplicate
     # result pages.  Small explicit test/task configurations remain unchanged.
-    max_queries = 24
+    # This is a total planning bound, not a per-click request count. The
+    # Tavily adapter still consumes only SEARCH_TAVILY_QUERIES_PER_ROUND per
+    # round, so later clicks can continue accumulating candidates safely.
+    max_queries = 96
     return tuple(queries[:max_queries])
 
 
@@ -155,7 +189,10 @@ def build_search_queries_for_round(
         )
     if len(queries) <= max_queries:
         return queries
-    start = max(0, round_index) * max_queries
-    if start >= len(queries):
-        return ()
+    # A task can remain active for many days. Once the finite query pool has
+    # been consumed, wrap to the next slice rather than silently issuing an
+    # empty request; the provider-level domain dedupe still prevents repeats
+    # during the current process.
+    slice_count = (len(queries) + max_queries - 1) // max_queries
+    start = (max(0, round_index) % slice_count) * max_queries
     return queries[start : start + max_queries]

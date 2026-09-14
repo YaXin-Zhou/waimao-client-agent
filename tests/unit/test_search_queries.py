@@ -120,5 +120,19 @@ def test_build_search_queries_bounds_large_condition_combinations():
 
     queries = build_search_queries(criteria)
 
-    assert len(queries) == 24
+    assert len(queries) == 96
     assert queries[0].startswith("plastic parts automotive manufacturer country-0")
+
+
+def test_build_search_queries_wraps_after_all_bounded_rounds():
+    from src.application.search_queries import build_search_queries_for_round
+
+    criteria = AcquisitionCriteria(
+        product="plastic parts", countries=("France",), industries=("automotive",)
+    )
+    first = build_search_queries_for_round(criteria, 0, max_queries=12)
+    wrapped = build_search_queries_for_round(criteria, 99, max_queries=12)
+
+    assert first
+    assert wrapped
+    assert all("France" in query for query in wrapped)

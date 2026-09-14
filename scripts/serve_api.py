@@ -96,10 +96,14 @@ email_draft_repository = SQLiteEmailDraftRepository(DATABASE)
 email_send_attempt_repository = SQLiteEmailSendAttemptRepository(DATABASE)
 follow_up_task_repository = SQLiteFollowUpTaskRepository(DATABASE)
 audit_repository = SQLiteAuditEventRepository(DATABASE)
-static_search_provider = GoogleSearchProvider(
-    timeout=float(config_values.get("SEARCH_TIMEOUT_SECONDS", "15")),
-    max_results_per_query=int(config_values.get("SEARCH_RESULTS_PER_QUERY", "10")),
-    host=config_values.get("SEARCH_GOOGLE_HOST", "www.google.com.hk"),
+static_search_provider = (
+    GoogleSearchProvider(
+        timeout=float(config_values.get("SEARCH_TIMEOUT_SECONDS", "15")),
+        max_results_per_query=int(config_values.get("SEARCH_RESULTS_PER_QUERY", "10")),
+        host=config_values.get("SEARCH_GOOGLE_HOST", "www.google.com.hk"),
+    )
+    if config_values.get("SEARCH_GOOGLE_ENABLED", "false").lower() == "true"
+    else None
 )
 browser_search_provider = None
 if config_values.get("SEARCH_BROWSER_ENABLED", "true").lower() == "true":
