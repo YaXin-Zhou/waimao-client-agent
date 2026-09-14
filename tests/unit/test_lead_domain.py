@@ -93,6 +93,24 @@ def test_generic_website_can_use_one_consistent_country_code_email_suffix():
     assert cleaned[0].country == "Germany"
 
 
+def test_generic_us_website_can_use_state_zip_and_phone_address_evidence():
+    sources = (
+        (
+            "https://example-molding.com/contact",
+            "Contact us - 123 Industrial Drive, Detroit, MI 48201, United States. "
+            "Phone: +1 (313) 555-0199.",
+        ),
+    )
+
+    assert infer_country_from_public_evidence("example-molding.com", sources) == "United States"
+
+
+def test_generic_country_evidence_does_not_treat_unqualified_zip_as_us():
+    sources = (("https://example-molding.com/contact", "Address: 12345 Industrial Park"),)
+
+    assert infer_country_from_public_evidence("example-molding.com", sources) == ""
+
+
 def test_clean_company_name_removes_search_title_prefixes():
     assert clean_company_name(
         "automotiveAutomotive Injection Moulding - Plastic-IT"

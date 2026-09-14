@@ -105,6 +105,23 @@ _PLACEHOLDER_EMAIL_DOMAINS = {
 }
 _SUSPICIOUS_EMAIL_DOMAIN_MARKERS = ("localhost", "invalid", "testing")
 _NON_EMAIL_FILE_TLDS = {"png", "jpg", "jpeg", "gif", "svg", "webp", "avif", "ico"}
+_US_STATE_NAMES = (
+    "alabama", "alaska", "arizona", "arkansas", "california", "colorado",
+    "connecticut", "delaware", "florida", "georgia", "hawaii", "idaho",
+    "illinois", "indiana", "iowa", "kansas", "kentucky", "louisiana",
+    "maine", "maryland", "massachusetts", "michigan", "minnesota",
+    "mississippi", "missouri", "montana", "nebraska", "nevada", "ohio",
+    "oklahoma", "oregon", "pennsylvania", "rhode island", "south carolina",
+    "south dakota", "tennessee", "texas", "utah", "vermont", "virginia",
+    "washington", "west virginia", "wisconsin", "wyoming",
+)
+_US_STATE_CODES = (
+    "AL", "AK", "AZ", "AR", "CA", "CO", "CT", "DE", "FL", "GA", "HI",
+    "ID", "IL", "IN", "IA", "KS", "KY", "LA", "ME", "MD", "MA", "MI",
+    "MN", "MS", "MO", "MT", "NE", "NV", "NH", "NJ", "NM", "NY", "NC",
+    "ND", "OH", "OK", "OR", "PA", "RI", "SC", "SD", "TN", "TX", "UT",
+    "VT", "VA", "WA", "WV", "WI", "WY",
+)
 
 
 def _normalize_text(value: str) -> str:
@@ -159,6 +176,16 @@ def infer_country_from_public_evidence(
         "United Kingdom": r"(?:based|located|headquartered|registered|office|address)[^.!?]{0,80}\b(?:united kingdom|uk)\b|\b(?:united kingdom|uk)\b[^.!?]{0,80}(?:address|office|location|registered)",
         "United States": r"(?:based|located|headquartered|registered|office|address)[^.!?]{0,80}\b(?:united states|usa)\b|\b(?:united states|usa)\b[^.!?]{0,80}(?:address|office|location|registered)",
     }
+    us_states = "|".join(re.escape(value) for value in _US_STATE_NAMES)
+    us_codes = "|".join(code.casefold() for code in _US_STATE_CODES)
+    address_cue = r"(?:based|located|headquartered|registered|office|address|mailing|contact|facility|plant|warehouse)"
+    patterns["United States"] += (
+        rf"|\b(?:{us_states})\b[^.!?]{{0,40}}\b(?:{us_codes})\s+\d{{5}}(?:-\d{{4}})?\b"
+        rf"|\b(?:{us_codes})\s+\d{{5}}(?:-\d{{4}})?\b[^.!?]{{0,80}}\b{address_cue}\b"
+        rf"|\b{address_cue}\b[^.!?]{{0,100}}\b(?:{us_states})\b[^.!?]{{0,50}}\b(?:{us_codes})\b"
+        rf"|\b{address_cue}\b[^.!?]{{0,120}}\b(?:{us_codes})\s+\d{{5}}(?:-\d{{4}})?\b"
+        rf"|\b{address_cue}\b[^.!?]{{0,100}}(?:\+1|001)[\s().-]*\d{{3}}[\s().-]*\d{{3}}[\s.-]*\d{{4}}"
+    )
     matches = [country for country, pattern in patterns.items() if re.search(pattern, website_text)]
     return matches[0] if len(set(matches)) == 1 else ""
 
