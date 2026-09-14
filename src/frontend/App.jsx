@@ -264,9 +264,20 @@ function App() {
     const profile = remoteTaskConfig?.sender_profile || {}
     const criteria = remoteTaskConfig?.criteria || {}
     const product = criteria.product || criteria.keywords?.[0] || ''
-    if (!remoteTaskId || !remoteLeads.length || !product || !profile.company_name || !profile.contact_name || !profile.position) return
-    if (autoDraftTaskRef.current === remoteTaskId) return
-    autoDraftTaskRef.current = remoteTaskId
+    const completedResearch = new Set(
+      researchRuns
+        .filter((run) => ['succeeded', 'review_required'].includes(run.status))
+        .map((run) => run.domain),
+    )
+    const existingDraftDomains = new Set(batchDrafts.map((draft) => draft.lead_domain))
+    const readyDomains = remoteLeads
+      .filter((lead) => lead.qualified && !lead.contacted && lead.email?.includes('@'))
+      .map((lead) => lead.domain)
+      .filter((domain) => completedResearch.has(domain) && !existingDraftDomains.has(domain))
+    if (!remoteTaskId || !readyDomains.length || !product || !profile.company_name || !profile.contact_name || !profile.position) return
+    const requestKey = `${remoteTaskId}:${readyDomains.sort().join(',')}`
+    if (autoDraftTaskRef.current === requestKey) return
+    autoDraftTaskRef.current = requestKey
     fetch(`/api/tasks/${remoteTaskId}/drafts/batch-generate`, {
       method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ product }),
     }).then(async (response) => {
@@ -274,7 +285,7 @@ function App() {
       if (!response.ok) throw new Error(payload.error || '邮件自动生成失败')
       if (payload.generated_count) setBatchDrafts((items) => [...items, ...(payload.items || [])])
     }).catch(() => { autoDraftTaskRef.current = null })
-  }, [remoteTaskId, remoteTaskConfig, remoteLeads.length])
+  }, [remoteTaskId, remoteTaskConfig, remoteLeads, researchRuns, batchDrafts])
   useEffect(() => {
     if (!remoteTaskId) return undefined
     let cancelled = false
@@ -909,7 +920,7 @@ function App() {
         <ReplyCenter mailboxStatus={mailboxStatus} threads={mailThreads} analyses={replyAnalyses} followUpTasks={followUpTasks} loading={replyLoading} onTest={testMailbox} onSync={syncMailbox} onAnalyze={analyzeReplies} onGenerateDraft={generateReplyDraft} onFollowUpStatus={updateFollowUpStatus}/>
         <section className="workspace-grid">
           <div className="lead-panel panel"><div className="panel-heading"><div><h2>可发送客户 <span>共 {filteredLeads.length} 个</span></h2><p>已找到官网公开邮箱，可以直接联系</p></div></div><div className="table-head"><span className="checkbox"/><span>公司名称</span><span>国家 / 地区</span><span>客户类型</span><span>状态</span><span/></div><div className="lead-list">{filteredLeads.length ? filteredLeads.map((lead) => <button className={`lead-row ${selected?.name === lead.name ? 'selected' : ''}`} key={lead.name} onClick={() => selectLead(lead)}><span className={`checkbox ${selected?.name === lead.name ? 'checked' : ''}`}>{selected?.name === lead.name && <Icon name="check" size={13}/>}</span><strong>{lead.name}</strong><span className="country"><span>{lead.flag}</span>{lead.country}</span><span>{lead.type}</span><Status status={lead.status}/><span className="more">···</span></button>) : <div className="empty-results">{remoteLeads.length ? '这次没有找到合格客户，请换一组条件' : '搜索后，合格客户会显示在这里'}</div>}</div><div className="table-footer"><span>当前显示 {filteredLeads.length} 个客户</span></div></div>
-          <aside className={`detail-panel panel ${filteredLeads.length && activeLead ? '' : 'detail-empty'}`}>{filteredLeads.length && activeLead ? <><div className="detail-top"><div className="company-symbol">◎</div><div className="company-title"><div><h2>{activeLead.name} <a href={activeLead.website} target="_blank" rel="noreferrer"><Icon name="external" size={14}/></a></h2><p>{activeLead.country} <i/> {activeLead.type} <i/> {activeLead.research ? '已完成官网背调' : '资料待整理'}</p></div><Status status={activeLead.status}/></div></div><div className="detail-tabs">{['概览', '来源证据', '邮件草稿'].map((tab) => <button className={detailTab === tab ? 'active' : ''} key={tab} onClick={() => setDetailTab(tab)}>{tab}</button>)}</div>{detailTab === '概览' && <><Overview lead={activeLead} onEvidence={() => setDetailTab('来源证据')} onDraft={() => setDetailTab('邮件草稿')}/><ResearchPanel lead={activeLead} loading={researchLoading} onStart={startResearch} onReview={reviewResearchField}/><LeadTimeline lead={activeLead} events={activeLead.auditEvents} onTransition={transitionLead} loading={leadTransitionLoading}/></>} {detailTab === '来源证据' && <Evidence lead={activeLead} onRefresh={refreshContacts} refreshing={contactRefreshLoading}/>} {detailTab === '邮件草稿' && <><Draft lead={activeLead} language={language} setLanguage={setLanguage} translatedDraft={translatedDraft} translationLoading={translationLoading} onTranslate={translateDraft} onReview={reviewDraft} reviewLoading={reviewLoading} status={draftStatus} setStatus={setDraftStatus} notify={notify}/><ContactForm lead={activeLead} onUpdate={updateContact} onRefresh={refreshContacts} refreshing={contactRefreshLoading}/><SenderProfileEditor taskConfig={remoteTaskConfig} onSave={saveSenderProfile}/><DraftGenerator lead={activeLead} taskConfig={remoteTaskConfig} loading={reviewLoading} onGenerate={generateDraft}/><ReviewControls lead={activeLead} sendingEnabled={mailboxStatus?.sending_enabled} onReview={reviewDraft} onSafetyCheck={runSendSafetyCheck} safetyLoading={safetyLoading} safetyResult={sendSafety} onSend={sendDraft} sendLoading={sendLoading} loading={reviewLoading}/></>}</> : <div className="detail-empty-state"><strong>没有选中的客户</strong><span>调整搜索词后选择一条客户记录</span></div>}</aside>
+          <aside className={`detail-panel panel ${filteredLeads.length && activeLead ? '' : 'detail-empty'}`}>{filteredLeads.length && activeLead ? <><div className="detail-top"><div className="company-symbol">◎</div><div className="company-title"><div><h2>{activeLead.name} <a href={activeLead.website} target="_blank" rel="noreferrer"><Icon name="external" size={14}/></a></h2><p>{activeLead.country} <i/> {activeLead.type} <i/> {activeLead.research ? '已完成官网背调' : '资料待整理'}</p></div><Status status={activeLead.status}/></div></div><div className="detail-tabs">{['概览', '来源证据', '邮件草稿'].map((tab) => <button className={detailTab === tab ? 'active' : ''} key={tab} onClick={() => setDetailTab(tab)}>{tab}</button>)}</div>{detailTab === '概览' && <><Overview lead={activeLead} onEvidence={() => setDetailTab('来源证据')} onDraft={() => setDetailTab('邮件草稿')}/><ResearchPanel lead={activeLead} loading={researchLoading} onStart={startResearch} onReview={reviewResearchField}/><LeadTimeline lead={activeLead} events={activeLead.auditEvents} onTransition={transitionLead} loading={leadTransitionLoading}/></>} {detailTab === '来源证据' && <Evidence lead={activeLead} onRefresh={refreshContacts} refreshing={contactRefreshLoading}/>} {detailTab === '邮件草稿' && <><Draft lead={activeLead} language={language} setLanguage={setLanguage} translatedDraft={translatedDraft} translationLoading={translationLoading} onTranslate={translateDraft} onReview={reviewDraft} reviewLoading={reviewLoading} status={draftStatus} setStatus={setDraftStatus} notify={notify}/><ContactForm lead={activeLead} onUpdate={updateContact} onRefresh={refreshContacts} refreshing={contactRefreshLoading}/><SenderProfileEditor taskConfig={remoteTaskConfig} onSave={saveSenderProfile}/><ReviewControls lead={activeLead} sendingEnabled={mailboxStatus?.sending_enabled} onReview={reviewDraft} onSafetyCheck={runSendSafetyCheck} safetyLoading={safetyLoading} safetyResult={sendSafety} onSend={sendDraft} sendLoading={sendLoading} loading={reviewLoading}/></>}</> : <div className="detail-empty-state"><strong>没有选中的客户</strong><span>调整搜索词后选择一条客户记录</span></div>}</aside>
         </section>
       </>}
       </div>
