@@ -92,6 +92,36 @@ _DISCOVERY_QUALIFIERS = (
     "engineering manager",
 )
 
+# Local-language and regional discovery terms improve recall while the
+# deterministic country check remains the final gate. These are query terms,
+# not additional target countries.
+_COUNTRY_LANGUAGE_TERMS = {
+    "德国": ("Spritzgussteile", "Kunststoffspritzguss", "Kunststoffteile", "Automobilzulieferer"),
+    "germany": ("Spritzgussteile", "Kunststoffspritzguss", "Kunststoffteile", "Automobilzulieferer"),
+    "法国": ("pièces injectées", "injection plastique", "plasturgie", "équipementier automobile"),
+    "france": ("pièces injectées", "injection plastique", "plasturgie", "équipementier automobile"),
+    "意大利": ("stampaggio a iniezione", "componenti in plastica", "fornitore automotive"),
+    "italy": ("stampaggio a iniezione", "componenti in plastica", "fornitore automotive"),
+}
+
+_COUNTRY_REGIONS = {
+    "德国": ("Bavaria", "Bayern", "Baden-Württemberg", "North Rhine-Westphalia", "NRW"),
+    "germany": ("Bavaria", "Bayern", "Baden-Württemberg", "North Rhine-Westphalia", "NRW"),
+    "法国": ("Île-de-France", "Auvergne-Rhône-Alpes", "Grand Est"),
+    "france": ("Île-de-France", "Auvergne-Rhône-Alpes", "Grand Est"),
+    "意大利": ("Lombardy", "Lombardia", "Emilia-Romagna", "Veneto"),
+    "italy": ("Lombardy", "Lombardia", "Emilia-Romagna", "Veneto"),
+}
+
+_ROLE_INTENTS = (
+    "OEM",
+    "Tier 1",
+    "automotive supplier",
+    "buyer",
+    "sourcing manager",
+    "purchasing manager",
+)
+
 
 def _search_term(value: str) -> str:
     """将中文输入转换为英文搜索词，转换只发生在后端查询构建阶段。"""
@@ -143,6 +173,7 @@ def build_search_queries(criteria: AcquisitionCriteria) -> tuple[str, ...]:
     countries = _translated(criteria.countries) or ("",)
 
     base_queries: list[str] = []
+    localized_queries: list[str] = []
     for term, industry, country, customer_type in product(
         terms, industries, countries, customer_types
     ):
@@ -151,14 +182,39 @@ def build_search_queries(criteria: AcquisitionCriteria) -> tuple[str, ...]:
         )
         if query and query not in base_queries:
             base_queries.append(query)
-    queries: list[str] = list(base_queries)
-    for base_query in base_queries:
+        country_key = country.casefold()
+        for local_term in _COUNTRY_LANGUAGE_TERMS.get(country_key, ()):
+            query = " ".join(
+                part.strip()
+                for part in (local_term, industry, customer_type, country)
+                if part.strip()
+            )
+            if query and query not in localized_queries:
+                localized_queries.append(query)
+        for region in _COUNTRY_REGIONS.get(country_key, ()):
+            query = " ".join(
+                part.strip()
+                for part in (term, industry, customer_type, region, country)
+                if part.strip()
+            )
+            if query and query not in localized_queries:
+                localized_queries.append(query)
+    query_bases = [*base_queries, *localized_queries]
+    # Keep the original English base queries first for compatibility, then add
+    # localized and regional bases before their role/qualifier variants so the
+    # first several rounds already cover genuinely different result pools.
+    queries: list[str] = list(query_bases)
+    for base_query in query_bases:
         for intent in _BUYER_INTENTS[1:]:
             query = " ".join(part for part in (base_query, intent) if part)
             if query not in queries:
                 queries.append(query)
         for qualifier in _DISCOVERY_QUALIFIERS:
             query = " ".join(part for part in (base_query, qualifier) if part)
+            if query not in queries:
+                queries.append(query)
+        for role in _ROLE_INTENTS:
+            query = " ".join(part for part in (base_query, role) if part)
             if query not in queries:
                 queries.append(query)
     # Keep flexible user criteria, but bound the cartesian product so a browser
