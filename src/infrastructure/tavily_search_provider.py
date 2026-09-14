@@ -3,11 +3,13 @@
 from __future__ import annotations
 
 import json
+import re
 import time
 from dataclasses import replace
 from typing import Callable
 from urllib.error import HTTPError, URLError
 from urllib.request import Request, urlopen
+from urllib.parse import urlparse
 
 from src.application.search_queries import build_search_queries_for_round
 from src.domain.lead import LeadRecord, canonical_website_domain
@@ -24,6 +26,11 @@ class TavilySearchProvider:
     # already succeeded. Fallbacks remain available when Tavily errors or
     # returns no usable candidates.
     return_immediately_after_results = True
+    _DIRECTORY_DOMAINS = frozenset({
+        "wlw.de",
+        "europages.com",
+        "europages.co.uk",
+    })
 
     def __init__(
         self,
@@ -119,6 +126,21 @@ class TavilySearchProvider:
                 )
                 if len(records) >= target:
                     return records[:target]
+        # Directories are useful for enumeration but are not company websites.
+        # Use a few directory entries only as names to seed a second, official-
+        # website lookup. This adds recall without ever persisting a directory
+        # page as a customer or treating its contact data as verified.
+        if len(records) < target:
+            records.extend(
+                self._discover_official_sites_from_directories(
+                    search_criteria,
+                    records,
+                    target,
+                    round_index,
+                )
+            )
+            if records:
+                return records[:target]
         if not records:
             if query_pool_reused:
                 raise SearchProviderError(
@@ -126,6 +148,92 @@ class TavilySearchProvider:
                 )
             raise SearchProviderError("Tavily returned no public website results")
         return records
+
+    def _discover_official_sites_from_directories(
+        self,
+        criteria: AcquisitionCriteria,
+        existing: list[LeadRecord],
+        target: int,
+        round_index: int,
+    ) -> list[LeadRecord]:
+        """Turn a few directory names into official-site candidates.
+
+        This is deliberately small and bounded: directory pages can be noisy,
+        and the official-site lookup is an additional API call. The existing
+        website fetcher and qualification gate remain responsible for public
+        email and country verification.
+        """
+        countries = " ".join(value.strip() for value in criteria.countries if value.strip())
+        terms = " ".join(value.strip() for value in criteria.keywords[:2] if value.strip())
+        if not terms:
+            terms = criteria.product.strip()
+        directory_queries = (
+            f"site:wlw.de {terms} {countries} supplier",
+            f"site:europages.com {terms} {countries} manufacturer",
+        )
+        directory_query = directory_queries[round_index % len(directory_queries)]
+        payload = self._request(directory_query)
+        names: list[str] = []
+        for result in payload.get("results", []):
+            if not isinstance(result, dict):
+                continue
+            url = str(result.get("url", "")).strip()
+            if self._directory_domain(url) not in self._DIRECTORY_DOMAINS:
+                continue
+            names.extend(self._extract_directory_company_names(
+                f"{result.get('title', '')} {result.get('content', '')}"
+            ))
+        discovered: list[LeadRecord] = []
+        seen = {canonical_website_domain(item.website) for item in existing}
+        for name in dict.fromkeys(names):
+            if len(discovered) + len(existing) >= target or len(discovered) >= 3:
+                break
+            lookup = f'"{name}" official website {countries} contact'
+            lookup_payload = self._request(lookup)
+            for result in lookup_payload.get("results", []):
+                if not isinstance(result, dict):
+                    continue
+                url = str(result.get("url", "")).strip()
+                title = str(result.get("title", "")).strip()
+                content = str(result.get("content", "")).strip()
+                domain = canonical_website_domain(url)
+                if (
+                    not domain
+                    or domain in seen
+                    or not GoogleSearchProvider._is_candidate(url, title)
+                    or not self._is_company_result(title, f"{content} {url}")
+                ):
+                    continue
+                seen.add(domain)
+                self._excluded_domains.add(domain.casefold().removeprefix("www."))
+                discovered.append(
+                    LeadRecord(
+                        company_name=title or name,
+                        website=url,
+                        source_url=self._endpoint,
+                        source_excerpt=content or title or name,
+                    )
+                )
+                break
+        return discovered
+
+    @classmethod
+    def _directory_domain(cls, url: str) -> str:
+        return (urlparse(url).hostname or "").lower().removeprefix("www.")
+
+    @staticmethod
+    def _extract_directory_company_names(text: str) -> tuple[str, ...]:
+        """Extract only legal-name-shaped snippets from directory summaries."""
+        pattern = re.compile(
+            r"\b([A-ZÄÖÜ][A-Za-zÄÖÜäöüß0-9&'().,\-/ ]{2,80}?\s+"
+            r"(?:GmbH(?:\s*&\s*Co\.\s*KG)?|AG|KG|UG|S\.?r\.?l\.?|"
+            r"Ltd\.?|Inc\.?|LLC|SAS|S\.?A\.))\b"
+        )
+        return tuple(
+            " ".join(match.split()).strip(" -|,;")
+            for match in pattern.findall(text)
+            if len(match.strip()) >= 4
+        )
 
     def _request(self, query: str) -> dict:
         request = Request(

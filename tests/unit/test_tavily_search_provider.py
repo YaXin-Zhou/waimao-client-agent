@@ -92,6 +92,19 @@ def test_tavily_provider_keeps_company_pages_with_broad_business_terms():
     )
 
 
+def test_tavily_directory_helpers_keep_directory_pages_out_of_customer_pool():
+    names = TavilySearchProvider._extract_directory_company_names(
+        "TechniForm GmbH Deutschland; SCHLIESSMEYER GmbH; 77 Anbieter für Kunststoffspritzguss"
+    )
+
+    assert names == ("TechniForm GmbH", "SCHLIESSMEYER GmbH")
+    assert TavilySearchProvider._directory_domain("https://www.wlw.de/de/suche/x") == "wlw.de"
+    assert TavilySearchProvider._directory_domain("https://example.de/company") == "example.de"
+    assert TavilySearchProvider._directory_domain("https://www.wlw.de/de/suche/x") in (
+        "wlw.de", "europages.com", "europages.co.uk"
+    )
+
+
 def test_tavily_provider_accepts_configured_query_budget():
     provider = TavilySearchProvider(
         "secret", max_results_per_query=20, max_queries_per_round=8
