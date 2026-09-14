@@ -40,6 +40,13 @@ def test_email_validation_accepts_dotted_business_mailboxes_and_rejects_urls():
     assert is_plausible_email("hero@2x.png") is False
 
 
+def test_email_validation_rejects_web_encoding_and_test_addresses():
+    assert is_plausible_email("%20me@microplast.fr") is False
+    assert is_plausible_email(
+        "asuperlongemailadresstocheckreflowonmobile@testingtesting123.com"
+    ) is False
+
+
 def test_country_is_inferred_from_country_code_domain_without_search_title():
     cleaned = clean_leads(
         [

@@ -103,6 +103,7 @@ _PLACEHOLDER_EMAIL_DOMAINS = {
     "contoso.com",
     "test.com",
 }
+_SUSPICIOUS_EMAIL_DOMAIN_MARKERS = ("localhost", "invalid", "testing")
 _NON_EMAIL_FILE_TLDS = {"png", "jpg", "jpeg", "gif", "svg", "webp", "avif", "ico"}
 
 
@@ -266,7 +267,15 @@ def is_plausible_email(email: str) -> bool:
     if "@" not in address:
         return False
     local, domain = address.rsplit("@", 1)
-    if not local or "." not in domain:
+    if (
+        not local
+        or not domain
+        or "." not in domain
+        or "%" in address
+        or len(local) > 64
+        or len(domain) > 253
+        or any(marker in domain for marker in _SUSPICIOUS_EMAIL_DOMAIN_MARKERS)
+    ):
         return False
     if domain in _PLACEHOLDER_EMAIL_DOMAINS:
         return False

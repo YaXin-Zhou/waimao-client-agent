@@ -24,6 +24,7 @@ from src.domain.lead import (
     clean_company_name,
     clean_leads,
     identity_consistency,
+    is_plausible_email,
     is_credible_source_excerpt,
     is_search_source,
     score_lead,
@@ -305,6 +306,9 @@ class AcquisitionService:
                     item.lead,
                     company_name=clean_company_name(
                         item.lead.company_name, item.lead.domain
+                    ),
+                    emails=tuple(
+                        email for email in item.lead.emails if is_plausible_email(email)
                     ),
                     sources=tuple(
                         source
