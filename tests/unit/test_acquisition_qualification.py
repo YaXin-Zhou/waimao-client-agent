@@ -104,7 +104,7 @@ def test_qualification_accepts_plausible_industry_use_without_exact_product_phra
     assert result.qualified is True
 
 
-def test_qualification_accepts_unknown_country_when_email_is_available():
+def test_qualification_rejects_unknown_country_when_target_market_is_configured():
     criteria = AcquisitionCriteria(product="CNC machining", countries=("德国", "美国", "英国"))
     result = AcquisitionService._qualify(
         [
@@ -122,11 +122,11 @@ def test_qualification_accepts_unknown_country_when_email_is_available():
         criteria,
     )[0]
 
-    assert result.qualified is True
-    assert "country_unconfirmed" not in result.rejection_reasons
+    assert result.qualified is False
+    assert "missing_target_country" in result.rejection_reasons
 
 
-def test_qualification_accepts_country_outside_target_markets_when_email_is_available():
+def test_qualification_rejects_country_outside_target_markets_even_when_email_is_available():
     criteria = AcquisitionCriteria(product="CNC machining", countries=("德国", "美国", "英国"))
     result = AcquisitionService._qualify(
         [
@@ -144,8 +144,8 @@ def test_qualification_accepts_country_outside_target_markets_when_email_is_avai
         criteria,
     )[0]
 
-    assert result.qualified is True
-    assert "country_not_target" not in result.rejection_reasons
+    assert result.qualified is False
+    assert "country_not_target" in result.rejection_reasons
 
 
 def test_qualification_accepts_public_email_even_when_domain_differs():

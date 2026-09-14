@@ -118,6 +118,13 @@ function App() {
   const [replyLoading, setReplyLoading] = useState(false)
   const [selectedResearch, setSelectedResearch] = useState(null)
   const [selectedDraft, setSelectedDraft] = useState(null)
+  const [batchDrafts, setBatchDrafts] = useState([])
+  const [batchIndex, setBatchIndex] = useState(0)
+  const [batchSelectedIds, setBatchSelectedIds] = useState([])
+  const [batchTranslations, setBatchTranslations] = useState({})
+  const [batchTranslationLoading, setBatchTranslationLoading] = useState(false)
+  const [batchPreview, setBatchPreview] = useState(null)
+  const [batchLoading, setBatchLoading] = useState(false)
   const [selectedSendHistory, setSelectedSendHistory] = useState([])
   const [selectedLeadAudit, setSelectedLeadAudit] = useState([])
   const [leadTransitionLoading, setLeadTransitionLoading] = useState(false)
@@ -240,6 +247,21 @@ function App() {
   useEffect(() => {
     if (!remoteTaskId) return undefined
     let cancelled = false
+    fetch(`/api/tasks/${remoteTaskId}/drafts`)
+      .then((response) => response.ok ? response.json() : Promise.reject(new Error('draft list failed')))
+      .then((data) => {
+        if (cancelled) return
+        const drafts = data.items || []
+        setBatchDrafts(drafts)
+        setBatchIndex((current) => Math.min(current, Math.max(0, drafts.length - 1)))
+        setBatchSelectedIds((ids) => ids.filter((id) => drafts.some((draft) => draft.id === id && draft.status === 'approved')))
+      })
+      .catch(() => { if (!cancelled) setBatchDrafts([]) })
+    return () => { cancelled = true }
+  }, [remoteTaskId, selectedDraft?.id, selectedDraft?.status])
+  useEffect(() => {
+    if (!remoteTaskId) return undefined
+    let cancelled = false
     let timer
     const loadDiscoveryRuns = async () => {
       try {
@@ -358,10 +380,10 @@ function App() {
       .catch(() => {})
     return () => { cancelled = true }
   }, [researchRuns, remoteTaskId, selected?.domain])
-  // 国家是搜索时的目标条件，但不能在结果页再次用“未知/翻译差异”把
-  // 已经由后端判定合格的邮箱客户隐藏掉。后端返回的 qualified 是唯一展示门槛。
-  const targetLeads = remoteLeads
-  const qualifiedLeads = targetLeads.filter((lead) => lead.qualified && !lead.contacted)
+  // “可发送客户”不是候选归档：必须已由后端验证为目标市场、存在公开邮箱，
+  // 并且尚未联系。这样德国搜索不会展示中国、美国或国家未知的记录。
+  const targetLeads = remoteLeads.filter((lead) => lead.qualified && !lead.contacted)
+  const qualifiedLeads = targetLeads
   const displayLeads = leadView === 'qualified' ? qualifiedLeads : targetLeads
   const filteredLeads = useMemo(() => displayLeads.filter((lead) => `${lead.name} ${lead.country} ${lead.type}`.toLowerCase().includes(query.toLowerCase())), [displayLeads, query])
   const activeLead = selected ? { ...selected, type: selectedResearch ? customerTypeLabel(selectedResearch.customer_type) : selected.type, detail: selectedResearch?.business_summary || selected.detail, research: selectedResearch, draft: selectedDraft, sendHistory: selectedSendHistory, auditEvents: selectedLeadAudit, researchRun: researchRuns.find((run) => run.domain === selected.domain), isRemote: true } : null
@@ -462,6 +484,48 @@ function App() {
       setTranslatedDraft(null)
       notify('邮件草稿已生成，请人工审核')
     } catch { notify('邮件生成失败，请确认客户资料已整理完成') } finally { setReviewLoading(false) }
+  }
+  const reviewBatchDraft = async (draftId, action = 'approve') => {
+    setBatchLoading(true)
+    try {
+      const response = await fetch(`/api/drafts/${draftId}/${action}`, {
+        method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ note: '' }),
+      })
+      const payload = await response.json()
+      if (!response.ok) throw new Error(payload.error || 'batch review failed')
+      setBatchDrafts((items) => items.map((draft) => draft.id === draftId ? payload : draft))
+      setBatchSelectedIds((items) => action === 'approve' ? items : items.filter((id) => id !== draftId))
+      notify(action === 'approve' ? '邮件已审核通过' : '邮件已退回修改')
+    } catch (error) { notify(error.message || '批量审核失败') } finally { setBatchLoading(false) }
+  }
+  const translateBatchDraft = async (draftId) => {
+    if (!draftId || batchTranslationLoading || batchTranslations[draftId]) return
+    setBatchTranslationLoading(true)
+    try {
+      const response = await fetch(`/api/drafts/${draftId}/translate`, {
+        method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ target_language: 'zh-CN' }),
+      })
+      const payload = await response.json()
+      if (!response.ok || !payload?.body) throw new Error('translation failed')
+      setBatchTranslations((items) => ({ ...items, [draftId]: payload }))
+    } catch { notify('中文预览暂时生成失败，请稍后重试') } finally { setBatchTranslationLoading(false) }
+  }
+  const sendBatchDrafts = async (confirmed = false) => {
+    const approvedIds = batchSelectedIds.filter((id) => batchDrafts.some((draft) => draft.id === id && draft.status === 'approved'))
+    if (!remoteTaskId || !approvedIds.length) { notify('请先选择审核通过的邮件'); return }
+    setBatchLoading(true)
+    try {
+      const response = await fetch(`/api/tasks/${remoteTaskId}/drafts/batch-send`, {
+        method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ draft_ids: approvedIds, confirmed }),
+      })
+      const payload = await response.json()
+      if (!response.ok) throw new Error(payload.error || 'batch send failed')
+      if (!confirmed) { setBatchPreview(payload); return }
+      setBatchPreview(null)
+      setBatchSelectedIds([])
+      notify(`批量发送完成：${payload.sent_count || 0} 封成功，${payload.failed_count || 0} 封失败`)
+      await refreshAfterSend()
+    } catch (error) { notify(error.message || '批量发送失败') } finally { setBatchLoading(false) }
   }
   const runSendSafetyCheck = async () => {
     if (!selectedDraft?.id) return
@@ -824,7 +888,8 @@ function App() {
         <div className="page-heading"><div><h1>找客户</h1><p>输入目标条件，优先展示官网有公开邮箱的客户</p></div></div>
         <div className={`data-notice ${apiState}`}><span />{apiState === 'loading' ? '正在准备客户资料…' : apiState === 'connected' ? '客户资料已准备就绪' : apiState === 'empty' ? '当前还没有客户资料' : '客户资料暂时无法读取'}</div>
         <section className="search-panel panel"><div className="search-panel-heading"><div><h2>搜索条件</h2><p>常用条件放在这里，中文也可以直接输入</p></div><button type="button" className="primary-button" disabled={isSearching} onClick={discoverLeads}><Icon name="search" size={16}/>{isSearching ? '正在搜索…' : '搜索可发送客户'}</button></div><div className="search-fields"><label>产品或业务关键词<input value={searchProduct} onChange={(event) => setSearchProduct(event.target.value)} placeholder="例如：注塑件、塑料零件、精密加工" /></label><label>目标国家 / 地区<input value={searchCountries} onChange={(event) => setSearchCountries(event.target.value)} placeholder="例如：德国、墨西哥" /></label><label>行业<input value={searchIndustries} onChange={(event) => setSearchIndustries(event.target.value)} placeholder="例如：汽车、电子" /></label>{searchWarnings.length > 0 && <div className="criteria-hint">{searchWarnings.map((warning) => <span key={warning}>{warning}</span>)}</div>}{discoveryError && <div className="discovery-friendly-error">{discoveryError}</div>}</div>{isSearching && <SearchProgress elapsedSeconds={searchElapsedSeconds} step={discoveryRun?.step} />}<div className="search-panel-foot"><details className="maintenance-inline"><summary>维护工具（不常用）</summary><div className="maintenance-inline-body"><button type="button" className="outline-button" onClick={() => setShowRuleEditor(true)}>研究规则</button><button type="button" className="outline-button" onClick={() => setShowBrowserImport(true)}>备用导入</button></div></details></div></section>
-        {discoverySummary ? <DiscoveryFunnel summary={discoverySummary}/> : null}
+        {discoverySummary ? <DiscoveryFunnel summary={discoverySummary} qualifiedCount={targetLeads.length}/> : null}
+        <BatchMailPanel drafts={batchDrafts} index={batchIndex} onIndexChange={setBatchIndex} selectedIds={batchSelectedIds} onToggle={(id) => setBatchSelectedIds((items) => items.includes(id) ? items.filter((item) => item !== id) : items.length >= 30 ? items : [...items, id])} onReview={reviewBatchDraft} translations={batchTranslations} translationLoading={batchTranslationLoading} onTranslate={translateBatchDraft} onPreview={() => sendBatchDrafts(false)} onConfirm={() => sendBatchDrafts(true)} loading={batchLoading} preview={batchPreview}/>
         <ReplyCenter mailboxStatus={mailboxStatus} threads={mailThreads} analyses={replyAnalyses} followUpTasks={followUpTasks} loading={replyLoading} onTest={testMailbox} onSync={syncMailbox} onAnalyze={analyzeReplies} onGenerateDraft={generateReplyDraft} onFollowUpStatus={updateFollowUpStatus}/>
         <section className="workspace-grid">
           <div className="lead-panel panel"><div className="panel-heading"><div><h2>可发送客户 <span>共 {filteredLeads.length} 个</span></h2><p>已找到官网公开邮箱，可以直接联系</p></div></div><div className="table-head"><span className="checkbox"/><span>公司名称</span><span>国家 / 地区</span><span>客户类型</span><span>状态</span><span/></div><div className="lead-list">{filteredLeads.length ? filteredLeads.map((lead) => <button className={`lead-row ${selected?.name === lead.name ? 'selected' : ''}`} key={lead.name} onClick={() => selectLead(lead)}><span className={`checkbox ${selected?.name === lead.name ? 'checked' : ''}`}>{selected?.name === lead.name && <Icon name="check" size={13}/>}</span><strong>{lead.name}</strong><span className="country"><span>{lead.flag}</span>{lead.country}</span><span>{lead.type}</span><Status status={lead.status}/><span className="more">···</span></button>) : <div className="empty-results">{remoteLeads.length ? '这次没有找到合格客户，请换一组条件' : '搜索后，合格客户会显示在这里'}</div>}</div><div className="table-footer"><span>当前显示 {filteredLeads.length} 个客户</span></div></div>
@@ -905,8 +970,10 @@ function evidenceCheckStatus(value) {
   return { supported: '已找到', not_found: '未找到', not_configured: '未设置', not_checked: '未检查', conflicting: '信息不一致' }[value] || value
 }
 
-function DiscoveryFunnel({ summary }) {
-  const count = summary.qualified_count || 0
+function DiscoveryFunnel({ summary, qualifiedCount }) {
+  // 以当前客户池的实际可展示数量为准，避免旧搜索摘要在任务切换后造成
+  // “上方数字”和下方客户列表不一致。
+  const count = Number.isFinite(qualifiedCount) ? qualifiedCount : (summary.qualified_count || 0)
   return <div className="discovery-funnel simple-funnel"><div><strong>本次搜索结果</strong><span>可发送客户</span></div><div className="qualified-result-count"><b>{count}</b><span>家</span></div><p className="funnel-note">这些客户已找到可用邮箱，可以直接进入人工发送。</p></div>
 }
 
@@ -1004,7 +1071,21 @@ function DraftGenerator({ lead, taskConfig, loading, onGenerate }) {
   return <div className="review-controls draft-generator"><div className="section-title"><h3>{lead.draft ? '重新生成邮件' : '生成邮件'}</h3><span>{lead.draft ? '会创建新版本，不覆盖当前草稿' : '使用已整理的客户资料与发件人资料'}</span></div><label>产品或服务<input value={product} onChange={(event) => setProduct(event.target.value)} placeholder="填写本次推广产品" /></label><label>写作方向<textarea value={template} onChange={(event) => setTemplate(event.target.value)} rows="2" /></label><button className="primary-button full" disabled={loading || !product.trim() || !lead.research || !hasRecipient} onClick={() => onGenerate(template, product)}>{loading ? '生成中…' : lead.draft ? '生成新版本草稿' : '生成邮件草稿'} <Icon name="arrow" size={16}/></button>{!hasRecipient ? <p className="generator-hint">当前没有公开邮箱，补充收件人后才能生成。</p> : !lead.research && <p className="generator-hint">{researchState.message}</p>}</div>
 }
 
+function BatchMailPanel({ drafts, index, onIndexChange, selectedIds, onToggle, onReview, translations, translationLoading, onTranslate, onPreview, onConfirm, loading, preview }) {
+  const current = drafts.length ? drafts[Math.min(index, drafts.length - 1)] : null
+  const [showChinese, setShowChinese] = useState(false)
+  useEffect(() => { if (current) setShowChinese(false) }, [current?.id])
+  if (!current) return null
+  const translated = translations[current.id]
+  const approved = drafts.filter((draft) => draft.status === 'approved')
+  const selectedApproved = drafts.filter((draft) => selectedIds.includes(draft.id) && draft.status === 'approved')
+  const subject = showChinese && translated ? translated.subject : current.subject
+  const body = showChinese && translated ? translated.body : current.body
+  return <section className="batch-mail-panel panel"><div className="panel-heading"><div><h2>批量审核邮件 <span>{drafts.length} 封</span></h2><p>逐封查看并审核，审核通过后再加入本次发送</p></div><span className="database-readonly">已审核 {approved.length} 封</span></div><div className="batch-mail-toolbar"><span>已选择 {selectedIds.length} 封 · 可发送 {selectedApproved.length} 封</span><button type="button" className="send-button" disabled={loading || !selectedApproved.length} onClick={onPreview}>发送已选邮件</button></div><div className="batch-mail-carousel"><button type="button" className="carousel-arrow" disabled={index <= 0} onClick={() => onIndexChange(index - 1)} aria-label="上一封">‹</button><article className="batch-mail-card"><div className="batch-mail-card-top"><span>第 {index + 1} / {drafts.length} 封</span><span className={`batch-draft-status ${current.status}`}>{current.status === 'approved' ? '已审核' : current.status === 'revision_required' ? '需修改' : current.status === 'rejected' ? '不发送' : '待审核'}</span></div><div className="batch-mail-recipient"><strong>{current.recipient_email}</strong><button type="button" className="text-button" disabled={translationLoading} onClick={() => translated ? setShowChinese((value) => !value) : onTranslate(current.id)}>{translationLoading ? '翻译中…' : showChinese ? '返回英文' : '中文预览'}</button></div><b>{subject}</b><p>{body}</p>{showChinese && translated && <small className="translation-note">中文仅用于审核阅读，发送时仍使用英文邮件。</small>}<label className="batch-select"><input type="checkbox" checked={selectedIds.includes(current.id)} disabled={current.status !== 'approved'} onChange={() => onToggle(current.id)} />加入本次发送</label><div className="batch-card-actions"><button type="button" className="outline-button" disabled={loading || current.status === 'approved' || current.status === 'rejected'} onClick={() => onReview(current.id, 'approve')}>审核通过</button><button type="button" className="outline-button" disabled={loading || current.status === 'approved' || current.status === 'rejected'} onClick={() => onReview(current.id, 'request-revision')}>退回修改</button></div></article><button type="button" className="carousel-arrow" disabled={index >= drafts.length - 1} onClick={() => onIndexChange(index + 1)} aria-label="下一封">›</button></div>{preview && <div className="batch-send-confirm"><strong>确认发送已选的 {preview.count} 封邮件？</strong><p>只有已经审核通过的邮件会发送。</p><button type="button" className="send-button" disabled={loading} onClick={onConfirm}>确认发送</button></div>}</section>
+}
+
 function ReviewControls({ lead, sendingEnabled, onReview, onSafetyCheck, safetyLoading, safetyResult, onSend, sendLoading, loading }) {
+  return null
   const [reviewer, setReviewer] = useState('')
   const [note, setNote] = useState('')
   const [confirmingSend, setConfirmingSend] = useState(false)
@@ -1026,7 +1107,9 @@ function DatabasePanel({ overview, loading, exportLoading, onExport, onSelect, s
     const hasWebsiteEvidence = Number(sources.website_count || 0) > 0 && Number(sources.same_domain_count || 0) > 0
     // 资料库按“可用客户资料”展示：有官网、有公开邮箱即可；行业/国家
     // 作为详情字段呈现，不再用脆弱的关键词二次过滤造成大量漏数。
-    return name && item.lead?.emails?.length && hasWebsiteEvidence && !databaseNoise.some((marker) => name.includes(marker))
+    // 客户资料库只展示符合当前目标国家、邮箱等硬条件的客户。原始候选仍
+    // 保存在本机，避免德国搜索时把中国等非目标市场误当成客户展示。
+    return item.qualified && name && item.lead?.emails?.length && hasWebsiteEvidence && !databaseNoise.some((marker) => name.includes(marker))
   })
   const displayItems = view === 'sendable' ? customerItems.filter((item) => item.sendable) : view === 'pending' ? customerItems.filter((item) => item.pending_contact) : view === 'contacted' ? customerItems.filter((item) => item.contacted) : view === 'follow_up' ? customerItems.filter((item) => item.follow_up_ready) : view === 'qualified' ? customerItems.filter((item) => item.qualified && !item.contacted) : customerItems
   const viewDescription = view === 'sendable' ? '今天优先联系这些客户，按每日发送安排' : view === 'pending' ? '这些客户符合条件，今天不发送，保留到后续联系' : view === 'contacted' ? '查看已经发送过邮件的客户' : view === 'follow_up' ? '查看收到回复、可以继续跟进的客户' : view === 'qualified' ? '展示所有符合当前条件的客户，不受每日发送数量影响' : '查看本机保存的客户资料；明显的文章、工具和目录结果已隐藏'

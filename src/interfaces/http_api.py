@@ -251,6 +251,20 @@ class ApiApplication:
             ):
                 return self._create_draft(segments[2], segments[4], self._parse_body(body))
             if (
+                method == "GET"
+                and len(segments) == 4
+                and segments[:2] == ["api", "tasks"]
+                and segments[3] == "drafts"
+            ):
+                return self._task_drafts(segments[2])
+            if (
+                method == "POST"
+                and len(segments) == 5
+                and segments[:2] == ["api", "tasks"]
+                and segments[3:5] == ["drafts", "batch-send"]
+            ):
+                return self._batch_send_drafts(segments[2], self._parse_body(body))
+            if (
                 method == "POST"
                 and len(segments) == 4
                 and segments[:2] == ["api", "tasks"]
@@ -1152,6 +1166,78 @@ class ApiApplication:
         self._drafts.save(draft)
         return 201, self._draft(draft)
 
+    def _task_drafts(self, task_id: str) -> tuple[int, dict]:
+        """List outreach drafts for the local batch-review carousel."""
+        self._require_task(task_id)
+        getter = getattr(self._drafts, "list_for_task", None)
+        if not callable(getter):
+            raise RuntimeError("email draft repository does not support task listing")
+        return 200, {"items": [self._draft(draft) for draft in getter(task_id)]}
+
+    def _batch_send_drafts(self, task_id: str, body: dict) -> tuple[int, dict]:
+        """Preview or send a reviewed batch, preserving the single-draft safeguards."""
+        self._require_task(task_id)
+        draft_ids = body.get("draft_ids", [])
+        if not isinstance(draft_ids, list):
+            raise ValueError("draft_ids must be an array")
+        draft_ids = list(dict.fromkeys(str(item).strip() for item in draft_ids if str(item).strip()))
+        if not draft_ids:
+            raise ValueError("at least one draft is required")
+        if len(draft_ids) > 30:
+            raise ValueError("batch sending is limited to 30 drafts per operation")
+        drafts = [self._drafts.get(draft_id) for draft_id in draft_ids]
+        if any(draft is None or draft.task_id != task_id for draft in drafts):
+            raise ValueError("all drafts must belong to the current task")
+        preview = [
+            {
+                "id": draft.id,
+                "recipient_email": draft.recipient_email,
+                "subject": draft.subject,
+                "status": draft.status.value,
+                "approved": draft.status.value == "approved",
+            }
+            for draft in drafts
+        ]
+        if not bool(body.get("confirmed", False)):
+            return 200, {
+                "requires_confirmation": True,
+                "sending_performed": False,
+                "count": len(preview),
+                "items": preview,
+            }
+        if self._email_send is None:
+            raise RuntimeError("email send service is not configured")
+        if not self._sending_enabled:
+            raise RuntimeError("SMTP sending is disabled; enable it explicitly for a controlled test")
+        if not all(item["approved"] for item in preview):
+            raise ValueError("all selected drafts must be approved before batch sending")
+        task = self._tasks.get(task_id)
+        sent_count = 0
+        results = []
+        for draft in drafts:
+            try:
+                attempt = self._email_send.send(
+                    draft.id,
+                    SendPolicy(daily_limit=task.criteria.daily_limit, sent_today=sent_count),
+                    True,
+                    draft.recipient_email,
+                    draft.subject,
+                    draft.body,
+                    f"batch-{task_id}-{draft.id}",
+                )
+                sent_count += 1
+                results.append({"draft_id": draft.id, "success": True, "attempt": self._send_attempt(attempt)})
+            except Exception as error:
+                results.append({"draft_id": draft.id, "success": False, "error": str(error)})
+        return 200, {
+            "requires_confirmation": False,
+            "sending_performed": bool(sent_count),
+            "count": len(results),
+            "sent_count": sent_count,
+            "failed_count": len(results) - sent_count,
+            "items": results,
+        }
+
     def _update_contact(self, task_id: str, domain: str, body: dict) -> tuple[int, dict]:
         result = self._acquisition.update_contact(
             task_id,
@@ -1387,7 +1473,7 @@ class ApiApplication:
         return 200, self._translation.preview(draft, str(body.get("target_language", "zh-CN")))
 
     def _review(self, draft_id: str, action: str, body: dict) -> tuple[int, dict]:
-        reviewer = body.get("reviewer", "")
+        reviewer = str(body.get("reviewer") or "本地用户").strip()
         if action == "approve":
             draft = self._reviews.approve(draft_id, reviewer)
         elif action == "request-revision":

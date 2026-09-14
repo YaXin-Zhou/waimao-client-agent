@@ -262,12 +262,24 @@ class AcquisitionService:
     ) -> list[AssessedLead]:
         """按任务配置筛选可交付客户，同时保留所有候选及淘汰原因。"""
         evaluated: list[AssessedLead] = []
+        target_countries = {
+            _country_key(value)
+            for value in criteria.countries
+            if _country_key(value)
+        }
         for item in results:
             reasons: list[str] = []
-            # 当前客户只关心可联系邮箱。官网、国家、产品/行业和公司主体
-            # 仍然作为资料展示与排序信息保留，但不再阻断进入可发送列表。
             if criteria.require_public_email and not item.lead.emails:
                 reasons.append("missing_public_email")
+            # Target market is a hard business boundary: public-email records
+            # without confirmed country evidence stay in the candidate archive,
+            # but must never enter the sendable customer pool.
+            if target_countries:
+                lead_country = _country_key(item.lead.country)
+                if not lead_country:
+                    reasons.append("missing_target_country")
+                elif lead_country not in target_countries:
+                    reasons.append("country_not_target")
             evaluated.append(
                 replace(
                     item,

@@ -120,6 +120,9 @@ class Drafts:
             else None
         )
 
+    def list_for_task(self, task_id):
+        return [self.draft] if self.draft.task_id == task_id else []
+
 
 class AuditEvents:
     def __init__(self):
@@ -873,6 +876,35 @@ def test_api_approval_updates_draft_without_sending():
 
     assert status == 200
     assert events["items"][0]["actor"] == "reviewer-1"
+
+
+def test_api_lists_outreach_drafts_for_batch_review():
+    app, task, draft, _ = make_app()
+
+    status, payload = app.handle("GET", f"/api/tasks/{task.id}/drafts")
+
+    assert status == 200
+    assert payload["items"] == [app._draft(draft)]
+
+
+def test_api_previews_batch_review_without_sending_email():
+    app, task, draft, _ = make_app()
+
+    status, approved = app.handle("POST", f"/api/drafts/{draft.id}/approve", {})
+    assert status == 200
+    assert approved["status"] == "approved"
+
+    status, payload = app.handle(
+        "POST",
+        f"/api/tasks/{task.id}/drafts/batch-send",
+        {"draft_ids": [draft.id], "confirmed": False},
+    )
+
+    assert status == 200
+    assert payload["requires_confirmation"] is True
+    assert payload["sending_performed"] is False
+    assert payload["count"] == 1
+    assert payload["items"][0]["recipient_email"] == "sales@alpine.example"
 
 
 def test_api_returns_json_error_for_unknown_draft():
