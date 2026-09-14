@@ -16,7 +16,18 @@ def test_classifies_access_restriction_as_retryable_without_exposing_details():
 def test_classifies_empty_provider_results_separately():
     assert classify_search_error("Bing search returned no public website results") == {
         "category": "no_verified_results",
-        "user_message": "当前条件暂未找到可验证的公司官网，可调整条件后重试。",
+        "user_message": "本次没有找到新的合格客户，请换一组条件或稍后再试。",
+        "retryable": True,
+    }
+
+
+def test_aggregate_empty_results_do_not_look_like_network_failure():
+    assert classify_search_error(
+        "all configured search providers failed: Tavily returned no public website results; "
+        "Google returned a JavaScript-only or consent page"
+    ) == {
+        "category": "no_verified_results",
+        "user_message": "本次没有找到新的合格客户，请换一组条件或稍后再试。",
         "retryable": True,
     }
 
