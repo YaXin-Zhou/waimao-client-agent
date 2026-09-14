@@ -108,7 +108,7 @@ class Drafts:
         self.draft = draft
 
     def get(self, draft_id):
-        return self.draft if draft_id == self.draft.id else None
+        return self.draft if self.draft and draft_id == self.draft.id else None
 
     def save(self, draft):
         self.draft = draft
@@ -116,12 +116,26 @@ class Drafts:
     def latest_for_lead(self, task_id, lead_domain):
         return (
             self.draft
-            if self.draft.task_id == task_id and self.draft.lead_domain == lead_domain
+            if self.draft
+            and self.draft.task_id == task_id
+            and self.draft.lead_domain == lead_domain
             else None
         )
 
     def list_for_task(self, task_id):
-        return [self.draft] if self.draft.task_id == task_id else []
+        return [self.draft] if self.draft and self.draft.task_id == task_id else []
+
+
+class DraftGenerator:
+    def generate(self, task_id, lead, research, template, product, sender_profile, language):
+        return EmailDraft.create(
+            task_id,
+            lead.domain,
+            lead.emails[0],
+            f"{product} for {lead.company_name}",
+            f"Hello {lead.company_name},\n\nWe can support your {product} sourcing.",
+            (research.evidence_url,),
+        )
 
 
 class AuditEvents:
@@ -904,6 +918,22 @@ def test_api_previews_batch_review_without_sending_email():
     assert payload["requires_confirmation"] is True
     assert payload["sending_performed"] is False
     assert payload["count"] == 1
+    assert payload["items"][0]["recipient_email"] == "sales@alpine.example"
+
+
+def test_api_batch_generates_one_draft_for_each_eligible_lead():
+    app, task, _, _ = make_app()
+    app._drafts.draft = None
+    app._email_drafts = DraftGenerator()
+
+    status, payload = app.handle(
+        "POST",
+        f"/api/tasks/{task.id}/drafts/batch-generate",
+        {"product": "power station"},
+    )
+
+    assert status == 200
+    assert payload["generated_count"] == 1
     assert payload["items"][0]["recipient_email"] == "sales@alpine.example"
 
 

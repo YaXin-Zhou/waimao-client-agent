@@ -1,4 +1,4 @@
-import { useEffect, useMemo, useState } from 'react'
+import { useEffect, useMemo, useRef, useState } from 'react'
 import RuleEditorModal from './components/RuleEditorModal'
 import BrowserImportModal from './components/BrowserImportModal'
 
@@ -125,6 +125,7 @@ function App() {
   const [batchTranslationLoading, setBatchTranslationLoading] = useState(false)
   const [batchPreview, setBatchPreview] = useState(null)
   const [batchLoading, setBatchLoading] = useState(false)
+  const autoDraftTaskRef = useRef(null)
   const [selectedSendHistory, setSelectedSendHistory] = useState([])
   const [selectedLeadAudit, setSelectedLeadAudit] = useState([])
   const [leadTransitionLoading, setLeadTransitionLoading] = useState(false)
@@ -259,6 +260,21 @@ function App() {
       .catch(() => { if (!cancelled) setBatchDrafts([]) })
     return () => { cancelled = true }
   }, [remoteTaskId, selectedDraft?.id, selectedDraft?.status])
+  useEffect(() => {
+    const profile = remoteTaskConfig?.sender_profile || {}
+    const criteria = remoteTaskConfig?.criteria || {}
+    const product = criteria.product || criteria.keywords?.[0] || ''
+    if (!remoteTaskId || !remoteLeads.length || !product || !profile.company_name || !profile.contact_name || !profile.position) return
+    if (autoDraftTaskRef.current === remoteTaskId) return
+    autoDraftTaskRef.current = remoteTaskId
+    fetch(`/api/tasks/${remoteTaskId}/drafts/batch-generate`, {
+      method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ product }),
+    }).then(async (response) => {
+      const payload = await response.json()
+      if (!response.ok) throw new Error(payload.error || '邮件自动生成失败')
+      if (payload.generated_count) setBatchDrafts((items) => [...items, ...(payload.items || [])])
+    }).catch(() => { autoDraftTaskRef.current = null })
+  }, [remoteTaskId, remoteTaskConfig, remoteLeads.length])
   useEffect(() => {
     if (!remoteTaskId) return undefined
     let cancelled = false

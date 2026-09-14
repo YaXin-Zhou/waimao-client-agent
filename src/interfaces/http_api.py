@@ -261,6 +261,13 @@ class ApiApplication:
                 method == "POST"
                 and len(segments) == 5
                 and segments[:2] == ["api", "tasks"]
+                and segments[3:5] == ["drafts", "batch-generate"]
+            ):
+                return self._batch_generate_drafts(segments[2], self._parse_body(body))
+            if (
+                method == "POST"
+                and len(segments) == 5
+                and segments[:2] == ["api", "tasks"]
                 and segments[3:5] == ["drafts", "batch-send"]
             ):
                 return self._batch_send_drafts(segments[2], self._parse_body(body))
@@ -1173,6 +1180,40 @@ class ApiApplication:
         if not callable(getter):
             raise RuntimeError("email draft repository does not support task listing")
         return 200, {"items": [self._draft(draft) for draft in getter(task_id)]}
+
+    def _batch_generate_drafts(self, task_id: str, body: dict) -> tuple[int, dict]:
+        """Generate one outreach draft per eligible lead, skipping existing drafts."""
+        if self._email_drafts is None:
+            raise RuntimeError("email draft provider is not configured")
+        task = self._tasks.get(task_id)
+        if task is None:
+            raise KeyError(f"Task not found: {task_id}")
+        product = str(body.get("product") or task.criteria.product or "").strip()
+        if not product and task.criteria.keywords:
+            product = task.criteria.keywords[0].strip()
+        if not product:
+            raise ValueError("product is required")
+        template = str(body.get("template") or "Introduce {product} to {company} based on their published business information.").strip()
+        existing = {
+            draft.lead_domain
+            for draft in self._drafts.list_for_task(task_id)
+            if draft.kind.value == "outreach"
+        }
+        generated = []
+        skipped = 0
+        for assessed in self._acquisition.list_leads(task_id):
+            if not assessed.qualified or not assessed.lead.domain or not assessed.lead.emails or assessed.lead.domain in existing:
+                skipped += 1
+                continue
+            research = self._research.get(task_id, assessed.lead.domain)
+            if research is None:
+                skipped += 1
+                continue
+            draft = self._email_drafts.generate(task_id, assessed.lead, research, template, product, task.sender_profile, task.criteria.language)
+            self._drafts.save(draft)
+            existing.add(assessed.lead.domain)
+            generated.append(self._draft(draft))
+        return 200, {"generated_count": len(generated), "skipped_count": skipped, "items": generated}
 
     def _batch_send_drafts(self, task_id: str, body: dict) -> tuple[int, dict]:
         """Preview or send a reviewed batch, preserving the single-draft safeguards."""
