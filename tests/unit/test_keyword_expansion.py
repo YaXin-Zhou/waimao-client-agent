@@ -42,3 +42,13 @@ def test_expander_falls_back_to_empty_on_model_failure():
 
     criteria = AcquisitionCriteria(product="CNC machining")
     assert DeepSeekKeywordExpander(BrokenProvider()).expand(criteria) == ()
+
+
+def test_expander_recomputes_when_industry_or_customer_type_changes():
+    provider = FakeProvider({"search_terms": ["buyer intent"]})
+    expander = DeepSeekKeywordExpander(provider)
+
+    expander.expand(AcquisitionCriteria(product="plastic parts", industries=("automotive",)))
+    expander.expand(AcquisitionCriteria(product="plastic parts", industries=("electronics",)))
+
+    assert provider.calls == 2

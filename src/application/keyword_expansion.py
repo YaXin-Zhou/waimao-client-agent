@@ -27,7 +27,20 @@ class DeepSeekKeywordExpander:
 
     def expand(self, criteria: AcquisitionCriteria) -> tuple[str, ...]:
         base_terms = configured_research_terms(criteria)
-        cache_key = tuple(value.casefold() for value in base_terms)
+        # Industry and customer type shape buyer intent. Include them in the
+        # cache key so changing the task conditions does not silently reuse a
+        # term set produced for a different market. Countries remain outside
+        # the model terms and are enforced deterministically by query building.
+        cache_key = tuple(
+            value.casefold()
+            for value in (
+                *base_terms,
+                "__industries__",
+                *criteria.industries,
+                "__customer_types__",
+                *criteria.customer_types,
+            )
+        )
         if cache_key in self._cache:
             return self._cache[cache_key]
         if not base_terms:
