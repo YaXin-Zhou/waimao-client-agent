@@ -137,3 +137,23 @@ def test_tavily_provider_uses_optional_model_expansion_without_changing_country(
 
     assert any("plastic components" in query for query in captured)
     assert all("France" in query for query in captured)
+
+
+def test_tavily_provider_reports_reused_query_pool_after_first_round():
+    empty = type("EmptyResponse", (), {"read": lambda self: b'{"results": []}'})
+    provider = TavilySearchProvider("secret", opener=lambda request, timeout: empty())
+
+    try:
+        provider.search_round(
+            AcquisitionCriteria(
+                product="plastic parts",
+                countries=("France",),
+                candidate_limit=1,
+                qualified_lead_limit=1,
+            ),
+            round_index=1,
+        )
+    except Exception as error:
+        assert "query pool exhausted" in str(error)
+    else:
+        raise AssertionError("expected query-pool exhaustion")

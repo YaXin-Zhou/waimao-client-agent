@@ -21,6 +21,16 @@ def test_classifies_empty_provider_results_separately():
     }
 
 
+def test_classifies_exhausted_query_pool_as_actionable_business_message():
+    assert classify_search_error(
+        "Tavily query pool exhausted; no new public website results"
+    ) == {
+        "category": "query_pool_exhausted",
+        "user_message": "当前检索条件已基本覆盖，请调整关键词或国家后再试。",
+        "retryable": True,
+    }
+
+
 def test_aggregate_empty_results_do_not_look_like_network_failure():
     assert classify_search_error(
         "all configured search providers failed: Tavily returned no public website results; "

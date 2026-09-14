@@ -80,6 +80,16 @@ class TavilySearchProvider:
         queries = build_search_queries_for_round(
             search_criteria, round_index, max_queries=self._max_queries
         )
+        query_pool_reused = (
+            round_index > 0
+            and (
+                len(build_search_queries_for_round(search_criteria, 0, max_queries=len(queries) or 1))
+                <= self._max_queries
+                or round_index
+                >= (len(build_search_queries_for_round(search_criteria, 0, max_queries=self._max_queries)) + self._max_queries - 1)
+                // self._max_queries
+            )
+        )
         for query in queries:
             payload = self._request(query)
             for result in payload.get("results", []):
@@ -110,6 +120,10 @@ class TavilySearchProvider:
                 if len(records) >= target:
                     return records[:target]
         if not records:
+            if query_pool_reused:
+                raise SearchProviderError(
+                    "Tavily query pool exhausted; no new public website results"
+                )
             raise SearchProviderError("Tavily returned no public website results")
         return records
 

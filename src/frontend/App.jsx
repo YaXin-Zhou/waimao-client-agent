@@ -90,6 +90,9 @@ function searchCriteriaWarnings({ product, keywords, countries, industries }) {
 
 function friendlyDiscoveryError(value) {
   const message = String(value || '')
+  if (message.includes('query pool exhausted')) {
+    return '当前检索条件已基本覆盖，请调整关键词或国家后再试。'
+  }
   if (message.includes('no public website results')) {
     return '本次没有找到新的合格客户，请换一组条件或稍后再试。'
   }

@@ -7,6 +7,12 @@ def classify_search_error(error: str) -> dict[str, object]:
     """Return a stable user message while preserving the raw error separately."""
     message = str(error).strip()
     lowered = message.lower()
+    if "query pool exhausted" in lowered:
+        return {
+            "category": "query_pool_exhausted",
+            "user_message": "当前检索条件已基本覆盖，请调整关键词或国家后再试。",
+            "retryable": True,
+        }
     # An aggregate fallback error may contain a search-engine challenge even
     # when the actionable result is simply that no new usable websites were
     # found. Prefer the clearer customer-facing message in that case.
